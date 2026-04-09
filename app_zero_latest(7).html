@@ -1,0 +1,2284 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>みかみ塾 統合アプリ v14</title>
+  <style>
+    :root{--bg:#f8fafc;--card:#fff;--line:#dbe4ee;--text:#0f172a;--sub:#475569;--blue:#1d4ed8;--teal:#0f766e;--soft:#eef2ff;--soft2:#ecfeff;--soft3:#fff7ed;--amber:#92400e;--green:#166534}
+    *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1500px;margin:0 auto;padding:22px}.hero{display:flex;flex-wrap:wrap;gap:14px;align-items:end;justify-content:space-between;margin-bottom:18px}.pill{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 12px;font-size:13px}h1{margin:12px 0 6px;font-size:30px}.muted{color:var(--sub);line-height:1.8}
+    .appTabs,.btns{display:flex;flex-wrap:wrap;gap:10px}.appTab,button{appearance:none;border:1px solid var(--line);background:#fff;color:var(--text);padding:10px 14px;border-radius:14px;cursor:pointer;font-size:14px}.appTab.active{background:var(--soft);border-color:#c7d2fe;color:#3730a3;font-weight:700}.primary{background:var(--blue);color:#fff;border-color:var(--blue)}.green{background:var(--teal);color:#fff;border-color:var(--teal)}
+    .screen{display:none}.screen.active{display:block}.layout{display:grid;grid-template-columns:420px 1fr;gap:18px}.twoCol{display:grid;grid-template-columns:1.12fr 1fr;gap:18px}.single{display:grid;grid-template-columns:1fr;gap:18px}@media (max-width:1100px){.layout,.twoCol{grid-template-columns:1fr}}
+    .card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:18px;box-shadow:0 8px 24px rgba(15,23,42,.04)}.card h2{margin:0 0 6px}.head{margin:0 0 14px;color:var(--sub);font-size:14px;line-height:1.7}.section{margin-top:18px}.label{display:block;font-weight:700;font-size:14px;margin-bottom:8px}
+    input[type="text"],input[type="number"],textarea,select{width:100%;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px 13px;font-size:14px}textarea{min-height:90px;resize:vertical}.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}@media (max-width:720px){.row2,.row3{grid-template-columns:1fr}}
+    .checks{display:grid;grid-template-columns:1fr;gap:10px}.checkItem{border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:10px;align-items:start}.box{border-radius:18px;padding:14px;line-height:1.8}.blueBox{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8}.notice{background:#ecfdf5;border:1px solid #bbf7d0;border-radius:18px;padding:14px;color:#166534;line-height:1.8;margin-top:12px}
+    .previewPaper{background:#fff;border:1px solid var(--line);border-radius:22px;padding:20px}.paper{width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:12mm;box-shadow:0 10px 28px rgba(15,23,42,.08)}.paper h2{margin:0 0 4mm;font-size:18pt}.paper .sub{font-size:10pt;color:#475569;margin-bottom:5mm}.q{margin-bottom:7mm;font-size:11pt;line-height:2.1} .answerBox{margin-top:3mm;border:1px solid #cbd5e1;border-radius:8px;min-height:22mm;padding:2mm;background:#fff} .answerLine{border-bottom:1px solid #cbd5e1;height:9mm;margin-top:2mm}.answerKey{margin-top:3mm;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:2.5mm;font-size:10.5pt;line-height:1.8}.ans{font-size:11pt;line-height:1.8}.small{font-size:13px;color:var(--sub)}
+    .resultBlock{border:1px solid var(--line);border-radius:18px;padding:14px;background:#fff;margin-top:12px}.resultBlock h3{margin:0 0 10px;font-size:16px}.resultBlock ul{margin:0;padding-left:18px;line-height:1.9}.tagrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}.tag{background:var(--soft);color:#3730a3;border-radius:999px;padding:6px 10px;font-size:12px}.modeTag{background:var(--soft2);color:#155e75}.closingTag{background:var(--soft3);color:var(--amber)}
+    details{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:#fff} summary{cursor:pointer;font-weight:700}
+    table{width:100%;border-collapse:collapse;font-size:13px} th,td{border-bottom:1px solid var(--line);padding:10px 8px;vertical-align:top;text-align:left} th{background:#f8fafc;position:sticky;top:0}.tableWrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:18px}.countRow{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}.countPill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 12px;font-size:13px}.flowSteps{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}.flowStep{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}.flowStep strong{display:block;margin-bottom:4px}.softBox{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px;line-height:1.8}.statusOk{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <div class="pill">✨ みかみ塾 統合アプリ v14</div>
+        <h1>問題作成 + 問題一覧 + 分析レポート</h1>
+        <div class="muted">ゼロ追加課金運用向けに「問題作成 → プロンプトコピー → チャット分析 → レポート反映」を回しやすくした版です。</div>
+      </div>
+    </div>
+
+    <div class="appTabs">
+      <button id="tabBuilder" class="appTab active">問題作成</button>
+      <button id="tabList" class="appTab">問題一覧</button>
+      <button id="tabPhoto" class="appTab">写真分析</button>
+      <button id="tabReports" class="appTab">分析レポート</button>
+    </div>
+
+    <div id="screenBuilder" class="screen active">
+      <div class="layout">
+        <div class="card">
+          <h2>問題作成</h2>
+          <p class="head">最初に科目と学年を選び、そのあと「今どこまで習ったか」を選ぶ流れです。</p>
+          <div class="section row2">
+            <div><label class="label">科目</label><select id="subjectSelect"><option>英語</option><option>数学</option></select></div>
+            <div><label class="label">学年</label><select id="gradeSelect"><option>中1</option><option>中2</option><option>中3</option></select></div>
+          </div>
+          <div class="section row2">
+            <div><label class="label">テスト名</label><input type="text" id="testTitle" value="診断テスト" /></div>
+            <div><label class="label">問題数</label><select id="questionCount"><option>8</option><option selected>10</option><option>12</option><option>15</option><option>20</option></select></div>
+          </div>
+          <div class="section"><label class="label">習った範囲</label><div id="stageArea" class="checks"></div></div>
+          <div class="section"><label class="label">出したい問題タイプ</label><div id="typeArea" class="checks"></div></div>
+          <div class="section box blueBox">ここで選んだ「科目・学年・範囲」は、そのまま分析レポート側にも渡す前提です。</div>
+          <div class="section btns">
+            <button id="generateBtn" class="primary">問題を作成</button>
+            <button id="printQuestionsBtn">問題を印刷</button>
+            <button id="saveQuestionsBtn">問題を保存</button>
+            <button id="showAnswersBtn">解答を表示</button>
+            <button id="printAnswersBtn">解答を印刷</button>
+            <button id="saveAnswersBtn">解答を保存</button>
+            <button id="goListBtn">この条件で問題一覧へ</button>
+            <button id="goReportBtn" class="green">この設定で分析レポートへ</button>
+          </div>
+        </div>
+        <div class="card previewPaper">
+          <div class="paper" id="questionsPaper">
+            <h2 id="paperTitle">診断テスト</h2>
+            <div class="sub" id="paperSub"></div>
+            <div id="generateStatus" class="box blueBox" style="margin-bottom:12px;">まだ問題を組んでいません。印刷・保存時は10問ごとに改ページします。</div>
+            <div id="questionArea"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="screenList" class="screen">
+      <div class="single">
+        <div class="card">
+          <h2>問題一覧</h2>
+          <p class="head">作った問題ベースをここで確認します。あとでここに修正や追加の入口も付けられます。</p>
+          <div class="row3">
+            <div><label class="label">科目</label><select id="listSubject"><option value="all">すべて</option><option value="英語">英語</option><option value="数学">数学</option></select></div>
+            <div><label class="label">親項目</label><select id="listCategory"><option value="all">すべて</option></select></div>
+            <div><label class="label">問題タイプ</label><select id="listType"><option value="all">すべて</option></select></div>
+          </div>
+          <div class="section row2">
+            <div><label class="label">キーワード</label><input type="text" id="listKeyword" placeholder="問題文やIDで検索" /></div>
+            <div><label class="label">表示件数</label><select id="listLimit"><option>20</option><option selected>50</option><option>100</option><option>999</option></select></div>
+          </div>
+          <div class="section btns">
+            <button id="refreshListBtn" class="primary">一覧を更新</button>
+            <button id="backToBuilderBtn">問題作成へ戻る</button>
+          </div>
+          <div id="listCounts" class="countRow"></div>
+          <div class="resultBlock section">
+            <h3>中1英語 完成進捗</h3>
+            <div id="progressSummary" class="countRow"></div>
+          </div>
+          <div class="tableWrap section">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>科目</th>
+                  <th>学年</th>
+                  <th>親項目</th>
+                  <th>タイプ</th>
+                  <th>見たいミス</th>
+                  <th>原因候補</th>
+                  <th>問題文</th>
+                  <th>正答</th>
+                </tr>
+              </thead>
+              <tbody id="listBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="screenPhoto" class="screen">
+      <div class="twoCol">
+        <div class="card">
+          <h2>写真分析</h2>
+          <p class="head">ここが写メから分析へ入る入口です。今の版では、写真を入れる場所と、分析結果が出る場所を先に固めています。</p>
+          <div class="section">
+            <label class="label">テストの写真</label>
+            <input type="file" id="photoInput" accept="image/*" />
+          </div>
+          <div class="section row2">
+            <div><label class="label">写真の種類</label><select id="photoType"><option>みかみ塾オリジナル問題</option><option>学校テスト</option></select></div>
+            <div><label class="label">分析対象</label><select id="photoTarget"><option>中1英語</option></select></div>
+          </div>
+          <div class="section btns">
+            <button id="copyChappiePromptBtn" class="primary">チャッピー分析用プロンプトをコピー</button>
+            <button id="applyChappieResponseBtn" class="green">返答をレポートへ反映</button>
+            <button id="toReportFromPhotoBtn">レポート画面を開く</button>
+          </div>
+          <div id="photoAnalyzeStatus" class="box blueBox" style="margin-top:12px;">まだプロンプトはコピーしていません。</div>
+          <div id="responseParseStatus" class="box blueBox" style="margin-top:12px;">まだチャッピーの返答は反映していません。</div>
+          <div class="flowSteps">
+            <div class="flowStep"><strong>1. 問題を作る</strong><div class="small">問題作成タブで範囲と問題タイプを決め、印刷または保存します。</div></div>
+            <div class="flowStep"><strong>2. プロンプトをコピー</strong><div class="small">この画面でプロンプトを作り、写メと一緒にチャッピーへ送ります。</div></div>
+            <div class="flowStep"><strong>3. チャット分析を受け取る</strong><div class="small">返ってきた文章は見出しつきのまま下の欄へ貼ります。</div></div>
+            <div class="flowStep"><strong>4. レポートへ反映</strong><div class="small">「返答をレポートへ反映」を押すと、問題番号・特徴・誤答例・自由分析が自動で入ります。</div></div>
+          </div>
+          <div class="notice" style="margin-top:12px;">この版はゼロ追加課金前提です。写メ分析そのものはチャッピーのチャット側で行い、この画面は「問題作成・印刷・分析用メモづくり・レポート反映」に使います。</div>
+        </div>
+        <div class="card">
+          <h2>写真プレビュー / 自動抽出欄</h2>
+          <div id="photoPreviewWrap" class="box blueBox">まだ写真が入っていません。</div>
+          <div id="photoExtractBox" class="resultBlock">
+            <h3>チャッピーへ渡すための下書き欄</h3>
+            <div class="row2">
+              <div><label class="label">落とした問題番号</label><input type="text" id="photoProblemNos" placeholder="例: 1 3 5" /></div>
+              <div><label class="label">答案の特徴</label><input type="text" id="photoTraits" placeholder="例: 語順ミスが多い" /></div>
+            </div>
+            <div class="section"><label class="label">問題別判定</label><textarea id="photoMarkingSummary" placeholder="例: 1: ○ / 2: × / 3: △ / 4: 判定保留"></textarea></div>
+            <div class="section"><label class="label">誤答例</label><textarea id="photoWrongExamples" placeholder="例: Does she likes music? など"></textarea></div>
+            <div class="section"><label class="label">写真メモ</label><textarea id="photoMemo" placeholder="ここは今後AIが自動で埋める場所"></textarea></div>
+            <div class="section"><label class="label">自由分析メモ</label><textarea id="photoFreeAnalysis" placeholder="例: 途中で止まりやすい / 同じ語順ミスが続く など"></textarea></div>
+            <div class="section"><label class="label">チャッピーへ渡すプロンプト</label><textarea id="chappiePromptBox" placeholder="ここにコピー前の内容が入ります" style="min-height:180px;"></textarea></div>
+            <div class="section"><label class="label">チャッピーの返答を貼る</label><textarea id="chappieResponseBox" placeholder="チャッピーから返ってきた分析結果を、そのままここに貼り付けます。" style="min-height:220px;"></textarea></div>
+            <div class="softBox">返答は、できるだけ見出しを変えずにそのまま貼ると自動反映が安定します。対応している見出しは「落とした問題番号 / 答案の特徴 / 誤答例 / ミスの型 / 原因 / 自由分析 / 学習レポート / 入塾クロージング資料」です。</div>
+            <div class="muted">今の版では、ここに作ったプロンプトをコピーしてチャットへ送り、返答を貼ってからレポートへ流し込む前提です。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="screenReports" class="screen">
+      <div class="twoCol">
+        <div class="card">
+          <h2>分析レポート</h2>
+          <p class="head">ここでは、科目や学年に応じて入力とミスの型が切り替わります。ミスの型は必要なときだけ開く形です。</p>
+          <div class="section row3">
+            <div><label class="label">科目</label><select id="reportSubject"><option>英語</option><option>数学</option></select></div>
+            <div><label class="label">学年</label><select id="reportGrade"><option>中1</option><option>中2</option><option>中3</option></select></div>
+            <div><label class="label">レポート種別</label><select id="reportMode"><option value="learning">学習レポート</option><option value="closing">入塾クロージング資料</option></select></div>
+          </div>
+          <div class="section row3">
+            <div><label class="label">生徒名</label><input type="text" id="studentName" /></div>
+            <div><label class="label">得点</label><input type="number" id="score" /></div>
+            <div><label class="label">単元</label><input type="text" id="unit" /></div>
+          </div>
+          <div class="section"><label class="label">丸つけ結果メモ</label><textarea id="reportMarkingSummary" placeholder="例: 1: ○ / 2: × / 3: △ / 4: 判定保留"></textarea></div>
+          <div class="section row2">
+            <div><label class="label">ミスした問題番号</label><input type="text" id="problemNos" /></div>
+            <div><label class="label">答案の特徴</label><input type="text" id="answerTraits" /></div>
+          </div>
+          <div class="section"><label class="label">具体的な誤答例</label><textarea id="wrongExamples"></textarea></div>
+          <div class="section"><label class="label">答案メモ</label><textarea id="memo"></textarea></div>
+          <div class="section"><label class="label">自由分析</label><textarea id="freeAnalysis" placeholder="項目に当てはまらない気づきもここに入れる"></textarea></div>
+          <div class="section row2">
+            <div><label class="label">チャッピー学習レポート要約</label><textarea id="aiLearningSummary" placeholder="チャット分析で返ってきた学習レポート要約を入れる"></textarea></div>
+            <div><label class="label">チャッピークロージング要約</label><textarea id="aiClosingSummary" placeholder="チャット分析で返ってきたクロージング要約を入れる"></textarea></div>
+          </div>
+          <div class="section"><details open><summary>ミスの型をひらく / とじる</summary><div id="errorTypeArea" class="checks" style="margin-top:12px;"></div></details></div>
+          <div class="section btns">
+            <button id="buildReportBtn" class="primary">レポートを更新</button>
+            <button id="exportLearningBtn">学習レポートを書き出す</button>
+            <button id="exportClosingBtn">クロージング資料を書き出す</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>レポート表示</h2>
+          <div id="tags" class="tagrow"></div>
+          <div id="updateStatus" class="box blueBox" style="margin-bottom:12px;">まだ更新していません。</div>
+          <div id="markingBlock" class="resultBlock"></div>
+          <div id="priorityReportBlock" class="resultBlock"></div>
+          <div id="builderSummary" class="resultBlock"></div>
+          <div id="derivedFromProblems" class="resultBlock"></div>
+          <div id="main1" class="resultBlock"></div>
+          <div id="main2" class="resultBlock"></div>
+          <div id="main3" class="resultBlock"></div>
+          <div id="main4" class="resultBlock"></div>
+          <div id="main5" class="resultBlock"></div>
+          <div id="main6" class="resultBlock"></div>
+          <div id="freeBlock" class="resultBlock"></div>
+          <div class="notice">今回は、問題一覧を中に入れて「どこまで作れているか」を確認しやすくしたのがポイントです。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const subjectConfig = {
+      '英語': {
+        stages: [['S1','be動詞'], ['S2','一般動詞'], ['S3','区別'], ['S4','疑問詞'], ['S5','三単現'], ['S6','前置詞'], ['S7','頻度副詞'], ['S8','並びかえ'], ['S9','英作文'], ['S10','読解・会話完成']],
+        types: ['空所補充','並びかえ','英作文','変形','見分け','答え方','間違い直し','読解','選択'],
+        errors: ['be動詞と一般動詞の混同','動詞選択ミス','語順ミス','否定文の作り方ミス','疑問文の作り方ミス','答え方ミス','三単現ミス','前置詞ミス','頻度副詞の位置ミス','スペルミス','単語抜け','空欄','日本語はわかるが英文にできない','見直し不足','途中で止まる']
+      },
+      '数学': {
+        stages: [['M1','正負の数'], ['M2','文字式・方程式'], ['M3','比例・反比例']],
+        types: ['計算','文章題','変形','グラフ'],
+        errors: ['符号ミス','計算途中でのミス','分数・小数の処理ミス','式は立てられるが最後で失点','文章題の立式ミス','図形の条件整理不足','グラフや表の読み取りミス','見直し不足']
+      }
+    };
+
+    const questionBank = [
+  {
+    "id": "E1-BQ-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "変形",
+    "mistake": "not の位置ミス",
+    "cause": "変形ルール未定着",
+    "q": "He is busy. を否定文にしなさい。",
+    "a": "He is not busy."
+  },
+  {
+    "id": "E1-BQ-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "変形",
+    "mistake": "be動詞を前に出せない",
+    "cause": "疑問文の型不足",
+    "q": "You are happy. を疑問文にしなさい。",
+    "a": "Are you happy?"
+  },
+  {
+    "id": "E1-BQ-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "答え方",
+    "mistake": "Yes/No 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "Are you a student? に Yes で答えなさい。",
+    "a": "Yes, I am."
+  },
+  {
+    "id": "E1-BQ-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "並びかえ",
+    "mistake": "not の位置ミス",
+    "cause": "語順不安定",
+    "q": "( is / she / not / kind )",
+    "a": "She is not kind."
+  },
+  {
+    "id": "E1-BQ-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "間違い直し",
+    "mistake": "主語に合う be 動詞ミス",
+    "cause": "主語と動詞の対応不足",
+    "q": "Are he tired? の誤りを直しなさい。",
+    "a": "Is he tired?"
+  },
+  {
+    "id": "E1-BQ-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "変形",
+    "mistake": "am not の位置ミス",
+    "cause": "否定文の型不足",
+    "q": "I am tired. を否定文にしなさい。",
+    "a": "I am not tired."
+  },
+  {
+    "id": "E1-BQ-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "変形",
+    "mistake": "疑問文の語順ミス",
+    "cause": "be動詞を前に出せない",
+    "q": "She is a teacher. を疑問文にしなさい。",
+    "a": "Is she a teacher?"
+  },
+  {
+    "id": "E1-BQ-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "答え方",
+    "mistake": "No 応答ミス",
+    "cause": "be動詞文の答え方不足",
+    "q": "Is he from Japan? に No で答えなさい。",
+    "a": "No, he is not."
+  },
+  {
+    "id": "E1-BQ-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "並びかえ",
+    "mistake": "not の位置ミス",
+    "cause": "語順不安定",
+    "q": "( are / not / they / students )",
+    "a": "They are not students."
+  },
+  {
+    "id": "E1-BQ-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "間違い直し",
+    "mistake": "主語に合う be 動詞ミス",
+    "cause": "主語と動詞の対応不足",
+    "q": "Am you hungry? の誤りを直しなさい。",
+    "a": "Are you hungry?"
+  },
+  {
+    "id": "E1-BQ-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "空所補充",
+    "mistake": "be動詞選択ミス",
+    "cause": "主語と be 動詞の対応不足",
+    "q": "(      ) she from Canada? に入る語を書きなさい。",
+    "a": "Is"
+  },
+  {
+    "id": "E1-BQ-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "空所補充",
+    "mistake": "be動詞選択ミス",
+    "cause": "主語と be 動詞の対応不足",
+    "q": "We (      ) in the classroom. に入る語を書きなさい。",
+    "a": "are"
+  },
+  {
+    "id": "E1-BQ-013",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "変形",
+    "mistake": "否定文ミス",
+    "cause": "否定文の型不足",
+    "q": "They are busy. を否定文にしなさい。",
+    "a": "They are not busy."
+  },
+  {
+    "id": "E1-BQ-014",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "答え方",
+    "mistake": "Yes/No 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "Are they soccer players? に Yes で答えなさい。",
+    "a": "Yes, they are."
+  },
+  {
+    "id": "E1-BQ-015",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "be動詞",
+    "type": "日本語→英文",
+    "mistake": "be動詞文の骨組みミス",
+    "cause": "主語＋be の型不足",
+    "q": "「私は日本出身です。」を英語で書きなさい。",
+    "a": "I am from Japan."
+  },
+  {
+    "id": "E1-DQ-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "変形",
+    "mistake": "don’t の位置ミス",
+    "cause": "一般動詞否定文の型不足",
+    "q": "You play soccer. を否定文にしなさい。",
+    "a": "You do not play soccer."
+  },
+  {
+    "id": "E1-DQ-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "変形",
+    "mistake": "be動詞疑問文にしてしまう",
+    "cause": "文の種類判定不足",
+    "q": "They study English. を疑問文にしなさい。",
+    "a": "Do they study English?"
+  },
+  {
+    "id": "E1-DQ-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "答え方",
+    "mistake": "Yes/No 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "Do you like music? に No で答えなさい。",
+    "a": "No, I do not."
+  },
+  {
+    "id": "E1-DQ-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "並びかえ",
+    "mistake": "do 疑問文の語順ミス",
+    "cause": "疑問文の型不足",
+    "q": "( do / you / tennis / play / ? )",
+    "a": "Do you play tennis?"
+  },
+  {
+    "id": "E1-DQ-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "間違い直し",
+    "mistake": "原形に戻せない",
+    "cause": "do の後ろは原形の理解不足",
+    "q": "You don’t plays baseball. の誤りを直しなさい。",
+    "a": "You don’t play baseball."
+  },
+  {
+    "id": "E1-DQ-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "変形",
+    "mistake": "否定文の型ミス",
+    "cause": "do not の位置が不安定",
+    "q": "I like math. を否定文にしなさい。",
+    "a": "I do not like math."
+  },
+  {
+    "id": "E1-DQ-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "変形",
+    "mistake": "疑問文の型ミス",
+    "cause": "Do を前に出せない",
+    "q": "You study English. を疑問文にしなさい。",
+    "a": "Do you study English?"
+  },
+  {
+    "id": "E1-DQ-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "答え方",
+    "mistake": "Yes 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "Do they play tennis? に Yes で答えなさい。",
+    "a": "Yes, they do."
+  },
+  {
+    "id": "E1-DQ-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "並びかえ",
+    "mistake": "否定文語順ミス",
+    "cause": "do not の位置が不安定",
+    "q": "( not / we / do / like / dogs )",
+    "a": "We do not like dogs."
+  },
+  {
+    "id": "E1-DQ-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "間違い直し",
+    "mistake": "原形に戻せない",
+    "cause": "do の後ろは原形の理解不足",
+    "q": "Do you likes music? の誤りを直しなさい。",
+    "a": "Do you like music?"
+  },
+  {
+    "id": "E1-DQ-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "空所補充",
+    "mistake": "動詞選択ミス",
+    "cause": "主語＋動詞の型不足",
+    "q": "I (      ) basketball after school. に入る語を書きなさい。",
+    "a": "play"
+  },
+  {
+    "id": "E1-DQ-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "空所補充",
+    "mistake": "疑問文ミス",
+    "cause": "Do の使い方不足",
+    "q": "(      ) you have a dog? に入る語を書きなさい。",
+    "a": "Do"
+  },
+  {
+    "id": "E1-DQ-013",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "日本語→英文",
+    "mistake": "一般動詞文の骨組みミス",
+    "cause": "主語＋動詞の型不足",
+    "q": "「私は毎日英語を勉強します。」を英語で書きなさい。",
+    "a": "I study English every day."
+  },
+  {
+    "id": "E1-DQ-014",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "変形",
+    "mistake": "否定文ミス",
+    "cause": "一般動詞否定文の型不足",
+    "q": "We play baseball. を否定文にしなさい。",
+    "a": "We do not play baseball."
+  },
+  {
+    "id": "E1-DQ-015",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "一般動詞",
+    "type": "答え方",
+    "mistake": "No 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "Do you play the piano? に No で答えなさい。",
+    "a": "No, I do not."
+  },
+  {
+    "id": "E1-BD-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "見分け",
+    "mistake": "文の種類判定ミス",
+    "cause": "be動詞文と一般動詞文の区別不足",
+    "q": "She is kind. は be動詞の文か、一般動詞の文か答えなさい。",
+    "a": "be動詞の文"
+  },
+  {
+    "id": "E1-BD-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "見分け",
+    "mistake": "文の種類判定ミス",
+    "cause": "一般動詞の見分け不足",
+    "q": "I play the piano. は be動詞の文か、一般動詞の文か答えなさい。",
+    "a": "一般動詞の文"
+  },
+  {
+    "id": "E1-BD-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "選択",
+    "mistake": "be動詞と一般動詞の混同",
+    "cause": "文の種類判定不足",
+    "q": "「あなたはサッカーをしますか。」に合う文を選びなさい。",
+    "a": "Do you play soccer?"
+  },
+  {
+    "id": "E1-BD-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "間違い直し",
+    "mistake": "be動詞と一般動詞の混同",
+    "cause": "主語＋動詞の骨組み不足",
+    "q": "He is play tennis. の誤りを直しなさい。",
+    "a": "He plays tennis."
+  },
+  {
+    "id": "E1-BD-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "並びかえ",
+    "mistake": "be動詞文の骨組み不安定",
+    "cause": "主語＋be動詞の型不足",
+    "q": "( am / I / from / Japan )",
+    "a": "I am from Japan."
+  },
+  {
+    "id": "E1-BD-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "並びかえ",
+    "mistake": "一般動詞文の骨組み不安定",
+    "cause": "主語＋動詞の型不足",
+    "q": "( like / dogs / we )",
+    "a": "We like dogs."
+  },
+  {
+    "id": "E1-BD-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "見分け",
+    "mistake": "文の種類判定ミス",
+    "cause": "be動詞文と一般動詞文の区別不足",
+    "q": "You are kind. は be動詞の文か、一般動詞の文か答えなさい。",
+    "a": "be動詞の文"
+  },
+  {
+    "id": "E1-BD-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "見分け",
+    "mistake": "文の種類判定ミス",
+    "cause": "一般動詞の見分け不足",
+    "q": "They play baseball. は be動詞の文か、一般動詞の文か答えなさい。",
+    "a": "一般動詞の文"
+  },
+  {
+    "id": "E1-BD-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "選択",
+    "mistake": "be動詞抜け",
+    "cause": "be動詞文の骨組み不足",
+    "q": "「彼は忙しいです。」に合う英文を選びなさい。",
+    "a": "He is busy."
+  },
+  {
+    "id": "E1-BD-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "選択",
+    "mistake": "be動詞と一般動詞の混同",
+    "cause": "文の種類判定不足",
+    "q": "「私はサッカーをします。」に合う英文を選びなさい。",
+    "a": "I play soccer."
+  },
+  {
+    "id": "E1-BD-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "間違い直し",
+    "mistake": "不要なbe動詞を入れる",
+    "cause": "一般動詞文の骨組み不足",
+    "q": "We are like music. の誤りを直しなさい。",
+    "a": "We like music."
+  },
+  {
+    "id": "E1-BD-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "見分け",
+    "mistake": "文の種類判定ミス",
+    "cause": "be動詞文と一般動詞文の区別不足",
+    "q": "My bag is blue. は be動詞の文か、一般動詞の文か答えなさい。",
+    "a": "be動詞の文"
+  },
+  {
+    "id": "E1-BD-013",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "見分け",
+    "mistake": "文の種類判定ミス",
+    "cause": "一般動詞の見分け不足",
+    "q": "I have a pen. は be動詞の文か、一般動詞の文か答えなさい。",
+    "a": "一般動詞の文"
+  },
+  {
+    "id": "E1-BD-014",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "間違い直し",
+    "mistake": "文の種類混同",
+    "cause": "文の種類判定不足",
+    "q": "Do you a student? の誤りを直しなさい。",
+    "a": "Are you a student?"
+  },
+  {
+    "id": "E1-BD-015",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "区別",
+    "type": "間違い直し",
+    "mistake": "文の種類混同",
+    "cause": "文の種類判定不足",
+    "q": "Is you play soccer? の誤りを直しなさい。",
+    "a": "Do you play soccer?"
+  },
+  {
+    "id": "E1-WH-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "選択",
+    "mistake": "疑問詞の意味混同",
+    "cause": "意味理解不足",
+    "q": "( What / Who / Where ) is your bag?",
+    "a": "Where"
+  },
+  {
+    "id": "E1-WH-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "並びかえ",
+    "mistake": "疑問詞の位置ミス",
+    "cause": "語順不安定",
+    "q": "( is / this / what )",
+    "a": "What is this?"
+  },
+  {
+    "id": "E1-WH-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "答え方",
+    "mistake": "質問文作成ミス",
+    "cause": "Where + be の型不足",
+    "q": "I am from Yamaguchi. になる質問文を書きなさい。",
+    "a": "Where are you from?"
+  },
+  {
+    "id": "E1-WH-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "日本語→英文",
+    "mistake": "疑問文の作り方ミス",
+    "cause": "文の種類判定不足",
+    "q": "「あなたは何が好きですか。」を英語で書きなさい。",
+    "a": "What do you like?"
+  },
+  {
+    "id": "E1-WH-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "間違い直し",
+    "mistake": "疑問詞＋be の語順ミス",
+    "cause": "語順不安定",
+    "q": "Where you are from? の誤りを直しなさい。",
+    "a": "Where are you from?"
+  },
+  {
+    "id": "E1-WH-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "選択",
+    "mistake": "疑問詞の意味混同",
+    "cause": "意味理解不足",
+    "q": "( Who / Where / When ) is she?",
+    "a": "Who"
+  },
+  {
+    "id": "E1-WH-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "選択",
+    "mistake": "疑問詞の意味混同",
+    "cause": "意味理解不足",
+    "q": "( When / What / Where ) do you play soccer? 「いつ」ならどれか。",
+    "a": "When"
+  },
+  {
+    "id": "E1-WH-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "並びかえ",
+    "mistake": "疑問詞＋do の語順ミス",
+    "cause": "語順不安定",
+    "q": "( do / you / what / have )",
+    "a": "What do you have?"
+  },
+  {
+    "id": "E1-WH-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "日本語→英文",
+    "mistake": "疑問詞文ミス",
+    "cause": "語順不安定",
+    "q": "「彼はどこに住んでいますか。」を英語で書きなさい。",
+    "a": "Where does he live?"
+  },
+  {
+    "id": "E1-WH-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "間違い直し",
+    "mistake": "疑問詞＋一般動詞の語順ミス",
+    "cause": "語順不安定",
+    "q": "What you like? の誤りを直しなさい。",
+    "a": "What do you like?"
+  },
+  {
+    "id": "E1-WH-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "答えから質問文",
+    "mistake": "疑問詞選択ミス",
+    "cause": "意味理解不足",
+    "q": "答えが “It is my bag.” になる質問文を書きなさい。",
+    "a": "What is it?"
+  },
+  {
+    "id": "E1-WH-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "疑問詞",
+    "type": "答えから質問文",
+    "mistake": "疑問詞選択ミス",
+    "cause": "意味理解不足",
+    "q": "答えが “At seven.” になる質問文を書きなさい。",
+    "a": "When do you get up?"
+  },
+  {
+    "id": "E1-3S-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "空所補充",
+    "mistake": "s の付け忘れ",
+    "cause": "主語と動詞の対応不足",
+    "q": "He ( play ) tennis. の（ ）内を正しくしなさい。",
+    "a": "plays"
+  },
+  {
+    "id": "E1-3S-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "変形",
+    "mistake": "does の後ろを原形にできない",
+    "cause": "三単現疑問文の型不足",
+    "q": "She likes music. を疑問文にしなさい。",
+    "a": "Does she like music?"
+  },
+  {
+    "id": "E1-3S-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "変形",
+    "mistake": "likes をそのまま残す",
+    "cause": "三単現否定文の型不足",
+    "q": "He plays soccer. を否定文にしなさい。",
+    "a": "He does not play soccer."
+  },
+  {
+    "id": "E1-3S-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "間違い直し",
+    "mistake": "三単現ミス",
+    "cause": "do/does の区別不足",
+    "q": "She don’t like cats. の誤りを直しなさい。",
+    "a": "She doesn’t like cats."
+  },
+  {
+    "id": "E1-3S-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "日本語→英文",
+    "mistake": "三単現ミス",
+    "cause": "主語と動詞の対応不足",
+    "q": "「彼は毎日英語を勉強します。」を英語で書きなさい。",
+    "a": "He studies English every day."
+  },
+  {
+    "id": "E1-3S-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "空所補充",
+    "mistake": "s の付け忘れ",
+    "cause": "主語と動詞の対応不足",
+    "q": "She ( like ) cats. の（ ）内を正しくしなさい。",
+    "a": "likes"
+  },
+  {
+    "id": "E1-3S-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "空所補充",
+    "mistake": "y→ies の変化ミス",
+    "cause": "動詞変化の理解不足",
+    "q": "He ( study ) English. の（ ）内を正しくしなさい。",
+    "a": "studies"
+  },
+  {
+    "id": "E1-3S-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "変形",
+    "mistake": "疑問文ミス",
+    "cause": "does の型不足",
+    "q": "She plays tennis. を疑問文にしなさい。",
+    "a": "Does she play tennis?"
+  },
+  {
+    "id": "E1-3S-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "変形",
+    "mistake": "否定文ミス",
+    "cause": "does not の型不足",
+    "q": "He likes dogs. を否定文にしなさい。",
+    "a": "He does not like dogs."
+  },
+  {
+    "id": "E1-3S-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "間違い直し",
+    "mistake": "does と likes を同時に使う",
+    "cause": "原形理解不足",
+    "q": "Does she likes music? の誤りを直しなさい。",
+    "a": "Does she like music?"
+  },
+  {
+    "id": "E1-3S-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "空所補充",
+    "mistake": "s の付け忘れ",
+    "cause": "主語と動詞の対応不足",
+    "q": "My father ( work ) in Tokyo. の（ ）内を正しくしなさい。",
+    "a": "works"
+  },
+  {
+    "id": "E1-3S-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "空所補充",
+    "mistake": "es の付け方ミス",
+    "cause": "動詞変化の理解不足",
+    "q": "He ( watch ) TV at night. の（ ）内を正しくしなさい。",
+    "a": "watches"
+  },
+  {
+    "id": "E1-3S-013",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "日本語→英文",
+    "mistake": "三単現疑問文ミス",
+    "cause": "does の型不足",
+    "q": "「彼女はピアノをひきますか。」を英語で書きなさい。",
+    "a": "Does she play the piano?"
+  },
+  {
+    "id": "E1-3S-014",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "間違い直し",
+    "mistake": "三単現ミス",
+    "cause": "do/does の区別不足",
+    "q": "He don’t play baseball. の誤りを直しなさい。",
+    "a": "He doesn’t play baseball."
+  },
+  {
+    "id": "E1-3S-015",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "三単現",
+    "type": "選択",
+    "mistake": "三単現ミス",
+    "cause": "主語と動詞の対応不足",
+    "q": "「彼は本を読みます。」に合う英文を選びなさい。",
+    "a": "He reads books."
+  },
+  {
+    "id": "E1-PR-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "空所補充",
+    "mistake": "in/on の混同",
+    "cause": "前置詞の意味理解不足",
+    "q": "The book is (      ) the desk.",
+    "a": "on"
+  },
+  {
+    "id": "E1-PR-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "空所補充",
+    "mistake": "in/on の混同",
+    "cause": "前置詞の意味理解不足",
+    "q": "The cat is (      ) the box.",
+    "a": "in"
+  },
+  {
+    "id": "E1-PR-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "選択",
+    "mistake": "前置詞選択ミス",
+    "cause": "日本語に引っぱられる",
+    "q": "I go to the park ( with / in / on ) my friend.",
+    "a": "with"
+  },
+  {
+    "id": "E1-PR-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "間違い直し",
+    "mistake": "前置詞ミス",
+    "cause": "定型表現未定着",
+    "q": "I am in home. の誤りを直しなさい。",
+    "a": "I am at home."
+  },
+  {
+    "id": "E1-PR-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "日本語→英文",
+    "mistake": "前置詞ミス",
+    "cause": "語順と前置詞の両方が弱い",
+    "q": "「そのいすは机の下にあります。」を英語で書きなさい。",
+    "a": "The chair is under the desk."
+  },
+  {
+    "id": "E1-PR-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "空所補充",
+    "mistake": "前置詞ミス",
+    "cause": "意味理解不足",
+    "q": "My pen is (      ) the bag. 「かばんの中」",
+    "a": "in"
+  },
+  {
+    "id": "E1-PR-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "空所補充",
+    "mistake": "前置詞ミス",
+    "cause": "意味理解不足",
+    "q": "The clock is (      ) the wall. 「壁に」",
+    "a": "on"
+  },
+  {
+    "id": "E1-PR-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "選択",
+    "mistake": "前置詞選択ミス",
+    "cause": "意味理解不足",
+    "q": "I live ( in / on / under ) Tokyo.",
+    "a": "in"
+  },
+  {
+    "id": "E1-PR-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "選択",
+    "mistake": "前置詞選択ミス",
+    "cause": "意味理解不足",
+    "q": "She comes ( from / with / at ) Japan.",
+    "a": "from"
+  },
+  {
+    "id": "E1-PR-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "日本語→英文",
+    "mistake": "前置詞ミス",
+    "cause": "定型表現未定着",
+    "q": "「私は友だちと学校へ行きます。」を英語で書きなさい。",
+    "a": "I go to school with my friend."
+  },
+  {
+    "id": "E1-PR-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "間違い直し",
+    "mistake": "前置詞ミス",
+    "cause": "定型表現未定着",
+    "q": "He is on home. の誤りを直しなさい。",
+    "a": "He is at home."
+  },
+  {
+    "id": "E1-PR-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "前置詞",
+    "type": "日本語→英文",
+    "mistake": "前置詞ミス",
+    "cause": "語順と前置詞の両方が弱い",
+    "q": "「私の本は机の上にあります。」を英語で書きなさい。",
+    "a": "My book is on the desk."
+  },
+  {
+    "id": "E1-FA-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "並びかえ",
+    "mistake": "頻度副詞の位置ミス",
+    "cause": "一般動詞の前ルール未定着",
+    "q": "( always / I / play / tennis )",
+    "a": "I always play tennis."
+  },
+  {
+    "id": "E1-FA-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "並びかえ",
+    "mistake": "頻度副詞の位置ミス",
+    "cause": "be動詞の後ルール未定着",
+    "q": "( tired / are / you / often )",
+    "a": "You are often tired."
+  },
+  {
+    "id": "E1-FA-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "選択",
+    "mistake": "位置ミス",
+    "cause": "一般動詞の前ルール未定着",
+    "q": "always を正しい位置に入れなさい。 I ( ) play soccer after school.",
+    "a": "I always play soccer after school."
+  },
+  {
+    "id": "E1-FA-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "日本語→英文",
+    "mistake": "位置ミス",
+    "cause": "be動詞の後ルール未定着",
+    "q": "「彼女はいつも親切です。」を英語で書きなさい。",
+    "a": "She is always kind."
+  },
+  {
+    "id": "E1-FA-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "日本語→英文",
+    "mistake": "位置ミス",
+    "cause": "一般動詞の前ルール未定着",
+    "q": "「私はときどき朝ごはんを食べます。」を英語で書きなさい。",
+    "a": "I sometimes eat breakfast."
+  },
+  {
+    "id": "E1-FA-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "並びかえ",
+    "mistake": "位置ミス",
+    "cause": "一般動詞の前ルール未定着",
+    "q": "( often / they / study / English )",
+    "a": "They often study English."
+  },
+  {
+    "id": "E1-FA-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "並びかえ",
+    "mistake": "位置ミス",
+    "cause": "be動詞の後ルール未定着",
+    "q": "( busy / is / he / always )",
+    "a": "He is always busy."
+  },
+  {
+    "id": "E1-FA-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "間違い直し",
+    "mistake": "位置ミス",
+    "cause": "ルール未定着",
+    "q": "I play always tennis. の誤りを直しなさい。",
+    "a": "I always play tennis."
+  },
+  {
+    "id": "E1-FA-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "間違い直し",
+    "mistake": "位置ミス",
+    "cause": "ルール未定着",
+    "q": "She always is happy. の誤りを直しなさい。",
+    "a": "She is always happy."
+  },
+  {
+    "id": "E1-FA-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "頻度副詞",
+    "type": "選択",
+    "mistake": "位置ミス",
+    "cause": "一般動詞の前ルール未定着",
+    "q": "never を正しい位置に入れなさい。 He ( ) gets up late.",
+    "a": "He never gets up late."
+  },
+  {
+    "id": "E1-OR-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "疑問詞＋be の語順ミス",
+    "cause": "語順不安定",
+    "q": "( from / are / you / where )",
+    "a": "Where are you from?"
+  },
+  {
+    "id": "E1-OR-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "疑問詞＋do の語順ミス",
+    "cause": "語順不安定",
+    "q": "( do / like / you / what )",
+    "a": "What do you like?"
+  },
+  {
+    "id": "E1-OR-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "not の位置ミス",
+    "cause": "語順不安定",
+    "q": "( not / she / is / busy )",
+    "a": "She is not busy."
+  },
+  {
+    "id": "E1-OR-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "三単現の位置ミス",
+    "cause": "主語＋動詞の型不足",
+    "q": "( plays / he / baseball )",
+    "a": "He plays baseball."
+  },
+  {
+    "id": "E1-OR-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "前置詞の位置ミス",
+    "cause": "語順不安定",
+    "q": "( with / I / my / go / friend )",
+    "a": "I go with my friend."
+  },
+  {
+    "id": "E1-OR-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "be動詞疑問文の語順ミス",
+    "cause": "疑問文の型不足",
+    "q": "( you / are / tired / ? )",
+    "a": "Are you tired?"
+  },
+  {
+    "id": "E1-OR-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "do 疑問文の語順ミス",
+    "cause": "疑問文の型不足",
+    "q": "( do / play / they / soccer / ? )",
+    "a": "Do they play soccer?"
+  },
+  {
+    "id": "E1-OR-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "not の位置ミス",
+    "cause": "否定文の型不足",
+    "q": "( not / I / am / busy )",
+    "a": "I am not busy."
+  },
+  {
+    "id": "E1-OR-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "三単現の位置ミス",
+    "cause": "主語＋動詞の型不足",
+    "q": "( she / music / likes )",
+    "a": "She likes music."
+  },
+  {
+    "id": "E1-OR-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "疑問詞＋be の語順ミス",
+    "cause": "語順不安定",
+    "q": "( from / is / he / where )",
+    "a": "Where is he from?"
+  },
+  {
+    "id": "E1-OR-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "一般動詞文の骨組みミス",
+    "cause": "主語＋動詞の型不足",
+    "q": "( I / English / study )",
+    "a": "I study English."
+  },
+  {
+    "id": "E1-OR-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "be動詞文の骨組みミス",
+    "cause": "主語＋be の型不足",
+    "q": "( am / I / fine )",
+    "a": "I am fine."
+  },
+  {
+    "id": "E1-OR-013",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "頻度副詞の位置ミス",
+    "cause": "ルール未定着",
+    "q": "( often / we / soccer / play )",
+    "a": "We often play soccer."
+  },
+  {
+    "id": "E1-OR-014",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "前置詞の位置ミス",
+    "cause": "語順不安定",
+    "q": "( in / the / box / cat / is / the )",
+    "a": "The cat is in the box."
+  },
+  {
+    "id": "E1-OR-015",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "並びかえ",
+    "type": "並びかえ",
+    "mistake": "疑問詞＋do の語順ミス",
+    "cause": "語順不安定",
+    "q": "( when / do / get / up / you )",
+    "a": "When do you get up?"
+  },
+  {
+    "id": "E1-WR-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "be動詞文の骨組みミス",
+    "cause": "主語＋be の型不足",
+    "q": "「私は福岡出身です。」を英語で書きなさい。",
+    "a": "I am from Fukuoka."
+  },
+  {
+    "id": "E1-WR-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "疑問文の作り方ミス",
+    "cause": "文の種類判定不足",
+    "q": "「あなたはサッカーをしますか。」を英語で書きなさい。",
+    "a": "Do you play soccer?"
+  },
+  {
+    "id": "E1-WR-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "頻度副詞の位置ミス",
+    "cause": "ルール未定着",
+    "q": "「彼女はいつも忙しいです。」を英語で書きなさい。",
+    "a": "She is always busy."
+  },
+  {
+    "id": "E1-WR-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "三単現ミス",
+    "cause": "主語と動詞の対応不足",
+    "q": "「彼は図書館で勉強します。」を英語で書きなさい。",
+    "a": "He studies in the library."
+  },
+  {
+    "id": "E1-WR-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "疑問詞の作り方ミス",
+    "cause": "語順不安定",
+    "q": "A: (                    ) ?  B: I am from Japan.",
+    "a": "Where are you from"
+  },
+  {
+    "id": "E1-WR-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "be動詞文の骨組みミス",
+    "cause": "主語＋be の型不足",
+    "q": "「彼女は親切です。」を英語で書きなさい。",
+    "a": "She is kind."
+  },
+  {
+    "id": "E1-WR-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "一般動詞文の骨組みミス",
+    "cause": "主語＋動詞の型不足",
+    "q": "「私は毎日テニスをします。」を英語で書きなさい。",
+    "a": "I play tennis every day."
+  },
+  {
+    "id": "E1-WR-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "前置詞ミス",
+    "cause": "意味理解不足",
+    "q": "「私のペンはかばんの中にあります。」を英語で書きなさい。",
+    "a": "My pen is in the bag."
+  },
+  {
+    "id": "E1-WR-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "疑問文の作り方ミス",
+    "cause": "語順不安定",
+    "q": "「彼は忙しいですか。」を英語で書きなさい。",
+    "a": "Is he busy?"
+  },
+  {
+    "id": "E1-WR-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "疑問詞の作り方ミス",
+    "cause": "語順不安定",
+    "q": "「あなたは何が好きですか。」を英語で書きなさい。",
+    "a": "What do you like?"
+  },
+  {
+    "id": "E1-WR-011",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "三単現ミス",
+    "cause": "主語と動詞の対応不足",
+    "q": "「彼女はピアノをひきます。」を英語で書きなさい。",
+    "a": "She plays the piano."
+  },
+  {
+    "id": "E1-WR-012",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "英作文",
+    "type": "英作文",
+    "mistake": "頻度副詞の位置ミス",
+    "cause": "ルール未定着",
+    "q": "「私はよく本を読みます。」を英語で書きなさい。",
+    "a": "I often read books."
+  },
+  {
+    "id": "E1-RD-001",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "読めても答え方が崩れる",
+    "cause": "Yes/No 応答の型不足",
+    "q": "I am Ken. I like soccer.  問い：Does Ken like soccer?",
+    "a": "Yes, he does."
+  },
+  {
+    "id": "E1-RD-002",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "Where の意味理解不足",
+    "cause": "疑問詞と前置詞の理解不足",
+    "q": "She is Emi. She is in the library.  問い：Where is Emi?",
+    "a": "She is in the library."
+  },
+  {
+    "id": "E1-RD-003",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "Yes/No 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "A: Do you like music?  B: (            ), I do.",
+    "a": "Yes"
+  },
+  {
+    "id": "E1-RD-004",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "be動詞の答え方ミス",
+    "cause": "答え方の型不足",
+    "q": "A: Are you tired?  B: No, (      ) not.",
+    "a": "I am"
+  },
+  {
+    "id": "E1-RD-005",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "頻度副詞の理解不足",
+    "cause": "語の意味理解不足",
+    "q": "He often plays tennis after school.  問い：内容として正しいか。",
+    "a": "正しい"
+  },
+  {
+    "id": "E1-RD-006",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "Who の理解不足",
+    "cause": "疑問詞理解不足",
+    "q": "This is Tom. He is my friend.  問い：Who is Tom?",
+    "a": "He is my friend."
+  },
+  {
+    "id": "E1-RD-007",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "What の理解不足",
+    "cause": "疑問詞理解不足",
+    "q": "I have a bike.  問い：What do you have?",
+    "a": "I have a bike."
+  },
+  {
+    "id": "E1-RD-008",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "Yes/No 応答ミス",
+    "cause": "答え方の型不足",
+    "q": "A: Is she a student?  B: Yes, (      ) is.",
+    "a": "she"
+  },
+  {
+    "id": "E1-RD-009",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "前置詞理解不足",
+    "cause": "前置詞理解不足",
+    "q": "The ball is under the desk.  問い：Where is the ball?",
+    "a": "It is under the desk."
+  },
+  {
+    "id": "E1-RD-010",
+    "subject": "英語",
+    "grade": "中1",
+    "category": "読解・会話完成",
+    "type": "読解",
+    "mistake": "三単現理解不足",
+    "cause": "主語と動詞の対応不足",
+    "q": "He plays baseball every day.  問い：Does he play baseball every day?",
+    "a": "Yes, he does."
+  },
+  {
+    "id": "M1-001",
+    "subject": "数学",
+    "grade": "中1",
+    "category": "正負の数",
+    "type": "計算",
+    "mistake": "符号ミス",
+    "cause": "確認不足",
+    "q": "-3 + 5 を計算しなさい。",
+    "a": "2"
+  },
+  {
+    "id": "M2-001",
+    "subject": "数学",
+    "grade": "中1",
+    "category": "文字式・方程式",
+    "type": "計算",
+    "mistake": "途中計算ミス",
+    "cause": "1行1処理ができていない",
+    "q": "2x + 3x を簡単にしなさい。",
+    "a": "5x"
+  }
+];
+
+    const qs=(s)=>document.querySelector(s), qsa=(s)=>[...document.querySelectorAll(s)];
+    let currentSet=[];
+    let answerVisible=false;
+    const STORAGE_KEY='mikamijuku_zero_mode_v14';
+    function safeLocalGet(){ try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');}catch(e){return null;} }
+    function safeLocalSet(data){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){} }
+    function shuffle(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+    function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+    function textToHtml(str){ return escapeHtml(str).replace(/\n/g,'<br>'); }
+    function listHtml(title, items){ return `<h3>${title}</h3><ul>${items.map(v=>`<li>${v}</li>`).join('')}</ul>`; }
+    function switchMain(tab){ ['builder','list','photo','reports'].forEach(id=>{qs('#screen'+id.charAt(0).toUpperCase()+id.slice(1)).classList.toggle('active',id===tab);qs('#tab'+id.charAt(0).toUpperCase()+id.slice(1)).classList.toggle('active',id===tab);}); }
+    function renderBuilderOptions(){
+      const subj = qs('#subjectSelect').value; const cfg = subjectConfig[subj];
+      qs('#stageArea').innerHTML = cfg.stages.map(([v,label],i)=>`<label class="checkItem"><input type="checkbox" class="stageCheck" value="${v}" ${i<2?'checked':''} /> <span>${label}</span></label>`).join('');
+      qs('#typeArea').innerHTML = cfg.types.map(t=>`<label class="checkItem"><input type="checkbox" class="typeCheck" value="${t}" checked /> <span>${t}</span></label>`).join('');
+      qs('#testTitle').value = `${qs('#gradeSelect').value}${subj} 診断テスト`;
+      buildTest();
+      saveState();
+    }
+    function selectedStages(){ return qsa('.stageCheck:checked').map(el=>el.value); }
+    function selectedTypes(){ return qsa('.typeCheck:checked').map(el=>el.value); }
+    function stageLabel(subj, code){ const map=Object.fromEntries(subjectConfig[subj].stages); return map[code]||code; }
+    function renderCurrentSetView(subj, grade, stages, basePool){
+      const catCounts={}; currentSet.forEach(q=>catCounts[q.category]=(catCounts[q.category]||0)+1);
+      qs('#paperTitle').textContent = qs('#testTitle').value || `${grade}${subj} 診断テスト`;
+      qs('#paperSub').textContent = `科目：${subj} / 範囲：${stages.join('・')||'未選択'} / 問題数：${currentSet.length}問`;
+      qs('#generateStatus').innerHTML = [
+        `候補問題数：${basePool.length}問`,
+        `実際に組んだ問題数：${currentSet.length}問`,
+        `使った親項目：${Object.keys(catCounts).join('・') || 'なし'}`,
+        `内訳：${Object.entries(catCounts).map(([k,v])=>`${k} ${v}問`).join(' / ') || 'なし'}`,
+        `この表示は仮ではなく、今の抽出結果そのものです。`
+      ].map(t=>`<div>${escapeHtml(t)}</div>`).join('');
+      if(!currentSet.length){
+        qs('#questionArea').innerHTML = '<div class="q">条件に合う問題がまだありません。</div>';
+        return;
+      }
+      qs('#questionArea').innerHTML = currentSet.map((q,i)=>`<div class="q"><strong>${i+1}.</strong> ${escapeHtml(q.q)}<div class="small">[${q.id}] / ${q.type} / ${q.category}</div><div class="answerBox"><table class="ansTable"><tr><td>&nbsp;</td></tr></table></div>${answerVisible?`<div class="answerKey"><strong>解答:</strong> ${escapeHtml(q.a)}</div>`:''}</div>`).join('');
+      const ansBtn = qs('#showAnswersBtn');
+      if(ansBtn) ansBtn.textContent = answerVisible ? '解答を隠す' : '解答を表示';
+    }
+    function refreshCurrentSetView(){
+      const subj=qs('#subjectSelect').value, grade=qs('#gradeSelect').value;
+      const stages=selectedStages().map(v=>stageLabel(subj,v));
+      const types=selectedTypes();
+      const basePool=questionBank.filter(q=>q.subject===subj && q.grade===grade && (stages.length===0 || stages.includes(q.category)) && (types.length===0 || types.includes(q.type)));
+      renderCurrentSetView(subj, grade, stages, basePool);
+    }
+    function updateReportErrorChecksFromText(text){
+      const src = String(text||'');
+      qsa('#errorTypeArea input').forEach(el=>{ el.checked = src.includes(el.value); });
+    }
+    function parseChappieSections(text){
+      const src = String(text||'').replace(/\r\n?/g, '\n');
+      const labels = ['問題別判定','落とした問題番号','答案の特徴','誤答例','ミスの型','原因','自由分析','学習レポート','入塾クロージング資料'];
+      const re = /^\s*(問題別判定|落とした問題番号|答案の特徴|誤答例|ミスの型|原因|自由分析|学習レポート|入塾クロージング資料)\s*[：:]\s*(.*)$/gm;
+      const hits = [...src.matchAll(re)];
+      const out = {};
+      hits.forEach((m, idx)=>{
+        const start = m.index + m[0].length;
+        const end = idx+1 < hits.length ? hits[idx+1].index : src.length;
+        const inline = (m[2]||'').trim();
+        const rest = src.slice(start, end).trim();
+        out[m[1]] = [inline, rest].filter(Boolean).join('\n').trim();
+      });
+      labels.forEach(k=>{ if(!out[k]) out[k]=''; });
+      return out;
+    }
+    function applyChappieResponseToFields(text){
+      const parsed = parseChappieSections(text);
+      qs('#photoMarkingSummary').value = parsed['問題別判定'] || qs('#photoMarkingSummary').value;
+      qs('#photoProblemNos').value = parsed['落とした問題番号'] || qs('#photoProblemNos').value;
+      qs('#photoTraits').value = parsed['答案の特徴'] || qs('#photoTraits').value;
+      qs('#photoWrongExamples').value = parsed['誤答例'] || qs('#photoWrongExamples').value;
+      qs('#photoMemo').value = parsed['原因'] || qs('#photoMemo').value;
+      qs('#photoFreeAnalysis').value = parsed['自由分析'] || qs('#photoFreeAnalysis').value;
+
+      qs('#reportMarkingSummary').value = parsed['問題別判定'] || qs('#reportMarkingSummary').value;
+      qs('#problemNos').value = parsed['落とした問題番号'] || qs('#problemNos').value;
+      qs('#answerTraits').value = parsed['答案の特徴'] || qs('#answerTraits').value;
+      qs('#wrongExamples').value = parsed['誤答例'] || qs('#wrongExamples').value;
+      qs('#memo').value = parsed['原因'] || qs('#memo').value;
+      qs('#freeAnalysis').value = parsed['自由分析'] || qs('#freeAnalysis').value;
+      qs('#aiLearningSummary').value = parsed['学習レポート'] || qs('#aiLearningSummary').value;
+      qs('#aiClosingSummary').value = parsed['入塾クロージング資料'] || qs('#aiClosingSummary').value;
+      updateReportErrorChecksFromText(parsed['ミスの型'] || '');
+      const okCount = Object.values(parsed).filter(Boolean).length;
+      qs('#responseParseStatus').className = 'box statusOk';
+      qs('#responseParseStatus').textContent = `チャッピーの返答を反映しました。取り込めた項目数：${okCount} / 8`;
+      buildReport();
+      saveState();
+    }
+    function collectState(){
+      return {
+        builder:{
+          subject:qs('#subjectSelect').value, grade:qs('#gradeSelect').value, testTitle:qs('#testTitle').value, questionCount:qs('#questionCount').value,
+          stages:selectedStages(), types:selectedTypes(), currentSetIds:currentSet.map(q=>q.id), answerVisible
+        },
+        list:{
+          subject:qs('#listSubject').value, category:qs('#listCategory').value, type:qs('#listType').value, keyword:qs('#listKeyword').value, limit:qs('#listLimit').value
+        },
+        photo:{
+          photoType:qs('#photoType').value, photoTarget:qs('#photoTarget').value, markingSummary:qs('#photoMarkingSummary').value, problemNos:qs('#photoProblemNos').value, traits:qs('#photoTraits').value, wrongExamples:qs('#photoWrongExamples').value, memo:qs('#photoMemo').value, freeAnalysis:qs('#photoFreeAnalysis').value, prompt:qs('#chappiePromptBox').value, response:qs('#chappieResponseBox').value
+        },
+        report:{
+          subject:qs('#reportSubject').value, grade:qs('#reportGrade').value, mode:qs('#reportMode').value, studentName:qs('#studentName').value, score:qs('#score').value, unit:qs('#unit').value, markingSummary:qs('#reportMarkingSummary').value, problemNos:qs('#problemNos').value, answerTraits:qs('#answerTraits').value, wrongExamples:qs('#wrongExamples').value, memo:qs('#memo').value, freeAnalysis:qs('#freeAnalysis').value, aiLearningSummary:qs('#aiLearningSummary').value, aiClosingSummary:qs('#aiClosingSummary').value, errors:selectedReportErrors()
+        }
+      };
+    }
+    function saveState(){ safeLocalSet(collectState()); }
+    function restoreCheckedValues(selector, values){
+      const set = new Set(values||[]);
+      qsa(selector).forEach(el=>{ el.checked = set.has(el.value); });
+    }
+    function loadState(){
+      const s = safeLocalGet();
+      if(!s) return;
+      if(s.builder){
+        qs('#subjectSelect').value = s.builder.subject || qs('#subjectSelect').value;
+        qs('#gradeSelect').value = s.builder.grade || qs('#gradeSelect').value;
+        renderBuilderOptions();
+        qs('#testTitle').value = s.builder.testTitle || qs('#testTitle').value;
+        qs('#questionCount').value = s.builder.questionCount || qs('#questionCount').value;
+        restoreCheckedValues('.stageCheck', s.builder.stages);
+        restoreCheckedValues('.typeCheck', s.builder.types);
+        const subj=qs('#subjectSelect').value, grade=qs('#gradeSelect').value;
+        const stages=selectedStages().map(v=>stageLabel(subj,v));
+        const types=selectedTypes();
+        const basePool=questionBank.filter(q=>q.subject===subj && q.grade===grade && (stages.length===0 || stages.includes(q.category)) && (types.length===0 || types.includes(q.type)));
+        const map = new Map(questionBank.map(q=>[q.id,q]));
+        answerVisible=!!s.builder.answerVisible;
+        currentSet=(s.builder.currentSetIds||[]).map(id=>map.get(id)).filter(Boolean);
+        if(!currentSet.length){ buildTest(); } else { renderCurrentSetView(subj, grade, stages, basePool); }
+      }
+      if(s.list){
+        qs('#listSubject').value = s.list.subject || 'all';
+        qs('#listCategory').value = s.list.category || 'all';
+        qs('#listType').value = s.list.type || 'all';
+        qs('#listKeyword').value = s.list.keyword || '';
+        qs('#listLimit').value = s.list.limit || '50';
+      }
+      if(s.photo){
+        qs('#photoType').value = s.photo.photoType || qs('#photoType').value;
+        qs('#photoTarget').value = s.photo.photoTarget || qs('#photoTarget').value;
+        qs('#photoMarkingSummary').value = s.photo.markingSummary || '';
+        qs('#photoProblemNos').value = s.photo.problemNos || '';
+        qs('#photoTraits').value = s.photo.traits || '';
+        qs('#photoWrongExamples').value = s.photo.wrongExamples || '';
+        qs('#photoMemo').value = s.photo.memo || '';
+        qs('#photoFreeAnalysis').value = s.photo.freeAnalysis || '';
+        qs('#chappiePromptBox').value = s.photo.prompt || '';
+        qs('#chappieResponseBox').value = s.photo.response || '';
+      }
+      if(s.report){
+        qs('#reportSubject').value = s.report.subject || qs('#reportSubject').value;
+        qs('#reportGrade').value = s.report.grade || qs('#reportGrade').value;
+        qs('#reportMode').value = s.report.mode || qs('#reportMode').value;
+        renderReportErrorTypes();
+        qs('#studentName').value = s.report.studentName || '';
+        qs('#score').value = s.report.score || '';
+        qs('#unit').value = s.report.unit || '';
+        qs('#reportMarkingSummary').value = s.report.markingSummary || '';
+        qs('#problemNos').value = s.report.problemNos || '';
+        qs('#answerTraits').value = s.report.answerTraits || '';
+        qs('#wrongExamples').value = s.report.wrongExamples || '';
+        qs('#memo').value = s.report.memo || '';
+        qs('#freeAnalysis').value = s.report.freeAnalysis || '';
+        qs('#aiLearningSummary').value = s.report.aiLearningSummary || '';
+        qs('#aiClosingSummary').value = s.report.aiClosingSummary || '';
+        restoreCheckedValues('#errorTypeArea input', s.report.errors);
+      }
+      renderList();
+      buildReport();
+    }
+    function buildTest(){
+      const subj=qs('#subjectSelect').value, grade=qs('#gradeSelect').value, count=parseInt(qs('#questionCount').value,10);
+      const stages=selectedStages().map(v=>stageLabel(subj,v));
+      const types=selectedTypes();
+      const basePool=questionBank.filter(q=>q.subject===subj && q.grade===grade && (stages.length===0 || stages.includes(q.category)) && (types.length===0 || types.includes(q.type)));
+      const grouped={};
+      basePool.forEach(q=>{ const key=q.category; if(!grouped[key]) grouped[key]=[]; grouped[key].push(q); });
+      const selectedCats = stages.length ? stages.filter(cat=>grouped[cat] && grouped[cat].length) : [...new Set(basePool.map(q=>q.category))];
+      let picked=[];
+      let seen=new Set();
+      let catIndex=0;
+      while(picked.length < count && selectedCats.length){
+        const cat = selectedCats[catIndex % selectedCats.length];
+        const pool = shuffle((grouped[cat]||[]).filter(q=>!seen.has(q.id)));
+        if(pool.length){ picked.push(pool[0]); seen.add(pool[0].id); }
+        catIndex++;
+        if(catIndex > selectedCats.length * count) break;
+        if([...seen].length >= basePool.length) break;
+      }
+      const remain = shuffle(basePool.filter(q=>!seen.has(q.id)));
+      while(picked.length < count && remain.length){ const q=remain.shift(); picked.push(q); seen.add(q.id); }
+      currentSet=picked.slice(0,count);
+      renderCurrentSetView(subj, grade, stages, basePool);
+      saveState();
+    }
+    function populateListFilters(){
+      const cats=['all',...new Set(questionBank.map(q=>q.category))];
+      const types=['all',...new Set(questionBank.map(q=>q.type))];
+      qs('#listCategory').innerHTML = cats.map(v=>`<option value="${v}">${v==='all'?'すべて':v}</option>`).join('');
+      qs('#listType').innerHTML = types.map(v=>`<option value="${v}">${v==='all'?'すべて':v}</option>`).join('');
+    }
+    function renderList(){
+      const subj=qs('#listSubject').value, cat=qs('#listCategory').value, type=qs('#listType').value, kw=qs('#listKeyword').value.trim().toLowerCase(), lim=parseInt(qs('#listLimit').value,10);
+      let rows=questionBank.filter(q=>(subj==='all'||q.subject===subj)&&(cat==='all'||q.category===cat)&&(type==='all'||q.type===type)&&(!kw || [q.id,q.q,q.a,q.category,q.mistake,q.cause].join(' ').toLowerCase().includes(kw)));
+      const counts = {};
+      rows.forEach(r=>counts[r.category]=(counts[r.category]||0)+1);
+      qs('#listCounts').innerHTML = [`表示件数：${rows.length}`,...Object.entries(counts).map(([k,v])=>`${k}：${v}問`)].map(t=>`<div class="countPill">${escapeHtml(t)}</div>`).join('');
+      const targets = {'be動詞':15,'一般動詞':15,'区別':15,'疑問詞':12,'三単現':15,'前置詞':12,'頻度副詞':10,'並びかえ':15,'英作文':12,'読解・会話完成':10};
+      const currentAll = {};
+      questionBank.filter(q=>q.subject==='英語' && q.grade==='中1').forEach(r=>currentAll[r.category]=(currentAll[r.category]||0)+1);
+      const totalTarget = Object.values(targets).reduce((a,b)=>a+b,0);
+      const totalCurrent = Object.keys(targets).reduce((sum,k)=>sum+(currentAll[k]||0),0);
+      qs('#progressSummary').innerHTML = [`合計：${totalCurrent}/${totalTarget}問`].concat(Object.entries(targets).map(([k,v])=>`${k}：${currentAll[k]||0}/${v}`)).map(t=>`<div class="countPill">${escapeHtml(t)}</div>`).join('');
+      rows=rows.slice(0,lim);
+      qs('#listBody').innerHTML = rows.map(q=>`<tr><td>${q.id}</td><td>${q.subject}</td><td>${q.grade}</td><td>${q.category}</td><td>${q.type}</td><td>${escapeHtml(q.mistake)}</td><td>${escapeHtml(q.cause)}</td><td>${escapeHtml(q.q)}</td><td>${escapeHtml(q.a)}</td></tr>`).join('');
+    }
+    function renderReportErrorTypes(){ const subj=qs('#reportSubject').value; const cfg=subjectConfig[subj]; qs('#errorTypeArea').innerHTML=cfg.errors.map(item=>`<label class="checkItem"><input type="checkbox" value="${item}" /> <span>${item}</span></label>`).join(''); qsa('#errorTypeArea input').forEach(el=>el.addEventListener('change', buildReport)); }
+    function selectedReportErrors(){ return qsa('#errorTypeArea input:checked').map(el=>el.value); }
+    function buildReport(){
+      const subj=qs('#reportSubject').value, mode=qs('#reportMode').value;
+      const d={ name:qs('#studentName').value.trim(), grade:qs('#reportGrade').value, score:qs('#score').value.trim(), unit:qs('#unit').value.trim(), markingSummary:qs('#reportMarkingSummary').value.trim(), problemNos:qs('#problemNos').value.trim(), answerTraits:qs('#answerTraits').value.trim(), wrongExamples:qs('#wrongExamples').value.trim(), memo:qs('#memo').value.trim(), freeAnalysis:qs('#freeAnalysis').value.trim(), aiLearningSummary:qs('#aiLearningSummary').value.trim(), aiClosingSummary:qs('#aiClosingSummary').value.trim(), errors:selectedReportErrors() };
+      const basis=[];
+      const parsedNos = d.problemNos.split(/[,、\s]+/).map(v=>parseInt(v,10)).filter(v=>!Number.isNaN(v) && v>=1 && v<=currentSet.length);
+      const linkedProblems = parsedNos.map(n=>currentSet[n-1]).filter(Boolean);
+      const linkedMistakes = [...new Set(linkedProblems.map(q=>q.mistake).filter(Boolean))];
+      const linkedCauses = [...new Set(linkedProblems.map(q=>q.cause).filter(Boolean))];
+      const linkedCats = [...new Set(linkedProblems.map(q=>q.category).filter(Boolean))];
+      if(d.markingSummary) basis.push(`問題別判定は「${d.markingSummary}」です。`);
+      if(d.problemNos) basis.push(`問題番号 ${d.problemNos} に注目すると、同じ種類の崩れが見えます。`);
+      if(linkedProblems.length) basis.push(`落とした問題から見ると「${linkedCats.join('・')}」の項目に課題が寄っています。`);
+      if(d.answerTraits) basis.push(`答案の特徴として「${d.answerTraits}」が見えています。`);
+      if(d.wrongExamples) basis.push(`誤答例「${d.wrongExamples}」から、考え方や処理のズレが見えます。`);
+      if(d.memo) basis.push(`メモとして「${d.memo}」があります。`);
+      if(!basis.length) basis.push('ここに答案の根拠が入ります。');
+      const diag=[], causes=[], priority=[], plan=[];
+      if(subj==='英語'){
+        const has = (name) => d.errors.includes(name);
+        if(has('be動詞と一般動詞の混同')){ diag.push('be動詞の文と一般動詞の文のルールが答案の中で混ざっています。'); causes.push('文の種類を見分ける前に、感覚で英文を作っている可能性があります。'); priority.push('まずは文の種類を見分ける練習を最優先にします。'); plan.push('be動詞文と一般動詞文を2列で分ける練習を入れます。'); }
+        if(has('動詞選択ミス')){ diag.push('主語に合う動詞や文に合う動詞の選び方で迷いが見えます。'); causes.push('主語と動詞を一まとまりで捉える感覚がまだ弱い可能性があります。'); priority.push('主語と動詞の対応をはっきりさせることを優先します。'); plan.push('主語ごとに使う動詞の型を短文で確認します。'); }
+        if(has('語順ミス')){ diag.push('語順の崩れがあり、英語の文の骨組みがまだ安定していません。'); causes.push('主語→動詞→残りの語の流れが固まりきっていません。'); priority.push('語順を整えることを優先します。'); plan.push('主語→動詞→残りの語の順で1文ずつ組み立てます。'); }
+        if(has('否定文の作り方ミス')){ diag.push('否定文にしたときに not や don’t の位置が崩れやすい状態です。'); causes.push('肯定文から否定文に変える手順がまだ型になっていません。'); priority.push('否定文の変形を優先して固めます。'); plan.push('肯定文→否定文の変形練習を短く反復します。'); }
+        if(has('疑問文の作り方ミス')){ diag.push('疑問文にしたときに形が崩れやすい状態です。'); causes.push('be動詞か do を前に出すルールが整理されていない可能性があります。'); priority.push('疑問文の型を先に固定します。'); plan.push('肯定文→疑問文→答え方の3点セットで練習します。'); }
+        if(has('答え方ミス')){ diag.push('質問の意味は取れても、Yes/No や主語・動詞の形で崩れています。'); causes.push('質問文と答え方をセットで覚えられていない可能性があります。'); priority.push('質問文と答え方を一緒に覚えることを優先します。'); plan.push('質問→答えのセット練習を毎回入れます。'); }
+        if(has('三単現ミス')){ diag.push('三単現の s や does の使い方で失点しています。'); causes.push('主語が he / she / it のときの変化が安定していません。'); priority.push('三単現の変化だけを切り出して練習します。'); plan.push('普通の文→三単現→疑問文・否定文へと段階的に確認します。'); }
+        if(has('前置詞ミス')){ diag.push('前置詞の抜けや選択ミスが見られます。'); causes.push('場所や関係を表す語の使い分けがあいまいです。'); priority.push('in / on / at / with などを短文で確認します。'); plan.push('前置詞だけを入れ替える練習をします。'); }
+        if(has('頻度副詞の位置ミス')){ diag.push('always や often などの位置が不安定です。'); causes.push('一般動詞の前、be動詞の後というルールが定着していません。'); priority.push('頻度副詞の位置を先に固めます。'); plan.push('一般動詞文・be動詞文で位置を比べる練習をします。'); }
+        if(has('スペルミス')){ diag.push('単語の意味は分かっていても、書く段階で細かい失点が出ています。'); causes.push('音とつづりの結びつきがまだ弱い可能性があります。'); priority.push('書ける単語を増やすことを優先します。'); plan.push('見て書く→見ないで書くの2段階で確認します。'); }
+        if(has('単語抜け')){ diag.push('文の骨組みは見えても、必要な語が抜けやすい状態です。'); causes.push('文を最後まで書き切る習慣がまだ弱い可能性があります。'); priority.push('主語・動詞・残りの語を最後まで書くことを優先します。'); plan.push('短い文を最後まで書き切る練習を固定します。'); }
+        if(has('空欄')){ diag.push('考え込んで止まってしまい、空欄が目立つ状態です。'); causes.push('自信がなく、途中まででも書く型がまだできていない可能性があります。'); priority.push('空欄を減らすことを先に目標にします。'); plan.push('迷ったら主語と動詞だけでも先に書く練習を入れます。'); }
+        if(has('日本語はわかるが英文にできない')){ diag.push('意味は取れていても、英語として組み立てるところで止まっています。'); causes.push('知識はあっても、英作文として使う練習が不足している可能性があります。'); priority.push('日本語→英文の組み立て練習を優先します。'); plan.push('短い日本文を英語に直す練習を毎回入れます。'); }
+        if(has('見直し不足')){ diag.push('あと少しで取れる点を見直しで落としている状態です。'); causes.push('見直しの順番が固定されていない可能性があります。'); priority.push('見直しの型を先に作ります。'); plan.push('解き終わり後に主語・動詞・語順の3点確認を入れます。'); }
+        if(has('途中で止まる')){ diag.push('途中で手が止まりやすく、最後まで書き切れていません。'); causes.push('書き始める型がなく、自信が切れやすい可能性があります。'); priority.push('途中で止まらず最後まで書く習慣を優先します。'); plan.push('1文を短く区切って最後まで完成させる練習をします。'); }
+        if(!diag.length && linkedMistakes.length){ diag.push(`問題番号から見ると、特に「${linkedMistakes[0]}」が中心になっています。`); }
+        if(!causes.length && linkedCauses.length){ causes.push(`落とした問題の傾向からは「${linkedCauses[0]}」が原因候補です。`); }
+        if(!priority.length && linkedCats.length){ priority.push(`まずは「${linkedCats[0]}」の項目を立て直すことを優先します。`); }
+        if(!plan.length && linkedCats.length){ plan.push(`${linkedCats[0]} にしぼった短い反復練習を入れます。`); }
+        if(!diag.length){ diag.push('英文の組み立て方にまだ不安定さが残っている状態です。'); causes.push('英語の型を使う前に、感覚で書いている可能性があります。'); priority.push('主語と動詞の基本ルールを立て直すことが最優先です。'); plan.push('be動詞文と一般動詞文を分けて短文で反復します。'); }
+      } else { diag.push('計算・立式・確認のどこかで処理が崩れている状態です。'); causes.push('理解不足だけでなく、途中確認を飛ばして失点している可能性があります。'); priority.push('計算の型と見直しの型を固定することが最優先です。'); plan.push('途中式を1行ずつ書く練習を固定します。'); }
+      const builderSubject=qs('#subjectSelect').value, builderGrade=qs('#gradeSelect').value; const builderStages=selectedStages().map(v=>stageLabel(builderSubject,v));
+      qs('#tags').innerHTML = [mode==='learning'?'学習レポート':'入塾クロージング資料', `${qs('#reportGrade').value}${subj}`, d.score?`${d.score}点`:'' , d.unit].filter(Boolean).map((v,i)=>`<span class="tag ${i===0?(mode==='learning'?'modeTag':'closingTag'):''}">${escapeHtml(v)}</span>`).join('');
+      const priorityItems = [];
+      if(d.aiLearningSummary){ priorityItems.push(`<div class="box"><strong>チャッピー作成の学習レポート本文（優先）</strong><br>${textToHtml(d.aiLearningSummary)}</div>`); }
+      if(d.aiClosingSummary){ priorityItems.push(`<div class="box"><strong>チャッピー作成のクロージング本文（優先）</strong><br>${textToHtml(d.aiClosingSummary)}</div>`); }
+      qs('#markingBlock').innerHTML = d.markingSummary ? `<h3>丸つけ結果</h3><div class="muted">${textToHtml(d.markingSummary)}</div>` : `<h3>丸つけ結果</h3><div class="muted">ここには、貼り付けた返答から取り込んだ問題別判定が表示されます。</div>`;
+      qs('#priorityReportBlock').innerHTML = priorityItems.length ? `<h3>チャッピー作成本文</h3>${priorityItems.join('')}` : `<h3>チャッピー作成本文</h3><div class="muted">ここには、貼り付けた返答から取り込んだ学習レポート本文・クロージング本文が優先表示されます。</div>`;
+      qs('#builderSummary').innerHTML = listHtml('問題作成から引き継いだ内容', [`科目：${builderGrade}${builderSubject}`, `作成した問題数：${currentSet.length}問`, `習った範囲：${builderStages.join('・') || '未選択'}`]);
+      if(linkedProblems.length){
+        qs('#derivedFromProblems').innerHTML = listHtml('落とした問題から自動で拾った内容', [
+          `該当問題：${linkedProblems.map((q,i)=>`${parsedNos[i]}→${q.id}`).join(' / ')}`,
+          `親項目：${linkedCats.join('・')}`,
+          `見えたミス：${linkedMistakes.join('・') || 'なし'}`,
+          `原因候補：${linkedCauses.join('・') || 'なし'}`
+        ]);
+      } else {
+        qs('#derivedFromProblems').innerHTML = listHtml('落とした問題から自動で拾った内容', ['まだ問題番号からの自動抽出はありません。']);
+      }
+      const now = new Date(); qs('#updateStatus').textContent = `レポートを更新しました：${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+      const freeText = d.freeAnalysis;
+      if(mode==='learning'){ qs('#main1').innerHTML=listHtml('今回の根拠', basis); qs('#main2').innerHTML=listHtml('診断', diag); qs('#main3').innerHTML=listHtml('つまずきの本質', causes); qs('#main4').innerHTML=listHtml('今いちばん優先すること', priority); qs('#main5').innerHTML=listHtml('1〜2週間の対策', plan); qs('#main6').innerHTML=`<h3>配布用コメント</h3><div class="muted">${escapeHtml(d.aiLearningSummary || `${d.name||'生徒'}さんは、今回の${subj}の答案から見ると、課題がかなり具体的に見えています。やるべきことをしぼって進めると改善しやすい状態です。`)}</div>`; }
+      else { qs('#main1').innerHTML=listHtml('現状の見立て', [`${subj}の課題はかなり具体的に見えています。`]); qs('#main2').innerHTML=listHtml('今回の根拠', basis); qs('#main3').innerHTML=listHtml('いま放置しないほうがいい理由', [`${subj}のつまずきが積み上がると、苦手意識だけが先に強くなりやすい状態です。`]); qs('#main4').innerHTML=listHtml('みかみ塾での改善の進め方', plan); qs('#main5').innerHTML=listHtml('今回見えている伸びしろ', [`今の時期なら、${subj}の土台を立て直すスタートとして良いタイミングです。`]); qs('#main6').innerHTML=`<h3>クロージング用コメント</h3><div class="muted">${escapeHtml(d.aiClosingSummary || `${d.name||'生徒'}さんは、今の時点で課題がかなり具体的に見えています。だからこそ、今ここで手を打てば、変化の手応えを作りやすい状態です。`)}</div>`; }
+      if(freeText){ qs('#freeBlock').innerHTML = `<h3>自由分析</h3><div class="muted">${escapeHtml(freeText)}</div>`; }
+      else { qs('#freeBlock').innerHTML = `<h3>自由分析</h3><div class="muted">ここには、項目だけでは拾いきれない答案全体の特徴を入れます。</div>`; }
+      saveState();
+    }
+
+    qs('#tabBuilder').addEventListener('click', ()=>switchMain('builder'));
+    qs('#tabList').addEventListener('click', ()=>switchMain('list'));
+    qs('#tabReports').addEventListener('click', ()=>switchMain('reports'));
+    qs('#subjectSelect').addEventListener('change', renderBuilderOptions);
+    qs('#gradeSelect').addEventListener('change', renderBuilderOptions);
+    qs('#generateBtn').addEventListener('click', buildTest);
+    qs('#goListBtn').addEventListener('click', ()=>{ qs('#listSubject').value=qs('#subjectSelect').value; renderList(); switchMain('list'); });
+    qs('#goReportBtn').addEventListener('click', ()=>{ qs('#reportSubject').value=qs('#subjectSelect').value; qs('#reportGrade').value=qs('#gradeSelect').value; qs('#unit').value=selectedStages().map(v=>stageLabel(qs('#subjectSelect').value,v)).join('・'); renderReportErrorTypes(); buildReport(); switchMain('reports'); });
+    qs('#refreshListBtn').addEventListener('click', renderList);
+    qs('#backToBuilderBtn').addEventListener('click', ()=>switchMain('builder'));
+    qs('#listSubject').addEventListener('change', renderList);
+    qs('#listCategory').addEventListener('change', renderList);
+    qs('#listType').addEventListener('change', renderList);
+    qs('#listKeyword').addEventListener('input', renderList);
+    qs('#listLimit').addEventListener('change', renderList);
+    qs('#reportSubject').addEventListener('change', ()=>{ renderReportErrorTypes(); buildReport(); });
+    qs('#reportMode').addEventListener('change', buildReport);
+    qs('#reportGrade').addEventListener('change', buildReport);
+    qs('#buildReportBtn').addEventListener('click', buildReport);
+
+
+    const photoInput = qs('#photoInput');
+    if(photoInput){
+      photoInput.addEventListener('change', (e)=>{
+        const file = e.target.files && e.target.files[0];
+        if(!file){ qs('#photoPreviewWrap').innerHTML = 'まだ写真が入っていません。'; return; }
+        const reader = new FileReader();
+        reader.onload = ()=>{ qs('#photoPreviewWrap').innerHTML = `<div style="font-weight:700;margin-bottom:10px;">読み込み済み：${escapeHtml(file.name)}</div><img src="${reader.result}" style="max-width:100%;border-radius:14px;border:1px solid var(--line);" />`; };
+        reader.readAsDataURL(file);
+      });
+    }
+    qs('#tabPhoto').addEventListener('click', ()=>switchMain('photo'));
+
+    
+    function buildChappiePrompt(){
+      const subj = qs('#subjectSelect').value;
+      const grade = qs('#gradeSelect').value;
+      const unit = selectedStages().map(v=>stageLabel(subj,v)).join('・') || '未選択';
+      const compactSet = currentSet.map((q, i) => ({ no: i + 1, id: q.id, category: q.category, type: q.type, q: q.q, a: q.a }));
+      return [
+        `${grade}${subj}の答案写真をこれから送ります。あなたの役割は「答案分析」と「レポート入力用の整理」です。`,
+        '感想文のように広げず、事実ベースで、実務入力しやすい形で返してください。',
+        '',
+        '【最重要ルール】',
+        '1. 写真に写っている内容だけで判断すること',
+        '2. 読み取れない部分は勝手に補わないこと',
+        '3. 推測した場合は必ず「推測」と明記すること',
+        '4. 出力は必ず指定の見出し・順番で返すこと',
+        '5. 各項目は短く、入力しやすい形で返すこと',
+        '6. 余計な前置き・まとめ・励ましは不要',
+        '7. 問題番号は半角数字で返すこと',
+        '8. 複数ある場合は「1,3,5」の形で返すこと',
+        '9. ミスの型は候補の中から選ぶこと',
+        '10. 学習レポートと入塾クロージング資料は別物として作ること',
+        '',
+        '【今回のテスト条件】',
+        `学年: ${grade}`,
+        `科目: ${subj}`,
+        `範囲: ${unit}`,
+        `問題数: ${currentSet.length}`,
+        '',
+        '【今回のテスト問題一覧】',
+        JSON.stringify(compactSet, null, 2),
+        '',
+        '【ミスの型候補】',
+        'be動詞と一般動詞の混同',
+        '動詞選択ミス',
+        '語順ミス',
+        '否定文の作り方ミス',
+        '疑問文の作り方ミス',
+        '答え方ミス',
+        '三単現ミス',
+        '前置詞ミス',
+        '頻度副詞の位置ミス',
+        'スペルミス',
+        '単語抜け',
+        '空欄',
+        '日本語はわかるが英文にできない',
+        '見直し不足',
+        '途中で止まる',
+        '',
+        '【丸つけルール】',
+        '・問題別判定: 各問題を ○ / × / △ / 判定保留 で返す',
+        '・○ = 正答と判断できる',
+        '・× = 誤答と判断できる',
+        '・△ = 一部合っているが不十分、または途中式・途中解答で部分的に正しい',
+        '・判定保留 = 写真が不鮮明で読めない、または判定材料が不足している',
+        '・問題別判定は「1: ○ / 2: × / 3: △ / 4: 判定保留」の形式でまとめる',
+        '',
+        '【答案分析の判定ルール】',
+        '・落とした問題番号: 写真から誤答・空欄・未完成と判断できる番号だけ',
+        '・答案の特徴: 全体傾向を1〜3個まで',
+        '・誤答例: 写真から読めるものだけ。読めない場合は「読み取り不可」',
+        '・ミスの型: 候補から該当するものだけ選ぶ',
+        '・原因: 答案から言える範囲だけ。言いすぎない',
+        '・自由分析: 上の項目に入りきらない観察事実だけ',
+        '',
+        '【学習レポートの作り方】',
+        '・対象は保護者と生徒',
+        '・今回の答案から見えた課題を、やさしい日本語で具体的に説明する',
+        '・課題は多くても2つまでに絞る',
+        '・何ができていないかだけで終わらず、次に何をすれば伸びるかまで書く',
+        '・1〜2週間で取り組む内容が伝わる形にする',
+        '・抽象的な励ましだけで終わらない',
+        '・2〜4文でまとめる',
+        '',
+        '【クロージング資料の作り方】',
+        '・対象は保護者面談',
+        '・今回の答案から見えた課題を、面談で使える形で整理する',
+        '・不安をあおりすぎず、今の時期に立て直す意味が伝わるようにする',
+        '・家庭学習だけでは修正しにくいポイントがあれば自然に入れる',
+        '・塾でどう改善していくかがイメージできるようにする',
+        '・売り込みっぽくなりすぎない',
+        '・2〜4文でまとめる',
+        '',
+        '【禁止事項】',
+        '・答案に根拠がないことを断定しない',
+        '・抽象的な精神論を書かない',
+        '・学習レポートとクロージング資料を同じ内容の言い換えにしない',
+        '・「がんばりましょう」「今後に期待です」だけで終わらない',
+        '・過度な営業文句を書かない',
+        '',
+        '【この形で返してください】',
+        '問題別判定:',
+        '落とした問題番号:',
+        '答案の特徴:',
+        '誤答例:',
+        'ミスの型:',
+        '原因:',
+        '自由分析:',
+        '学習レポート:',
+        '入塾クロージング資料:'
+      ].join('\n');
+    }
+
+    qs('#copyChappiePromptBtn').addEventListener('click', async ()=>{
+      const prompt = buildChappiePrompt();
+      qs('#chappiePromptBox').value = prompt;
+      try {
+        await navigator.clipboard.writeText(prompt);
+        qs('#photoAnalyzeStatus').className = 'box statusOk';
+        qs('#photoAnalyzeStatus').textContent = 'チャッピー分析用プロンプトをコピーしました。写メと一緒にチャットへ送ってください。';
+      } catch (e) {
+        qs('#photoAnalyzeStatus').textContent = 'プロンプトは作れました。下の欄から手でコピーしてチャットへ送ってください。';
+      }
+      saveState();
+    });
+
+    qs('#applyChappieResponseBtn').addEventListener('click', ()=>{
+      const text = qs('#chappieResponseBox').value.trim();
+      if(!text){
+        qs('#responseParseStatus').textContent = 'まだチャッピーの返答が入っていません。貼り付けてから反映してください。';
+        return;
+      }
+      applyChappieResponseToFields(text);
+    });
+
+qs('#toReportFromPhotoBtn').addEventListener('click', ()=>{
+      switchMain('reports');
+      qs('#reportMarkingSummary').value = qs('#photoMarkingSummary').value || '';
+      qs('#problemNos').value = qs('#photoProblemNos').value || '';
+      qs('#answerTraits').value = qs('#photoTraits').value || '';
+      qs('#wrongExamples').value = qs('#photoWrongExamples').value || '';
+      qs('#memo').value = qs('#photoMemo').value || '写真分析から移動。ここに今後、自動抽出結果を入れる。';
+      qs('#freeAnalysis').value = qs('#photoFreeAnalysis').value || '';
+      buildReport();
+      saveState();
+    });
+
+
+    function buildDocHtml(title, modeLabel){
+      const primaryAiText = qs('#reportMode').value==='learning' ? qs('#aiLearningSummary').value.trim() : qs('#aiClosingSummary').value.trim();
+      const primaryAiBlock = primaryAiText ? `<h2>チャッピー作成本文（優先）</h2><div class="box">${textToHtml(primaryAiText)}</div>` : '';
+      const content = `<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:"MS PGothic","Yu Gothic",sans-serif;margin:18mm;color:#111;} h1{font-size:18pt;margin:0 0 8mm;} h2{font-size:12pt;margin:6mm 0 2mm;border-bottom:1px solid #999;padding-bottom:2mm;} p,li{font-size:11pt;line-height:1.8;} ul{margin-top:0;} .meta{font-size:10pt;color:#444;margin-bottom:6mm;} .box{border:1px solid #999;padding:4mm;margin:0 0 4mm;} </style></head><body>`+
+      `<h1>${escapeHtml(title)}</h1>`+
+      `<div class="meta">作成種別：${escapeHtml(modeLabel)} / 作成日：${new Date().toLocaleString('ja-JP')}</div>`+
+      `<div class="box"><strong>対象</strong><br>学年：${escapeHtml(qs('#reportGrade').value)} / 科目：${escapeHtml(qs('#reportSubject').value)} / 生徒名：${escapeHtml(qs('#studentName').value || '未入力')}</div>`+
+      (qs('#reportMarkingSummary').value.trim() ? `<h2>丸つけ結果</h2><div class="box">${textToHtml(qs('#reportMarkingSummary').value.trim())}</div>` : '')+
+      primaryAiBlock+
+      `<h2>今回の根拠</h2>${qs('#main1').innerHTML}`+
+      `<h2>診断・見立て</h2>${qs('#main2').innerHTML}`+
+      `<h2>つまずきの本質 / 放置しない理由</h2>${qs('#main3').innerHTML}`+
+      `<h2>優先順位 / 改善方針</h2>${qs('#main4').innerHTML}`+
+      `<h2>対策 / 伸びしろ</h2>${qs('#main5').innerHTML}`+
+      `<h2>コメント</h2>${qs('#main6').innerHTML}`+
+      `<h2>自由分析</h2>${qs('#freeBlock').innerHTML}`+
+      `</body></html>`;
+      return content;
+    }
+    function downloadDoc(filename, title, modeLabel){
+      const html = buildDocHtml(title, modeLabel);
+      const blob = new Blob(['﻿', html], { type:'application/msword' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    }
+
+    qs('#exportLearningBtn').addEventListener('click', ()=>{ qs('#reportMode').value='learning'; buildReport(); downloadDoc('learning_report.doc', '学習レポート', '学習レポート'); });
+    qs('#exportClosingBtn').addEventListener('click', ()=>{ qs('#reportMode').value='closing'; buildReport(); downloadDoc('closing_report.doc', '入塾クロージング資料', '入塾クロージング資料'); });
+
+    function buildPrintableTestHtml(){
+      const pages = [];
+      for(let i=0;i<currentSet.length;i+=10){ pages.push(currentSet.slice(i,i+10)); }
+      return `<!doctype html><html><head><meta charset="UTF-8"><style>
+      body{font-family:"MS PGothic","Yu Gothic",sans-serif;margin:0;color:#111;}
+      h1{font-size:13pt;margin:0 0 1.8mm;}
+      .sub{font-size:8.3pt;color:#444;margin-bottom:2.8mm;}
+      .headRow{display:flex;justify-content:space-between;gap:8mm;font-size:10pt;margin-bottom:3mm;}
+      .headBox{flex:1;border-bottom:1px solid #999;padding-bottom:1mm;}
+      .page{page-break-after:always;padding:0;}
+      .page:last-child{page-break-after:auto;}
+      .q{margin-bottom:3.5mm;font-size:10.6pt;line-height:1.5;}
+      .ansTable{width:100%;border-collapse:collapse;margin-top:1.2mm;}
+      .ansTable td{border:1px solid #999;height:7mm;padding:0;}
+      @page{size:A4;margin:12.7mm;}
+      </style></head><body>`+
+      `${pages.map((page,pageIndex)=>`<div class="page"><h1>${escapeHtml(qs('#paperTitle').textContent)}</h1><div class="headRow"><div class="headBox">氏名：</div><div class="headBox">学年：</div></div><div class="sub">${escapeHtml(qs('#paperSub').textContent)} / ${pageIndex+1}ページ目</div>${page.map((q,idx)=>`<div class="q"><strong>${pageIndex*10+idx+1}.</strong> ${escapeHtml(q.q)}<table class="ansTable"><tr><td>&nbsp;</td></tr></table></div>`).join('')}</div>`).join('')}`+
+      `</body></html>`;
+    }
+    function buildPrintableAnswerHtml(){
+      const pages = [];
+      for(let i=0;i<currentSet.length;i+=20){ pages.push(currentSet.slice(i,i+20)); }
+      return `<!doctype html><html><head><meta charset="UTF-8"><style>
+      body{font-family:"MS PGothic","Yu Gothic",sans-serif;margin:0;color:#111;}
+      h1{font-size:13pt;margin:0 0 1.8mm;}
+      .sub{font-size:8.3pt;color:#444;margin-bottom:2.8mm;}
+      .page{page-break-after:always;padding:0;}
+      .page:last-child{page-break-after:auto;}
+      .q{margin-bottom:3.2mm;font-size:10.6pt;line-height:1.7;}
+      .a{margin-top:1mm;padding:1.8mm 2.2mm;border:1px solid #999;background:#fafafa;}
+      @page{size:A4;margin:12.7mm;}
+      </style></head><body>`+
+      `${pages.map((page,pageIndex)=>`<div class="page"><h1>${escapeHtml(qs('#paperTitle').textContent)} 解答</h1><div class="sub">${escapeHtml(qs('#paperSub').textContent)} / ${pageIndex+1}ページ目</div>${page.map((q,idx)=>`<div class="q"><strong>${pageIndex*20+idx+1}.</strong> ${escapeHtml(q.q)}<div class="a"><strong>解答:</strong> ${escapeHtml(q.a)}</div></div>`).join('')}</div>`).join('')}`+
+      `</body></html>`;
+    }
+    function printCurrentTest(){
+      const html = buildPrintableTestHtml();
+      const w = window.open('', '_blank');
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(()=>w.print(), 300);
+    }
+    function saveCurrentTest(){
+      const html = buildPrintableTestHtml();
+      const blob = new Blob(['﻿', html], { type:'application/msword' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'test_sheet.doc';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+    }
+    function printCurrentAnswers(){
+      const html = buildPrintableAnswerHtml();
+      const w = window.open('', '_blank');
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(()=>w.print(), 300);
+    }
+    function saveCurrentAnswers(){
+      const html = buildPrintableAnswerHtml();
+      const blob = new Blob(['﻿', html], { type:'application/msword' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'answer_sheet.doc';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+    }
+
+    qs('#printQuestionsBtn').addEventListener('click', printCurrentTest);
+    qs('#saveQuestionsBtn').addEventListener('click', saveCurrentTest);
+    qs('#showAnswersBtn').addEventListener('click', ()=>{ answerVisible=!answerVisible; refreshCurrentSetView(); saveState(); });
+    qs('#printAnswersBtn').addEventListener('click', printCurrentAnswers);
+    qs('#saveAnswersBtn').addEventListener('click', saveCurrentAnswers);
+    document.addEventListener('input', (e)=>{ if(e.target && e.target.closest('input, textarea, select')) saveState(); }, true);
+    document.addEventListener('change', (e)=>{ if(e.target && e.target.closest('input, textarea, select')) saveState(); }, true);
+    populateListFilters(); renderBuilderOptions(); renderList(); renderReportErrorTypes(); buildReport(); loadState();
+  </script>
+</body>
+</html>
