@@ -2453,6 +2453,54 @@
     function selectedTypes(){ return qsa('.typeCheck:checked').map(el=>el.value); }
     function stageLabel(subj, code){ const map=Object.fromEntries(subjectConfig[subj].stages); return map[code]||code; }
     function stageCodeFromLabel(subj, label){ const pair=(subjectConfig[subj].stages||[]).find(([code,name])=>name===label); return pair ? pair[0] : null; }
+    function simpleHash(str){ let h=0; for(let i=0;i<str.length;i++){ h=(h*31 + str.charCodeAt(i))|0; } return Math.abs(h).toString(36).slice(0,6); }
+    function buildSetMeta(){
+      const subj=qs('#subjectSelect').value;
+      const grade=qs('#gradeSelect').value;
+      const stages=selectedStages().map(v=>stageLabel(subj,v));
+      const types=selectedTypes();
+      const ids=currentSet.map(q=>q.id).join('|');
+      const subjCode=subj==='英語'?'ENG':'MATH';
+      const gradeCode=(grade||'').replace('中','C');
+      const setId=`${subjCode}-${gradeCode}-${currentSet.length}-${simpleHash(ids+'|'+stages.join('|')+'|'+types.join('|'))}`;
+      return { setId, subject:subj, grade, stages, types, count:currentSet.length, version:'v14' };
+    }
+    function buildSetMetaHtml(){
+      const meta=buildSetMeta();
+      return `<div class="setMeta"><strong>復元用セット情報</strong><br>セットID: ${escapeHtml(meta.setId)} / 科目: ${escapeHtml(meta.subject)} / 学年: ${escapeHtml(meta.grade)} / 範囲: ${escapeHtml(meta.stages.join('・')||'未選択')} / タイプ: ${escapeHtml(meta.types.join('・')||'未選択')} / 問題数: ${escapeHtml(String(meta.count))} / 版: ${escapeHtml(meta.version)}</div>`;
+    }
+    function practiceQuestionAllowed(q, preset){
+      if(!preset || !Array.isArray(preset.errorValues) || !preset.errorValues.length) return true;
+      const rules = {
+        'be動詞と一般動詞の混同': { cats:['be動詞','一般動詞','区別'], types:['見分け','変形','間違い直し','空所補充'] },
+        '動詞選択ミス': { cats:['一般動詞','区別','過去の疑問文・否定文','一般動詞の過去形'], types:['空所補充','変形','間違い直し','選択'] },
+        '語順ミス': { cats:['並びかえ','疑問詞','頻度副詞','一般動詞','過去の疑問文・否定文'], types:['並びかえ','英作文','変形'] },
+        '否定文の作り方ミス': { cats:['be動詞','一般動詞','三単現','過去のbe動詞','過去の疑問文・否定文'], types:['変形','並びかえ','間違い直し'] },
+        '疑問文の作り方ミス': { cats:['be動詞','一般動詞','疑問詞','三単現','過去のbe動詞','過去の疑問文・否定文'], types:['変形','並びかえ','答え方'] },
+        '答え方ミス': { cats:['be動詞','疑問詞','読解・会話完成','過去のbe動詞','過去の疑問文・否定文'], types:['答え方','読解','変形'] },
+        '三単現ミス': { cats:['三単現'], types:['変形','空所補充','間違い直し','英作文'] },
+        '前置詞ミス': { cats:['前置詞'], types:['空所補充','選択','英作文','間違い直し'] },
+        '頻度副詞の位置ミス': { cats:['頻度副詞'], types:['空所補充','並びかえ','英作文','間違い直し'] },
+        '過去のbe動詞ミス': { cats:['過去のbe動詞'], types:['変形','空所補充','答え方','間違い直し'] },
+        '過去形ミス': { cats:['一般動詞の過去形'], types:['変形','空所補充','間違い直し','英作文'] },
+        '不規則動詞ミス': { cats:['不規則動詞'], types:['空所補充','変形','英作文','間違い直し'] },
+        'did の文の作り方ミス': { cats:['過去の疑問文・否定文','不規則動詞'], types:['変形','並びかえ','答え方','間違い直し'] },
+        '過去を表す語の使い方ミス': { cats:['過去を表す語','一般動詞の過去形'], types:['選択','空所補充','英作文'] },
+        '単語抜け': { cats:['英作文','疑問詞','一般動詞','三単現'], types:['英作文','空所補充','並びかえ'] },
+        '日本語はわかるが英文にできない': { cats:['英作文','疑問詞','三単現','一般動詞の過去形','不規則動詞'], types:['英作文','並びかえ','変形'] },
+        '途中で止まる': { cats:['英作文','読解・会話完成','一般動詞','be動詞'], types:['空所補充','変形','英作文'] }
+      };
+      const activeRules = preset.errorValues.map(v=>rules[v]).filter(Boolean);
+      if(!activeRules.length) return true;
+      const matchedRules = activeRules.filter(rule=>rule.cats.includes(q.category));
+      if(matchedRules.length){
+        return matchedRules.some(rule=>rule.types.includes(q.type));
+      }
+      if(Array.isArray(preset.linkedCats) && preset.linkedCats.includes(q.category)){
+        return ['変形','空所補充','間違い直し','並びかえ','英作文','答え方','見分け','選択'].includes(q.type);
+      }
+      return false;
+    }
     function renderCurrentSetView(subj, grade, stages, basePool){
       const catCounts={}; currentSet.forEach(q=>catCounts[q.category]=(catCounts[q.category]||0)+1);
       qs('#paperTitle').textContent = qs('#testTitle').value || `${grade}${subj} 診断テスト`;
@@ -2646,9 +2694,11 @@
       const stages=selectedStages().map(v=>stageLabel(subj,v));
       const types=selectedTypes();
       const basePool=questionBank.filter(q=>q.subject===subj && q.grade===grade && (stages.length===0 || stages.includes(q.category)) && (types.length===0 || types.includes(q.type)));
+      const practicePool = practicePreset ? basePool.filter(q=>practiceQuestionAllowed(q, practicePreset)) : basePool;
+      const activePool = (practicePreset && practicePool.length >= Math.max(count, 6)) ? practicePool : basePool;
       const grouped={};
-      basePool.forEach(q=>{ const key=q.category; if(!grouped[key]) grouped[key]=[]; grouped[key].push(q); });
-      const selectedCats = stages.length ? stages.filter(cat=>grouped[cat] && grouped[cat].length) : [...new Set(basePool.map(q=>q.category))];
+      activePool.forEach(q=>{ const key=q.category; if(!grouped[key]) grouped[key]=[]; grouped[key].push(q); });
+      const selectedCats = stages.length ? stages.filter(cat=>grouped[cat] && grouped[cat].length) : [...new Set(activePool.map(q=>q.category))];
       const categoryWeights = (practicePreset && practicePreset.categoryWeights) || {};
       const typeWeights = (practicePreset && practicePreset.typeWeights) || {};
       const orderedCats = [...selectedCats].sort((a,b)=>(categoryWeights[b]||0)-(categoryWeights[a]||0));
@@ -2684,9 +2734,9 @@
         }
         catIndex++;
         if(catIndex > orderedCats.length * Math.max(count,3)) break;
-        if(usedIds.size >= basePool.length) break;
+        if(usedIds.size >= activePool.length) break;
       }
-      const remain=shuffle(basePool.filter(q=>!usedIds.has(q.id)));
+      const remain=shuffle(activePool.filter(q=>!usedIds.has(q.id)));
       remain.sort((a,b)=>{
         const pa=`${a.category}|${a.type}|${a.mistake}`;
         const pb=`${b.category}|${b.type}|${b.mistake}`;
@@ -2709,7 +2759,10 @@
         patternCount[pk]=(patternCount[pk]||0)+1;
       }
       currentSet=picked.slice(0,count);
-      renderCurrentSetView(subj, grade, stages, basePool);
+      renderCurrentSetView(subj, grade, stages, activePool);
+      if(practicePreset){
+        qs('#generateStatus').innerHTML += `<div>練習向きの直接問題にしぼった候補：${activePool.length}問</div>`;
+      }
       saveState();
     }
     function populateListFilters(){
@@ -3049,12 +3102,22 @@
         '【やってほしいこと】',
         '・問題番号を読む',
         '・復旧コードが見える場合は必ず読む',
+        '・プリント上部または下部にある「復元用セット情報」が見える場合は、その内容も読む',
         '・問題文をできるだけそのまま抜き出す',
         '・写真から読み取れない問題は保留として分ける',
         '・正答が明確にわかる場合だけ correctCandidate に入れる。わからない場合は空文字でよい',
         '・復旧コードが見える問題は code に入れる。見えない場合は空文字でよい',
         '',
         '【出力形式】',
+        '復元用セット情報:',
+        'setId:',
+        'subject:',
+        'grade:',
+        'stages:',
+        'types:',
+        'count:',
+        'version:',
+        '見えない項目は空でよい',
         '復旧問題一覧:',
         '[',
         '  {"no":1,"code":"E1-DQ-004","q":"問題文","correctCandidate":"","note":""}',
@@ -3072,15 +3135,27 @@
     function normalizeForMatch(str){ return String(str||'').replace(/[\s　]+/g,'').trim(); }
     function parseRecoveryResponse(text){
       const src = String(text||'');
+      const meta = {};
+      src.split(/\r\n?|\n/).forEach(line=>{
+        const m = line.match(/^\s*(setId|subject|grade|stages|types|count|version)\s*[:：]\s*(.*)$/i);
+        if(m) meta[m[1]] = (m[2]||'').trim();
+      });
       const start = src.indexOf('[');
       const end = src.lastIndexOf(']');
       if(start === -1 || end === -1 || end <= start) throw new Error('JSON配列が見つかりません');
       const arrText = src.slice(start, end + 1);
       const items = JSON.parse(arrText);
       if(!Array.isArray(items)) throw new Error('復旧問題一覧が配列ではありません');
-      return items;
+      return { meta, items };
     }
-    function applyRecoveredProblemSet(items){
+    function applyRecoveredProblemSet(payload){
+      const meta = payload && payload.meta ? payload.meta : {};
+      const items = payload && Array.isArray(payload.items) ? payload.items : [];
+      const metaSubject = (meta.subject || '').trim();
+      const metaGrade = (meta.grade || '').trim();
+      if(metaSubject && ['英語','数学'].includes(metaSubject)) qs('#subjectSelect').value = metaSubject;
+      if(metaGrade) qs('#gradeSelect').value = metaGrade;
+      renderBuilderOptions();
       const subj = qs('#subjectSelect').value;
       const grade = qs('#gradeSelect').value;
       const bankMap = new Map(questionBank.map(q=>[normalizeForMatch(q.q), q]));
@@ -3104,8 +3179,26 @@
           no
         };
       }).sort((a,b)=>a.no-b.no);
+      const stageNames = String(meta.stages||'').split(/[\/／,、・\s]+/).map(v=>v.trim()).filter(Boolean);
+      const typeNames = String(meta.types||'').split(/[\/／,、・\s]+/).map(v=>v.trim()).filter(Boolean);
+      if(stageNames.length){
+        const stageCodes = stageNames.map(name=>stageCodeFromLabel(subj, name)).filter(Boolean);
+        if(stageCodes.length) qsa('.stageCheck').forEach(el=>{ el.checked = stageCodes.includes(el.value); });
+      }
+      if(typeNames.length){
+        qsa('.typeCheck').forEach(el=>{ el.checked = typeNames.includes(el.value); });
+      }
       currentSet = restored;
-      analysisSnapshot = { title: `${grade}${subj} 復旧問題セット`, sub: `科目：${subj} / 復旧問題数：${restored.length}問`, questions: restored.map((q,i)=>({ ...q, no:i+1 })) };
+      const metaInfo = [];
+      if(meta.setId) metaInfo.push(`セットID：${meta.setId}`);
+      if(meta.stages) metaInfo.push(`範囲：${meta.stages}`);
+      if(meta.types) metaInfo.push(`タイプ：${meta.types}`);
+      analysisSnapshot = {
+        title: `${grade}${subj} 復旧問題セット`,
+        sub: `科目：${subj} / 復旧問題数：${restored.length}問${metaInfo.length ? ' / ' + metaInfo.join(' / ') : ''}`,
+        questions: restored.map((q,i)=>({ ...q, no:i+1 }))
+      };
+      qs('#testTitle').value = `${grade}${subj} 復旧問題セット`;
       refreshCurrentSetView();
       qs('#paperTitle').textContent = analysisSnapshot.title;
       qs('#paperSub').textContent = analysisSnapshot.sub;
@@ -3114,6 +3207,9 @@
         `復旧問題数：${restored.length}問`,
         `問題バンクと一致した問題（復旧コードまたは問題文で照合）：${matchedCount}問`,
         `仮復旧の問題：${restored.length - matchedCount}問`,
+        meta.setId ? `復元用セット情報：セットID ${meta.setId}` : '復元用セット情報：なし',
+        meta.stages ? `復元した範囲：${meta.stages}` : '復元した範囲：なし',
+        meta.types ? `復元した出題タイプ：${meta.types}` : '復元した出題タイプ：なし',
         'この問題セットは通常生成ではなく、プリント写真からの仮復旧です。'
       ].map(t=>`<div>${escapeHtml(t)}</div>`).join('');
       const status = qs('#recoveryStatus');
@@ -3162,8 +3258,8 @@
         return;
       }
       try {
-        const items = parseRecoveryResponse(raw);
-        applyRecoveredProblemSet(items);
+        const payload = parseRecoveryResponse(raw);
+        applyRecoveredProblemSet(payload);
       } catch (e) {
         qs('#recoveryStatus').textContent = '復旧結果の形式を読み取れませんでした。JSON配列の形を確認してください。';
       }
@@ -3235,10 +3331,10 @@ qs('#toReportFromPhotoBtn').addEventListener('click', ()=>{
       .q{margin-bottom:3.5mm;font-size:10.6pt;line-height:1.5;}
       .ansTable{width:100%;border-collapse:collapse;margin-top:1.2mm;}
       .ansTable td{border:1px solid #999;height:7mm;padding:0;}
-      .recoveryCode{font-size:7pt;color:#777;text-align:right;margin-top:1mm;}
+      .setMeta{font-size:7.2pt;color:#666;border:1px dashed #bbb;border-radius:6px;padding:1.8mm;margin:0 0 3mm;line-height:1.5;background:#fafafa}.recoveryCode{font-size:7pt;color:#777;text-align:right;margin-top:1mm;}
       @page{size:A4;margin:12.7mm;}
       </style></head><body>`+
-      `${pages.map((page,pageIndex)=>`<div class="page"><h1>${escapeHtml(qs('#paperTitle').textContent)}</h1><div class="headRow"><div class="headBox">氏名：</div><div class="headBox">学年：</div></div><div class="sub">${escapeHtml(qs('#paperSub').textContent)} / ${pageIndex+1}ページ目</div>${page.map((q,idx)=>`<div class="q"><strong>${pageIndex*10+idx+1}.</strong> ${escapeHtml(q.q)}<table class="ansTable"><tr><td>&nbsp;</td></tr></table><div class="recoveryCode">復旧コード: ${escapeHtml(q.id || `REC-${pageIndex*10+idx+1}`)}</div></div>`).join('')}</div>`).join('')}`+
+      `${pages.map((page,pageIndex)=>`<div class="page"><h1>${escapeHtml(qs('#paperTitle').textContent)}</h1><div class="headRow"><div class="headBox">氏名：</div><div class="headBox">学年：</div></div><div class="sub">${escapeHtml(qs('#paperSub').textContent)} / ${pageIndex+1}ページ目</div>${buildSetMetaHtml()}${page.map((q,idx)=>`<div class="q"><strong>${pageIndex*10+idx+1}.</strong> ${escapeHtml(q.q)}<table class="ansTable"><tr><td>&nbsp;</td></tr></table><div class="recoveryCode">復旧コード: ${escapeHtml(q.id || `REC-${pageIndex*10+idx+1}`)}</div></div>`).join('')}</div>`).join('')}`+
       `</body></html>`;
     }
     function buildPrintableAnswerHtml(){
@@ -3252,10 +3348,10 @@ qs('#toReportFromPhotoBtn').addEventListener('click', ()=>{
       .page:last-child{page-break-after:auto;}
       .q{margin-bottom:3.2mm;font-size:10.6pt;line-height:1.7;}
       .a{margin-top:1mm;padding:1.8mm 2.2mm;border:1px solid #999;background:#fafafa;}
-      .recoveryCode{font-size:7pt;color:#777;text-align:right;margin-top:1mm;}
+      .setMeta{font-size:7.2pt;color:#666;border:1px dashed #bbb;border-radius:6px;padding:1.8mm;margin:0 0 3mm;line-height:1.5;background:#fafafa}.recoveryCode{font-size:7pt;color:#777;text-align:right;margin-top:1mm;}
       @page{size:A4;margin:12.7mm;}
       </style></head><body>`+
-      `${pages.map((page,pageIndex)=>`<div class="page"><h1>${escapeHtml(qs('#paperTitle').textContent)} 解答</h1><div class="sub">${escapeHtml(qs('#paperSub').textContent)} / ${pageIndex+1}ページ目</div>${page.map((q,idx)=>`<div class="q"><strong>${pageIndex*20+idx+1}.</strong> ${escapeHtml(q.q)}<div class="a"><strong>解答:</strong> ${escapeHtml(q.a)}</div><div class="recoveryCode">復旧コード: ${escapeHtml(q.id || `REC-${pageIndex*20+idx+1}`)}</div></div>`).join('')}</div>`).join('')}`+
+      `${pages.map((page,pageIndex)=>`<div class="page"><h1>${escapeHtml(qs('#paperTitle').textContent)} 解答</h1><div class="sub">${escapeHtml(qs('#paperSub').textContent)} / ${pageIndex+1}ページ目</div>${buildSetMetaHtml()}${page.map((q,idx)=>`<div class="q"><strong>${pageIndex*20+idx+1}.</strong> ${escapeHtml(q.q)}<div class="a"><strong>解答:</strong> ${escapeHtml(q.a)}</div><div class="recoveryCode">復旧コード: ${escapeHtml(q.id || `REC-${pageIndex*20+idx+1}`)}</div></div>`).join('')}</div>`).join('')}`+
       `</body></html>`;
     }
     function printCurrentTest(){
