@@ -116,3 +116,16 @@ setTimeout(()=>{
     }
   }catch(e){console.error('v2.15.9 EVA image fix',e)}
 },0);
+
+/* v2.15.10: EVA8人の場面別セリフ増量＋直近4セリフ重複回避を後読み */
+(async function loadDialogue21510(){
+  try{
+    const r=await fetch('./dialogue21510.js?v=21510',{cache:'no-store'});
+    if(!r.ok)throw new Error('dialogue21510.js '+r.status);
+    const src=await r.text();
+    eval(src);
+  }catch(e){
+    console.error('v2.15.10 dialogue patch load failed',e);
+    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.9 EVA画像修正版・セリフ更新失敗';
+  }
+})();
