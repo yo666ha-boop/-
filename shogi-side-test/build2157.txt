@@ -1,0 +1,1 @@
+AI将棋先生 v2.15.7 side-selection isolated test build
