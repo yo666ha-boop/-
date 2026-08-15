@@ -1,0 +1,38 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#07100e"><title>AI将棋先生 v2.15.4 iPhone全画面修正版</title>
+<link rel="stylesheet" href="./strong213.css?v=2154">
+<style>
+html,body{margin:0;background:#06100d;color:#ead79b;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif}#loadnote{padding:8px 12px;font-size:12px;color:#bda56b}
+@media (orientation:portrait){
+.focus{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto auto auto auto!important;align-content:start!important;overflow-y:auto!important;overflow-x:hidden!important;height:var(--apph,100dvh)!important}
+.focus>.focusbar:first-child,.focus>.focusOpponent,.focus>.hand#fgHand,.focus>.boardWrap,.focus>.hand#fsHand,.focus>.focusbar:last-child{grid-column:1!important;grid-row:auto!important}
+.focus .boardWrap{min-height:0!important;height:auto!important;flex:0 0 auto!important;align-items:flex-start!important;justify-content:center!important;padding:2px 0!important}
+.focus .board{width:min(calc(100vw - 12px),calc(var(--apph,100dvh) - 215px))!important;max-width:100%!important;aspect-ratio:1/1!important;flex:0 0 auto!important;margin:0 auto!important}
+.focus .hand{min-height:34px!important;height:auto!important;flex:0 0 auto!important;margin:2px 0!important}
+.focusOpponent{flex:0 0 auto!important}.focusbar{flex:0 0 auto!important;min-height:34px}
+}
+</style></head><body>
+<div id="loadnote">AI将棋先生を読み込み中…</div>
+<div class="app"><div class="top"><div class="title">☗ AI将棋先生</div><div class="badge">v2.15.4 iPhone全画面修正版</div></div><div class="layout"><main class="game"><div class="hand" id="gHand"><b>相手</b></div><div class="boardWrap"><div class="board" id="board"></div></div><div class="hand" id="sHand"><b>あなた</b></div></main><aside class="side"><div class="controls"><button class="btn primary" id="newBtn">新規対局</button><button class="btn" id="undoBtn">待った</button><button class="btn" id="focusBtn">盤面全画面</button></div><div class="opponentCard" id="opponentCard"><div class="oppPortrait" id="oppPortrait"></div><div><div class="oppName" id="oppName"></div><div class="oppRank" id="oppRank"></div><div class="oppStyle" id="oppStyle"></div><div class="speech" id="charSpeech">対局を始めよう。</div></div></div><div class="status" id="status">準備中…</div><div id="resultBanner" class="resultBanner"></div><div class="statsBox"><div><div class="statsMain" id="statsMain">あなた R1500</div><div class="statsSub" id="statsSub">0勝 0敗 0分</div></div><button class="miniBtn" id="resetStatsBtn">成績リセット</button></div><div class="teacher"><div class="teacherHead"><div class="teacherTitle">☗ AI先生</div><button class="analyzeBtn" id="analyzeBtn">この局面を解析</button></div><div class="evalRow"><span id="shapeLabel">形勢：—</span><div class="evalTrack"><i id="evalFill" class="evalFill"></i></div><span id="evalNumber">—</span></div><div class="teacherMove" id="teacherMove">おすすめ手：解析すると表示</div><div class="teacherText" id="teacherText">形勢を見ながら対局できます。</div><div class="teacherText" id="lastMoveText">直前の一手：まだ評価していません</div></div><div class="review" id="reviewBox"><div class="reviewHead"><div class="reviewTitle">📘 AI先生・対局振り返り</div><button class="reviewBtn" id="reviewBtn">ここまで振り返る</button></div><div class="reviewStatus" id="reviewStatus">あなたが1手以上指すと振り返れます。</div><div class="reviewProgress" id="reviewProgress"><i id="reviewProgressFill"></i></div><div id="reviewSummary"></div></div><div class="meta" id="charInfo"></div><div class="moves" id="moves"></div><div class="chars" id="chars"></div></aside></div></div>
+<div class="focus" id="focus"><div class="focusbar"><strong>盤面集中モード</strong><button class="btn" id="closeBtn">✕ 通常表示</button></div><div class="focusOpponent"><div class="focusPortrait" id="foppPortrait"></div><div><div class="focusOppName" id="foppName"></div><div class="focusOppRank" id="foppRank"></div><div class="focusOppStyle" id="foppStyle"></div><div class="focusSpeech" id="fcharSpeech"></div></div></div><div class="hand" id="fgHand"><b>相手</b></div><div class="boardWrap"><div class="board" id="fboard"></div></div><div class="hand" id="fsHand"><b>あなた</b></div><div class="focusbar"><button class="btn" id="fundoBtn">待った</button><span class="meta" id="fstatus"></span></div></div>
+<script>
+(async()=>{
+const BASE='./';
+const MIC='./micchan2154.svg?v=2154';
+const AKI='./akiou.webp?v=2154';
+try{
+ const fs=['strong213_01.part','strong213_02.part','strong213_02b.part','strong213_03.part','strong213_04.part','strong213_05.part','strong213_06.part'];
+ const ps=[];
+ for(const f of fs){const r=await fetch(BASE+f+'?v=2154',{cache:'no-store'});if(!r.ok)throw new Error(f+' '+r.status);ps.push(await r.text());}
+ const sc=document.createElement('script');sc.textContent=ps.join('');document.body.appendChild(sc);
+ try{FIXED_IMG[1]=MIC;FIXED_IMG[2]=AKI;}catch(e){}
+ try{if(typeof render==='function')render();if(typeof renderOpponent==='function')renderOpponent(true);if(typeof renderStats==='function')renderStats();}catch(e){console.error(e)}
+ const forceMic=()=>{try{FIXED_IMG[1]=MIC;document.querySelectorAll('img[alt="みっちゃん"]').forEach(x=>{x.src=MIC});}catch(e){}};
+ forceMic();setTimeout(()=>{forceMic();try{if(typeof render==='function')render();if(typeof renderOpponent==='function')renderOpponent(true);forceMic();}catch(e){}},50);
+ const sq=document.querySelectorAll('#board .sq').length,pc=document.querySelectorAll('#board .piece').length,ch=document.querySelectorAll('#chars .ch').length;
+ const note=document.getElementById('loadnote');
+ if(sq===81&&pc===40&&ch===25){if(note)note.remove();document.getElementById('status').textContent='あなたが先手です。駒をタップしてください。';}
+ else throw new Error('起動確認：マス'+sq+' 駒'+pc+' キャラ'+ch);
+ window.AI_SHOGI_PUBLIC_BOOT={ok:true,squares:sq,pieces:pc,characters:ch,build:'2.15.4',strengthFrozen:true};
+}catch(e){console.error(e);const n=document.getElementById('loadnote');if(n)n.textContent='起動エラー：'+String(e.message||e);}
+})();
+</script></body></html>
