@@ -1,6 +1,13 @@
-/* AI将棋先生 v2.15.7 手番選択テスト。本体6分割を全結合した後、最後のIIFE終了直前へ挿入する。 */
+/* AI将棋先生 v2.15.7a 手番選択テスト。本体6分割を全結合した後、最後のIIFE終了直前へ挿入する。 */
 let SIDE2157_GOTE=false;
 let SIDE2157_MODE='sente';
+
+/* テスト版は /shogi-side-test/ 配下なので、あき王の相対画像だけ本番 /shogi/ を明示する */
+const AKIOU_TEST_IMG='../shogi/akiou.webp?v=2157a';
+FIXED_IMG[2]=AKIOU_TEST_IMG;
+document.querySelectorAll('img[alt="あき王"]').forEach(img=>{img.src=AKIOU_TEST_IMG;});
+const SIDE_TEST_BADGE=document.querySelector('.badge');
+if(SIDE_TEST_BADGE)SIDE_TEST_BADGE.textContent='v2.15.7a 先手後手テスト・あき王画像修正';
 
 (function installSide2157(){
   const controls=document.querySelector('.side .controls');
@@ -68,7 +75,7 @@ document.getElementById('undoBtn').onclick=undo;
 document.getElementById('fundoBtn').onclick=undo;
 
 window.AI_SHOGI_SIDE_TEST={
-  version:'2.15.7',
+  version:'2.15.7a',
   get:()=>({mode:SIDE2157_MODE,actual:SIDE2157_GOTE?'gote':'sente'}),
   set:(mode)=>{if(!['sente','gote','random'].includes(mode))return false;SIDE2157_MODE=mode;const p=document.getElementById('sideSelect2157');if(p)p.value=mode;return true;}
 };
