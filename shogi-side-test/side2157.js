@@ -1,13 +1,13 @@
-/* AI将棋先生 v2.15.8 EVAキャラ8人・先手後手テスト。 */
+/* AI将棋先生 v2.15.7b 手番選択テスト。後手の待った・全画面・棋譜座標まで対応。 */
 let SIDE2157_GOTE=false;
 let SIDE2157_MODE='sente';
 
 /* テスト版は /shogi-side-test/ 配下なので、あき王の相対画像だけ本番 /shogi/ を明示する */
-const AKIOU_TEST_IMG='../shogi/akiou.webp?v=2158';
+const AKIOU_TEST_IMG='../shogi/akiou.webp?v=2157b';
 FIXED_IMG[2]=AKIOU_TEST_IMG;
 document.querySelectorAll('img[alt="あき王"]').forEach(img=>{img.src=AKIOU_TEST_IMG;});
 const SIDE_TEST_BADGE=document.querySelector('.badge');
-if(SIDE_TEST_BADGE)SIDE_TEST_BADGE.textContent='v2.15.8 EVAキャラ8人差し替え・先手後手テスト';
+if(SIDE_TEST_BADGE)SIDE_TEST_BADGE.textContent='v2.15.7b 先手後手テスト・後手対応監査版';
 
 (function installSide2157(){
   const controls=document.querySelector('.side .controls');
@@ -94,87 +94,8 @@ document.getElementById('newBtn').onclick=newGame;
 document.getElementById('undoBtn').onclick=undo;
 document.getElementById('fundoBtn').onclick=undo;
 
-/* ===== v2.15.8 EVA 8キャラ差し替え ===== */
-const EVA2158_DATA={
-7:{name:"しんじ",meta:{"style":"相掛かり・成長型","feature":"慎重に読みながら一歩ずつ前へ進む。迷いは出るが、終盤まで粘って答えを探す。"},dialogues:{"start":["よろしく。ちゃんと考えて指してみる。","少し緊張するけど……やってみる。"],"normal":["これで大丈夫かな……。","もう少し盤面を見てみよう。","怖いけど、考える。","相手の狙いを見落とさないようにしよう。"],"winning":["少し、うまくいってるのかな。","ここで焦らなければ……。","この形なら、まだ前に進める。"],"losing":["まずい。でも、まだ考えられる。","逃げずに、この局面を見よう。","何かできることがあるはず。"],"critical":["怖い……でも、この一手は決めないと。","今できることを探そう。","ここで投げたくない。"],"think":["ちょっと待って。ちゃんと考えたい。","何か手があるはず……。","もう一度、最初から読む。"],"win":["勝てた……よかった。","最後まで指せてよかった。","ありがとう。ちょっと自信になった。"],"loss":["負けた……でも、次はもう少しできると思う。","悔しいけど、ちゃんと振り返ろう。","次は同じ間違いをしないようにする。"],"undo":["ごめん、もう一度考えさせて。","この手、やっぱり見直したい。"]},img:"./eva2158/shinji.webp?v=2158"},
-9:{name:"あやなみ",meta:{"style":"角換わり・精密静観型","feature":"余計な手を省き、静かに最善を積み重ねる。駒の効率と受けの精度が高い。"},dialogues:{"start":["よろしく。","始めるわ。","準備はできてる。"],"normal":["そう。","この手でいいと思う。","静かに進める。","まだ変化はある。"],"winning":["少し、こちらがいい。","このまま正確に指す。","崩さずに進める。"],"losing":["まだ終わってない。","受ければ、残る。","ここから整える。"],"critical":["ここは、間違えられない。","一番危ないところを見る。","まだ手はある。"],"think":["考える。","少し待って。","手順を確認する。"],"win":["ありがとう。","終わったのね。","いい対局だった。"],"loss":["負けたのね。","次は、もっと考える。","分かった。もう一度やる。"],"undo":["もう一度、考えるのね。","分かった。戻す。"]},img:"./eva2158/ayanami.webp?v=2158"},
-12:{name:"あすか",meta:{"style":"急戦・早繰り銀・強気攻め型","feature":"序盤から主導権を奪いにいく攻撃型。スピードと勝負勘で相手に考える暇を与えない。"},dialogues:{"start":["さあ、勝負よ！ 手加減なんてしないから。","あんた、本気で来なさいよ。","最初から全開でいくわよ！"],"normal":["その程度？ もっといい手を見せなさいよ。","攻めるわよ。ついてこれる？","ふん、まだまだね。","その隙、見逃すわけないでしょ。"],"winning":["ほらね、こっちが上！","このまま一気に決めるわよ。","勝ち筋、ちゃんと見えてるんだから。"],"losing":["ちょっと！ こんなの予定と違うじゃない！","まだ負けてない。ここから取り返すわ。","こんなところで終われるわけないでしょ！"],"critical":["絶対ここでひっくり返す！","最後まで勝負は終わってないわよ！","ここを耐えて、まとめて返す！"],"think":["ちょっと黙って。今、読んでるんだから。","この手なら……いける。","待ちなさい。全部読むから。"],"win":["当然でしょ！ でも、まあ楽しかったわ。","よし！ 次も勝つわよ。","ふふん、これが実力よ。"],"loss":["くっ……次は絶対負けないから！","今回は認める。でも次は覚えてなさい。","悔しい……もう一局よ！"],"undo":["待った？ しょうがないわね、もう一回だけよ。","やり直すなら、次はちゃんと指しなさいよ。"]},img:"./eva2158/asuka.webp?v=2158"},
-15:{name:"まり",meta:{"style":"ゴキゲン中飛車・自由猛攻型","feature":"型に縛られず、面白い筋を見つけると一気に踏み込む。明るく自由だが読みは鋭い。"},dialogues:{"start":["さーて、面白い一局にしよっか。","にゃは、どんな手が飛び出すかな？","肩の力抜いて、派手にいこうよ。"],"normal":["いいねぇ、その筋。","盤面が騒がしくなってきたねぇ。","定跡どおりじゃ、つまらないでしょ？","おっ、そこに目をつけた？"],"winning":["にゃはは、こっちのテンポだね。","ここから一気にいっちゃおうか。","いい感じ。盤面が歌ってるねぇ。"],"losing":["おっと、これはちょいピンチ。","まだまだ。面白いのはここからだよ。","逆転ルート、探してみよっか。"],"critical":["こりゃ本気で読まないとね。","ギリギリのほうが燃えるじゃん。","よーし、ここから大胆にいくよ。"],"think":["ふむふむ……この形、研究しがいあるね。","ちょい待ち。面白い手を探してる。","さてさて、どこから崩そうかな。"],"win":["いやー、楽しかった！ またやろう。","ごちそうさま。いい勝負だったね。","にゃは、うまく決まった。"],"loss":["やるねぇ。次はこっちがいただくよ。","負けた負けた。でも面白かった！","次はもっと変な手、持ってくるね。"],"undo":["お、やり直す？ いいよいいよ。","もう一回見る？ そのほうが面白いかも。"]},img:"./eva2158/mari.webp?v=2158"},
-16:{name:"ぺんぺん",meta:{"style":"向かい飛車・ゆるふわ直感型","feature":"読みの深さは控えめだが、ときどき妙に鋭い一手を放つ癒やし枠。予測不能さも魅力。"},dialogues:{"start":["クェッ！","クェ〜！","クェ、クェッ♪"],"normal":["クェッ、クェッ！","……クェ？","クェー！","クェクェ。"],"winning":["クェッ！！","クェクェクェ！","クェ〜♪"],"losing":["クェ〜……","クェ？ クェ？","……クェ。"],"critical":["クェーーッ！","……クェェ。","クェッ！？"],"think":["クェ……。","クェ？","……クェ、クェ。"],"win":["クェーーーッ♪","クェッ！","クェクェ〜♪"],"loss":["クェ……。","クェ〜。","……クェッ。"],"undo":["クェ？","クェッ。"]},img:"./eva2158/penpen.webp?v=2158"},
-17:{name:"げんどー",meta:{"style":"雁木・策士指揮型","feature":"無駄を嫌い、構想と手順で相手を追い込む。感情を表に出さず、局面を計画的に支配する。"},dialogues:{"start":["始めろ。","盤面を確認しろ。","時間だ。"],"normal":["問題ない。","その手は想定内だ。","余計な手は要らない。","最短の手順を選べ。"],"winning":["計画どおり進める。","優位は維持しろ。","ここから崩す。"],"losing":["修正する。","まだ計画は破綻していない。","次の手順へ移行する。"],"critical":["ここで誤るな。","最優先は王の安全だ。","一手で状況を戻せ。"],"think":["……検討中だ。","待て。","手順を再計算する。"],"win":["終了だ。","結果は出た。","次へ進む。"],"loss":["……再検討が必要だ。","次は修正する。","想定を更新する。"],"undo":["やり直せ。","その手は撤回しろ。"]},img:"./eva2158/gendo.webp?v=2158"},
-20:{name:"みさとさん",meta:{"style":"矢倉・持久戦・作戦指揮型","feature":"状況判断と立て直しが得意。攻め急がず、危険な筋を消してから勝負どころで一気に指揮する。"},dialogues:{"start":["よし、作戦開始！ 楽しくいきましょ。","準備はいい？ 盤面から目を離さないで。","さあ、一局いくわよ。"],"normal":["まずは状況確認。慌てない。","いい？ 相手の次の狙いまで見るのよ。","攻めるなら、逃げ道も用意してから。","盤面全体を見て。局地戦だけじゃだめよ。"],"winning":["いい流れ！ ここで雑にならない。","よし、そのまま主導権を握るわよ。","勝ちに行くけど、油断は禁止。"],"losing":["まだ撤退する局面じゃないわ。","立て直す。まず王の安全を確保。","焦らない。順番に問題を消すわよ。"],"critical":["ここが正念場。優先順位を間違えないで。","一番危ない筋から消すわよ。","深呼吸はあと。今は盤面に集中！"],"think":["作戦を組み直す。ちょっと待って。","情報整理中。もう少し読むわ。","ここは軽く指せないわね。"],"win":["作戦成功！ おつかれさま。","よし、勝ち！ 次もこの調子。","いい対局だったわ。お疲れ！"],"loss":["今回は作戦負けね。でも次がある。","反省会はあと。まずはナイスファイト。","悔しいけど、次に活かしましょ。"],"undo":["待ったね。今度はちゃんと先まで読むのよ。","やり直すなら、原因も一緒に見直しましょ。"]},img:"./eva2158/misato.webp?v=2158"},
-24:{name:"カヲル",meta:{"style":"師範・静謐万能型","feature":"仮キャラ勢の最上位。攻守・読み・終盤を高水準でこなし、静かに最善手へ導く万能型。"},dialogues:{"start":["よろしく。君と盤を囲めるのは、うれしいよ。","どんな一手になるのか、楽しみだ。","静かな時間になりそうだね。"],"normal":["焦らなくていい。盤面はまだ広いよ。","その手には君らしさが出ているね。","駒はそれぞれ、役目を持っている。","急がなくても、道は見えてくるよ。"],"winning":["少し流れがこちらに来ているようだね。","静かに進めよう。急ぐ必要はない。","形が整ってきた。きれいに仕上げよう。"],"losing":["苦しい形も悪くない。そこから見えるものがある。","まだ選べる手は残っているよ。","逆境だからこそ、見える一手もある。"],"critical":["ここが分かれ道だね。","最後の一手まで、君と考えたい。","怖がらなくていい。盤面をよく見よう。"],"think":["少しだけ、盤面の声を聞いてみるよ。","答えは急がなくていい。","静かに、先を読んでみよう。"],"win":["ありがとう。とてもきれいな将棋だった。","また会えるといいね。","いい時間だった。ありがとう。"],"loss":["君の一手が上回った。それでいい。","負けるのも、悪くない経験だね。","君の勝ちだ。素直に祝福するよ。"],"undo":["戻ることも選択のひとつだよ。","もう一度選べるなら、納得できる手を選ぼう。"]},img:"./eva2158/kaworu.webp?v=2158"},
-};
-
-const EVA2158_INDICES=new Set(Object.keys(EVA2158_DATA).map(Number));
-Object.entries(EVA2158_DATA).forEach(([ks,v])=>{
-  const i=Number(ks);
-  C[i][0]=v.name;
-  CHAR_META[i]=v.meta;
-  TEMP_DIALOGUES[i-5]=v.dialogues;
-});
-
-const SIDE2158_rankTextBase=rankText;
-rankText=function(i){
-  if(EVA2158_INDICES.has(i)){
-    const r=C[i][1];
-    const lv=r>=2300?'最上級':r>=2100?'上級':r>=1850?'中上級':r>=1600?'中級':r>=1400?'初中級':'入門〜初級';
-    return 'EVAキャラクター・'+lv;
-  }
-  return SIDE2158_rankTextBase(i);
-};
-
-const SIDE2158_portraitBase=portraitHTML;
-portraitHTML=function(i,c){
-  const e=EVA2158_DATA[i];
-  if(e)return '<img alt="'+c[0]+'" src="'+e.img+'"><span class="oppFixed">EVA</span>';
-  return SIDE2158_portraitBase(i,c);
-};
-
-function side2158ApplyCards(){
-  document.querySelectorAll('#chars .ch').forEach((b,i)=>{
-    const e=EVA2158_DATA[i];
-    if(!e)return;
-    let ph=b.querySelector('.chPh');
-    let img=b.querySelector('.chPic');
-    if(ph){
-      img=document.createElement('img');
-      img.className='chPic';
-      img.alt=C[i][0];
-      img.src=e.img;
-      ph.replaceWith(img);
-    }else if(img){
-      img.alt=C[i][0];
-      img.src=e.img;
-    }
-    const temp=b.querySelector('.chTemp');
-    if(temp){temp.className='chFixed';temp.textContent='EVA'}
-    const nm=b.querySelector('.chName');if(nm)nm.textContent=C[i][0];
-    const rt=b.querySelector('.chRating');if(rt)rt.textContent='R'+C[i][1];
-    const st=b.querySelector('.chStyle');if(st)st.textContent=CHAR_META[i].style;
-    b.title=C[i][0]+'｜R'+C[i][1]+'｜'+CHAR_META[i].style+'｜'+CHAR_META[i].feature;
-    b.dataset.eva2158='1';
-  });
-}
-
-side2158ApplyCards();
-render();
-renderStats();
-lastSpeech='';
-speechMood='start';
-renderOpponent(true);
-setTimeout(side2158ApplyCards,50);
-setTimeout(side2158ApplyCards,300);
-new MutationObserver(()=>side2158ApplyCards()).observe(document.getElementById('chars'),{childList:true,subtree:true});
-
-window.AI_SHOGI_EVA2158={
-  version:'2.15.8',
-  indices:[7,9,12,15,16,17,20,24],
-  characters:()=>[7,9,12,15,16,17,20,24].map(i=>({index:i,name:C[i][0],rating:C[i][1],style:CHAR_META[i].style}))
-};
-
 window.AI_SHOGI_SIDE_TEST={
-  version:'2.15.8',
+  version:'2.15.7b',
   get:()=>({mode:SIDE2157_MODE,actual:SIDE2157_GOTE?'gote':'sente'}),
   set:(mode)=>{if(!['sente','gote','random'].includes(mode))return false;SIDE2157_MODE=mode;const p=document.getElementById('sideSelect2157');if(p)p.value=mode;return true;}
 };
