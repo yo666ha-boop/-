@@ -99,3 +99,20 @@ window.AI_SHOGI_SIDE_TEST={
   get:()=>({mode:SIDE2157_MODE,actual:SIDE2157_GOTE?'gote':'sente'}),
   set:(mode)=>{if(!['sente','gote','random'].includes(mode))return false;SIDE2157_MODE=mode;const p=document.getElementById('sideSelect2157');if(p)p.value=mode;return true;}
 };
+
+/* v2.15.9: しんじ・ぺんぺん画像を正しい画像へ更新し、古い画像キャッシュを回避 */
+setTimeout(()=>{
+  try{
+    if(typeof EVA2158_DATA!=='undefined'){
+      EVA2158_DATA[7].img='./eva2158/shinji.webp?v=2159';
+      EVA2158_DATA[16].img='./eva2158/penpen.webp?v=2159';
+      const b=document.querySelector('.badge');if(b)b.textContent='v2.15.9 EVA画像修正版・先手後手テスト';
+      if(typeof side2158ApplyCards==='function')side2158ApplyCards();
+      render();renderStats();lastSpeech='';renderOpponent(true);
+      setTimeout(()=>{if(typeof side2158ApplyCards==='function')side2158ApplyCards();renderOpponent(false)},120);
+      setTimeout(()=>{if(typeof side2158ApplyCards==='function')side2158ApplyCards()},500);
+      if(window.AI_SHOGI_EVA2158)window.AI_SHOGI_EVA2158.version='2.15.9';
+      if(window.AI_SHOGI_SIDE_TEST)window.AI_SHOGI_SIDE_TEST.version='2.15.9';
+    }
+  }catch(e){console.error('v2.15.9 EVA image fix',e)}
+},0);
