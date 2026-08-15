@@ -129,3 +129,34 @@ setTimeout(()=>{
     const b=document.querySelector('.badge');if(b)b.textContent='v2.15.9 EVA画像修正版・セリフ更新失敗';
   }
 })();
+
+/* v2.15.14: 京楽・玉ちゃんの定番ボイスを実機系プレミア演出に寄せて再構成 */
+setTimeout(()=>{
+  try{
+    if(typeof TEMP_DIALOGUES==='undefined'||!TEMP_DIALOGUES[9])return;
+    const bank={
+      start:['ガンバレ！ガンバレ！','一等賞〜！','ガンバレ！ガンバレ！一等賞！','ポンポコポン♪ ガンバレ！ガンバレ！ 一等賞！'],
+      normal:['ガンバレ！ガンバレ！','よいしょっ！','まだまだ〜！','いいぞ、いいぞ〜！','もうちょっと〜！','ポンポコポン♪','玉ちゃん、応援中〜！','その調子〜！','元気いっぱい、ガンバレ〜！','いけいけ〜！','あと一歩〜！','チャンスだよ〜！'],
+      winning:['一等賞〜！','ガンバレ！ガンバレ！一等賞！','いいぞ、いいぞ〜！','あとちょっと〜！','そのまま、そのまま〜！','ポンポコポン♪ いけいけ〜！','いっとうしょーまであと少し〜！','玉ちゃん、にっこにこ〜！','みんなでガンバレ〜！','もうひと押し〜！'],
+      losing:['ガンバレ！ガンバレ！','まだまだ〜！','だいじょうぶ、ガンバレ〜！','ここから、ここから〜！','もう一回いこ〜！','負けないで〜！','玉ちゃん、応援するよ〜！','最後までガンバレ〜！'],
+      critical:['ガンバレ！ガンバレ！','ふんばれ〜！','まだだよ〜！','あきらめないで〜！','あと一歩、ガンバレ〜！','ここが勝負だよ〜！','玉ちゃん、全力応援〜！','お願い、つながって〜！'],
+      think:['うーん、どっちかな〜？','こっちかな〜？','よーく見て〜！','ちょっと待ってね〜！','ひらめけ〜！','よしっ、これ〜！'],
+      win:['一等賞〜！','ガンバレ！ガンバレ！一等賞！','やったー！いっとうしょー！','ばんざーい！','ポンポコポン♪ 一等賞〜！','玉ちゃん、うれしい〜！','みんな、がんばったね〜！','もう一回やろ〜！'],
+      loss:['ざんねーん！','次は一等賞〜！','もう一回、ガンバレ〜！','くやしいけど、またね〜！','次も応援するよ〜！'],
+      undo:['もう一回〜！','やりなおし〜！','ガンバレ！ガンバレ！','今度こそ〜！']
+    };
+    TEMP_DIALOGUES[9]=bank;
+    if(typeof FINAL21513_DATA!=='undefined'&&FINAL21513_DATA[14]){
+      FINAL21513_DATA[14].dialogues=bank;
+      FINAL21513_DATA[14].meta={style:'京楽プレミア・応援マスコット型',feature:'「ガンバレ！ガンバレ！」「一等賞！」の定番応援で盛り上げる京楽プレミアキャラ。明るい掛け声中心で、ときどきびっくり一手を放つ。'};
+      if(typeof CHAR_META!=='undefined')CHAR_META[14]=FINAL21513_DATA[14].meta;
+    }
+    const card=document.querySelectorAll('#chars .ch')[14];
+    if(card){const st=card.querySelector('.chStyle');if(st)st.textContent='京楽プレミア・応援マスコット型';card.title='玉ちゃん｜R'+C[14][1]+'｜京楽プレミア・応援マスコット型｜ガンバレ！ガンバレ！・一等賞！';}
+    if(window.AI_SHOGI_FINAL21513){window.AI_SHOGI_FINAL21513.version='2.15.14';if(window.AI_SHOGI_FINAL21513.counts)window.AI_SHOGI_FINAL21513.counts['玉ちゃん']=Object.fromEntries(Object.entries(bank).map(([k,v])=>[k,v.length]));}
+    if(window.AI_SHOGI_SIDE_TEST)window.AI_SHOGI_SIDE_TEST.version='2.15.14';
+    window.AI_SHOGI_TAMA21514={version:'2.15.14',verifiedClassics:['ガンバレ！ガンバレ！','一等賞！','ガンバレ！ガンバレ！一等賞！','ポンポコポン']};
+    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.14 25キャラ完成・リン画像修正＋玉ちゃん定番ボイス版';
+    if(typeof ci!=='undefined'&&C[ci]&&C[ci][0]==='玉ちゃん'&&typeof renderOpponent==='function'){lastSpeech='';speechMood='start';renderOpponent(true);}
+  }catch(e){console.error('v2.15.14 玉ちゃん定番ボイス修正',e)}
+},40);
