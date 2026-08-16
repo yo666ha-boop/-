@@ -1,12 +1,12 @@
-/* AI将棋先生 v2.15.19 みつき専用MAX AI＋実戦フロー監査 */
-(function installFunctional21519(){
-  const VERSION='2.15.19';
+/* AI将棋先生 v2.15.20 みつき専用MAX AI＋実戦フロー監査 */
+(function installFunctional21520(){
+  const VERSION='2.15.20';
 
   /* ===== みつき専用MAX AI =====
      既存 strong2155 の最強設定よりさらに上。
      R3000表示だけでなく、探索深度・静止探索・詰み探索・思考時間を専用化する。
      iPhoneでは序盤を抑え、中盤〜終盤ほど時間を投入する。 */
-  const aiSettings21519Base=aiSettings;
+  const aiSettings21520Base=aiSettings;
   aiSettings=function(r,who=ci){
     if(who===0){
       const mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent);
@@ -14,10 +14,10 @@
         ? {maxDepth:16,think:9000,q:10,matePly:11,mateMs:2200,qCheckLayers:5}
         : {maxDepth:18,think:18000,q:11,matePly:13,mateMs:3600,qCheckLayers:6};
     }
-    return aiSettings21519Base(r,who);
+    return aiSettings21520Base(r,who);
   };
 
-  const chooseAI21519Base=chooseAI;
+  const chooseAI21520Base=chooseAI;
   chooseAI=function(s,idx=ci,budgetOverride=null){
     if(idx===0 && budgetOverride==null){
       const mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent);
@@ -26,20 +26,20 @@
       try{material=phaseV214(s)}catch(e){}
       let budget;
       if(mobile){
-        if(ply<16) budget=4200;          // 序盤
-        else if(material>5200) budget=7200; // 中盤
-        else budget=10500;              // 終盤
+        if(ply<16) budget=4200;
+        else if(material>5200) budget=7200;
+        else budget=10500;
       }else{
         if(ply<16) budget=7000;
         else if(material>5200) budget=14000;
         else budget=22000;
       }
-      return chooseAI21519Base(s,idx,budget);
+      return chooseAI21520Base(s,idx,budget);
     }
-    return chooseAI21519Base(s,idx,budgetOverride);
+    return chooseAI21520Base(s,idx,budgetOverride);
   };
 
-  window.AI_SHOGI_MITSUKI_MAX21519={
+  window.AI_SHOGI_MITSUKI_MAX21520={
     ok:true,
     version:VERSION,
     character:'みつき',
@@ -51,8 +51,8 @@
   };
 
   /* 千日手はR変動なしのまま、成績の「引き分け」には正しく加算する。 */
-  const finishIfEnded21519Base=finishIfEnded;
-  function recordDrawNoRating21519(){
+  const finishIfEnded21520Base=finishIfEnded;
+  function recordDrawNoRating21520(){
     if(gameCounted)return 0;
     gameCounted=true;
     const old=stats.rating;
@@ -65,7 +65,7 @@
   finishIfEnded=function(){
     const rep=repetitionResult();
     if(rep&&rep.type!=='perpetual'){
-      recordDrawNoRating21519();
+      recordDrawNoRating21520();
       setStatus('千日手です。同一局面4回。公式ルールでは先後を交代して指し直しです。');
       setResult('draw','千日手・指し直し対象（R変動なし）');
       speechMood='normal';lastSpeech='';render();renderOpponent(true);
@@ -73,13 +73,31 @@
       const rs=document.getElementById('reviewStatus');if(rs)rs.textContent='対局が終わりました。AI先生と一局を振り返れます。';
       return true;
     }
-    return finishIfEnded21519Base();
+    return finishIfEnded21520Base();
   };
 
-  function deep21519(x){return JSON.parse(JSON.stringify(x));}
-  function moveInLegal21519(s,m){if(!m)return false;const u=usi(m);return legal(s).some(x=>usi(x)===u);}
+  function deep21520(x){return JSON.parse(JSON.stringify(x));}
+  function moveInLegal21520(s,m){if(!m)return false;const u=usi(m);return legal(s).some(x=>usi(x)===u);}
 
-  function runFunctionalAudit21519(){
+  function showAuditPanel21520(out){
+    try{
+      if(!new URLSearchParams(location.search).has('audit'))return;
+      let p=document.getElementById('auditPanel21520');
+      if(!p){
+        p=document.createElement('div');p.id='auditPanel21520';
+        p.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:10000;max-height:42vh;overflow:auto;background:#07100ef2;color:#f5e6b8;border:1px solid #ad9255;border-radius:10px;padding:10px 12px;font:12px/1.45 -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 4px 24px #0008';
+        document.body.appendChild(p);
+      }
+      const checks=[
+        ['総合',out.ok],['ルール',out.rulesOK],['25キャラAI',out.ai25OK],['みつきMAX',out.mitsukiMaxOK],['強さ順',out.strengthOrderOK],['後手',out.goteFlowOK],['待った',out.undoOK],['R・引分',out.ratingOK],['振り返り',out.reviewOK],['全画面',out.fullscreenOK]
+      ];
+      const line=checks.map(([n,v])=>n+':' +(v?'OK':'NG')).join(' / ');
+      const errs=(out.errors||[]).length?'<br>ERROR: '+String(out.errors.join(' | ')).replace(/</g,'&lt;') :'';
+      p.innerHTML='<b>AI将棋先生 v'+VERSION+' 実機監査</b><br>'+line+errs+'<br><span style="opacity:.75">この表示は ?audit=1 のときだけ出ます。</span>';
+    }catch(e){}
+  }
+
+  function runFunctionalAudit21520(){
     const out={version:VERSION,ok:false,checkedAt:new Date().toISOString(),errors:[]};
     let liveSnapshot=null;
     try{
@@ -109,7 +127,7 @@
       out.goteFlow={aiFirst:!!gm,turnAfterAI:g1?.t,userHasMove:!!sm,aiText,userText};
       out.goteFlowOK=!!gm&&!!g1&&g1.t===S&&!!sm&&aiText.startsWith('▲')&&userText.startsWith('△');
 
-      liveSnapshot={st:clone(st),hist:hist.map(clone),repHistory:deep21519(repHistory),reviewTrail:reviewTrail.map(x=>({...x,before:clone(x.before),move:{...x.move}})),reviewResults:reviewResults.slice(),thinking,gameCounted,lastHumanBefore:lastHumanBefore?clone(lastHumanBefore):null,lastHumanMove:lastHumanMove?{...lastHumanMove}:null,speechMood,lastSpeech,sel,drop,ci,stats:deep21519(stats),sideGote:typeof SIDE2157_GOTE!=='undefined'?SIDE2157_GOTE:false,sideMode:typeof SIDE2157_MODE!=='undefined'?SIDE2157_MODE:'sente'};
+      liveSnapshot={st:clone(st),hist:hist.map(clone),repHistory:deep21520(repHistory),reviewTrail:reviewTrail.map(x=>({...x,before:clone(x.before),move:{...x.move}})),reviewResults:reviewResults.slice(),thinking,gameCounted,lastHumanBefore:lastHumanBefore?clone(lastHumanBefore):null,lastHumanMove:lastHumanMove?{...lastHumanMove}:null,speechMood,lastSpeech,sel,drop,ci,stats:deep21520(stats),sideGote:typeof SIDE2157_GOTE!=='undefined'?SIDE2157_GOTE:false,sideMode:typeof SIDE2157_MODE!=='undefined'?SIDE2157_MODE:'sente'};
       if(typeof SIDE2157_GOTE!=='undefined')SIDE2157_GOTE=true;
       st=initial();st.t=G;hist=[];repHistory=[repEntry(st)];reviewTrail=[];reviewResults=[];thinking=false;gameCounted=false;sel=null;drop=null;
       const m1=legal(st)[0];if(m1)push(m1,'▲');
@@ -122,12 +140,12 @@
       const savedCi=ci;ci=5;
       stats=freshStats();stats.rating=1500;gameCounted=false;const winDelta=recordResult(1);
       stats=freshStats();stats.rating=1500;gameCounted=false;const lossDelta=recordResult(0);
-      stats=freshStats();stats.rating=1500;gameCounted=false;const drawBefore=stats.rating;recordDrawNoRating21519();const drawAfter=stats.rating;
+      stats=freshStats();stats.rating=1500;gameCounted=false;const drawBefore=stats.rating;recordDrawNoRating21520();const drawAfter=stats.rating;
       out.ratingFlow={winDelta,lossDelta,drawDelta:drawAfter-drawBefore,drawCount:stats.d};
       out.ratingOK=winDelta>0&&lossDelta<0&&drawAfter===drawBefore&&stats.d===1;ci=savedCi;
 
       const rv=initial(),hm=legal(rv)[0];let reviewOK=false,reviewData={};
-      if(hm){const best=chooseAI(clone(rv),0,30),actual=forcedScore(clone(rv),hm,1,20);reviewOK=!!best?.move&&Number.isFinite(actual)&&moveInLegal21519(rv,best.move);reviewData={human:usi(hm),best:best?.move?usi(best.move):null,actual,bestScore:best?.info?.score};}
+      if(hm){const best=chooseAI(clone(rv),0,30),actual=forcedScore(clone(rv),hm,1,20);reviewOK=!!best?.move&&Number.isFinite(actual)&&moveInLegal21520(rv,best.move);reviewData={human:usi(hm),best:best?.move?usi(best.move):null,actual,bestScore:best?.info?.score};}
       out.reviewData=reviewData;out.reviewOK=reviewOK;
 
       const focus=document.getElementById('focus'),fb=document.getElementById('focusBtn'),cb=document.getElementById('closeBtn');let focusOpen=false,focusClose=false;
@@ -138,13 +156,14 @@
     }catch(e){out.errors.push(String(e&&e.stack||e));}
     finally{
       if(liveSnapshot){try{st=liveSnapshot.st;hist=liveSnapshot.hist;repHistory=liveSnapshot.repHistory;reviewTrail=liveSnapshot.reviewTrail;reviewResults=liveSnapshot.reviewResults;thinking=liveSnapshot.thinking;gameCounted=liveSnapshot.gameCounted;lastHumanBefore=liveSnapshot.lastHumanBefore;lastHumanMove=liveSnapshot.lastHumanMove;speechMood=liveSnapshot.speechMood;lastSpeech=liveSnapshot.lastSpeech;sel=liveSnapshot.sel;drop=liveSnapshot.drop;ci=liveSnapshot.ci;stats=liveSnapshot.stats;if(typeof SIDE2157_GOTE!=='undefined')SIDE2157_GOTE=liveSnapshot.sideGote;if(typeof SIDE2157_MODE!=='undefined')SIDE2157_MODE=liveSnapshot.sideMode;saveStats();render();renderStats();renderOpponent(false);if(typeof side2157UpdateLabels==='function')side2157UpdateLabels();}catch(e){out.errors.push('restore:'+String(e&&e.message||e));out.ok=false;}}
-      out.checkedAt=new Date().toISOString();window.AI_SHOGI_FUNCTIONAL_AUDIT21519=out;
-      const badge=document.querySelector('.badge');if(badge)badge.textContent=out.ok?'v2.15.19 みつきMAX・実戦監査OK版':'v2.15.19 みつきMAX・監査注意版';
+      out.checkedAt=new Date().toISOString();window.AI_SHOGI_FUNCTIONAL_AUDIT21520=out;
+      const badge=document.querySelector('.badge');if(badge)badge.textContent=out.ok?'v2.15.20 みつきMAX・実戦監査OK版':'v2.15.20 みつきMAX・監査注意版';
       if(window.AI_SHOGI_SIDE_TEST)window.AI_SHOGI_SIDE_TEST.version=VERSION;if(window.AI_SHOGI_FINAL21513)window.AI_SHOGI_FINAL21513.version=VERSION;
+      showAuditPanel21520(out);
     }
     return out;
   }
 
-  window.AI_SHOGI_RUN_FUNCTIONAL_AUDIT21519=runFunctionalAudit21519;
-  setTimeout(runFunctionalAudit21519,700);
+  window.AI_SHOGI_RUN_FUNCTIONAL_AUDIT21520=runFunctionalAudit21520;
+  setTimeout(runFunctionalAudit21520,700);
 })();
