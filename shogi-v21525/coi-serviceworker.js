@@ -1,4 +1,4 @@
-/*! v2.15.25 isolated scope */
+/*! v2.15.25 isolated scope + iframe recovery */
 let coepCredentialless=false;
 if(typeof window==='undefined'){
  self.addEventListener('install',()=>self.skipWaiting());
@@ -10,5 +10,12 @@ if(typeof window==='undefined'){
   event.respondWith(fetch(req).then(res=>{if(res.status===0)return res;const h=new Headers(res.headers);h.set('Cross-Origin-Embedder-Policy',coepCredentialless?'credentialless':'require-corp');if(!coepCredentialless)h.set('Cross-Origin-Resource-Policy','cross-origin');h.set('Cross-Origin-Opener-Policy','same-origin');return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h})}));
  });
 }else{
- (()=>{const n=navigator,controlling=n.serviceWorker&&n.serviceWorker.controller;if(controlling){n.serviceWorker.controller.postMessage({type:'coepCredentialless',value:false});return}if(window.crossOriginIsolated!==false||!window.isSecureContext||!n.serviceWorker)return;n.serviceWorker.register(window.document.currentScript.src).then(reg=>{if(reg.active&&!n.serviceWorker.controller)location.reload()})})();
+ (()=>{
+  const n=navigator,controlling=n.serviceWorker&&n.serviceWorker.controller;
+  if(controlling)n.serviceWorker.controller.postMessage({type:'coepCredentialless',value:false});
+  else if(window.crossOriginIsolated===false&&window.isSecureContext&&n.serviceWorker){n.serviceWorker.register(window.document.currentScript.src).then(reg=>{if(reg.active&&!n.serviceWorker.controller)location.reload()})}
+  const kick=()=>{const fr=document.getElementById('game'),boot=document.getElementById('boot');if(fr&&boot){try{fr.dispatchEvent(new Event('load'))}catch(e){}}};
+  window.addEventListener('load',()=>{setTimeout(kick,150);setTimeout(kick,1200)});
+  setTimeout(kick,2500);
+ })();
 }
