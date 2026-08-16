@@ -29,7 +29,7 @@ jobs:
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
 
-      - name: Verify official WASM route and patch browser export
+      - name: Verify official WASM route and tune iPhone worker pool
         shell: bash
         run: |
           set -euxo pipefail
@@ -45,16 +45,9 @@ jobs:
           new='-s PTHREAD_POOL_SIZE=4'
           if old not in s:
               raise SystemExit('PTHREAD_POOL_SIZE=32 not found in official source/Makefile')
-          s=s.replace(old,new,1)
-          marker='LDFLAGS += -s FILESYSTEM=1 -s EXIT_RUNTIME=0 -s "EXPORTED_RUNTIME_METHODS=[\'FS\',\'ccall\']"'
-          export='LDFLAGS += -s "EXPORTED_FUNCTIONS=[\'_main\',\'_usi_command\']"'
-          if marker not in s:
-              raise SystemExit('WASM EXPORTED_RUNTIME_METHODS marker not found')
-          s=s.replace(marker,marker+'\n\t\t'+export,1)
-          p.write_text(s)
+          p.write_text(s.replace(old,new,1))
           PY
           grep -F -- '-s PTHREAD_POOL_SIZE=4' YaneuraOu/source/Makefile
-          grep -F -- "EXPORTED_FUNCTIONS=['_main','_usi_command']" YaneuraOu/source/Makefile
 
       - name: Reconstruct Suisho5 HalfKP evaluation file
         shell: bash
