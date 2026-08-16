@@ -127,7 +127,7 @@ jobs:
           const dir=__dirname;
           const factory=require(path.join(dir,'yaneuraou.halfkp.noeval.js'));
           (async()=>{
-            const engine=await factory({locateFile:(p)=>path.join(dir,p)});
+            const engine=await factory({locateFile:(p)=>path.join(dir,path.basename(String(p)))});
             if(!engine || !engine.FS || typeof engine.postMessage!=='function') throw new Error('engine module not ready');
             const nn=fs.readFileSync(path.resolve(dir,'../../../../nn.bin'));
             try{engine.FS.unlink('/nn.bin')}catch(_e){}
