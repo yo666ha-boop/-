@@ -143,6 +143,14 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          rm -rf /tmp/yaneuraou-ready
+          mkdir -p /tmp/yaneuraou-ready
+          cp -a shogi-side-test/yaneuraou/. /tmp/yaneuraou-ready/
+          git fetch origin future-mitsuki-yaneuraou
+          git reset --hard origin/future-mitsuki-yaneuraou
+          rm -rf shogi-side-test/yaneuraou
+          mkdir -p shogi-side-test/yaneuraou
+          cp -a /tmp/yaneuraou-ready/. shogi-side-test/yaneuraou/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js \
