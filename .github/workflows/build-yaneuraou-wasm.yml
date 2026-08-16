@@ -48,7 +48,35 @@ jobs:
           PY
           grep -F -- '-s PTHREAD_POOL_SIZE=4' YaneuraOu/source/Makefile
 
-      - name: Build official YaneuraOu HalfKP WebAssembly
+      - name: Reconstruct Suisho5 HalfKP evaluation file
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p YaneuraOu/.dl
+          curl -fL --retry 4 --retry-delay 2 \
+            -o YaneuraOu/.dl/suisho5_20211123.halfkp.nnue.cpp.gz \
+            https://github.com/mizar/YaneuraOu/releases/download/resource/suisho5_20211123.halfkp.nnue.cpp.gz
+          gzip -cd YaneuraOu/.dl/suisho5_20211123.halfkp.nnue.cpp.gz > YaneuraOu/.dl/embedded_nnue.cpp
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          src=Path('YaneuraOu/.dl/embedded_nnue.cpp').read_text(encoding='utf-8',errors='ignore')
+          hx=re.findall(r'\\x([0-9a-fA-F]{2})',src)
+          if not hx:
+              raise SystemExit('No \\xHH NNUE bytes found in embedded source')
+          data=bytes(int(x,16) for x in hx)
+          m=re.search(r'gEmbeddedNNUESize\s*=\s*(\d+)',src)
+          if m and int(m.group(1)) != len(data):
+              raise SystemExit(f'NNUE size mismatch: declared={m.group(1)} parsed={len(data)}')
+          if len(data) < 10_000_000:
+              raise SystemExit(f'NNUE unexpectedly small: {len(data)} bytes')
+          Path('YaneuraOu/nn.bin').write_bytes(data)
+          print('reconstructed nn.bin bytes=',len(data))
+          PY
+          ls -lh YaneuraOu/nn.bin
+          sha256sum YaneuraOu/nn.bin
+
+      - name: Build official YaneuraOu HalfKP noeval WebAssembly
         id: build
         shell: bash
         run: |
@@ -59,7 +87,7 @@ jobs:
             -v "${{ github.workspace }}/YaneuraOu:/src" \
             -w /src \
             emscripten/emsdk:3.1.43 \
-            node script/wasm_build.js halfkp 2>&1 | tee yaneuraou-build.log
+            node script/wasm_build.js halfkp.noeval 2>&1 | tee yaneuraou-build.log
           status=${PIPESTATUS[0]}
           set -e
           echo "status=${status}" >> "$GITHUB_OUTPUT"
@@ -79,10 +107,11 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          test -s YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.js
-          test -s YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.worker.js
-          test -s YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.wasm
-          ls -lh YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.*
+          test -s YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js
+          test -s YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js
+          test -s YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm
+          test -s YaneuraOu/nn.bin
+          ls -lh YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.* YaneuraOu/nn.bin
 
       - name: Install browser engine files
         if: steps.build.outputs.status == '0'
@@ -90,21 +119,24 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p shogi-side-test/yaneuraou
-          cp YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.js shogi-side-test/yaneuraou/YaneuraOu.js
-          cp YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.worker.js shogi-side-test/yaneuraou/YaneuraOu.worker.js
-          cp YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.wasm shogi-side-test/yaneuraou/YaneuraOu.wasm
+          cp YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
+          cp YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.worker.js
+          cp YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.wasm
+          cp YaneuraOu/nn.bin shogi-side-test/yaneuraou/nn.bin
           cp YaneuraOu/LICENSE shogi-side-test/yaneuraou/YANEURAOU_LICENSE.txt
           printf '%s\n' \
             'source=yaneurao/YaneuraOu' \
             'commit=33ccf1f907eb7184889fa23051243f81ab0bf973' \
-            'edition=halfkp' \
+            'edition=halfkp.noeval' \
+            'eval=Suisho5_20211123 HalfKP reconstructed from mizar resource' \
             'target_cpu=WASM' \
             'pthread_pool=4' \
             'emscripten=3.1.43' \
             > shogi-side-test/yaneuraou/build-info.txt
-          sha256sum shogi-side-test/yaneuraou/YaneuraOu.js \
-                    shogi-side-test/yaneuraou/YaneuraOu.worker.js \
-                    shogi-side-test/yaneuraou/YaneuraOu.wasm
+          sha256sum shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js \
+                    shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.worker.js \
+                    shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.wasm \
+                    shogi-side-test/yaneuraou/nn.bin
 
       - name: Commit official WASM artifacts to experiment branch
         if: steps.build.outputs.status == '0'
@@ -113,16 +145,17 @@ jobs:
           set -euxo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f shogi-side-test/yaneuraou/YaneuraOu.js \
-                     shogi-side-test/yaneuraou/YaneuraOu.worker.js \
-                     shogi-side-test/yaneuraou/YaneuraOu.wasm \
+          git add -f shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js \
+                     shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.worker.js \
+                     shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.wasm \
+                     shogi-side-test/yaneuraou/nn.bin \
                      shogi-side-test/yaneuraou/YANEURAOU_LICENSE.txt \
                      shogi-side-test/yaneuraou/build-info.txt
           if git diff --cached --quiet; then
             echo "No WASM artifact changes."
             exit 0
           fi
-          git commit -m "build: 公式やねうら王HalfKP WASMを追加"
+          git commit -m "build: 公式やねうら王HalfKP noevalと水匠5を追加"
           git push origin HEAD:future-mitsuki-yaneuraou
 
       - name: Upload WASM artifact
@@ -137,5 +170,5 @@ jobs:
         if: steps.build.outputs.status != '0'
         shell: bash
         run: |
-          echo "YaneuraOu WASM build failed; diagnostic log was uploaded."
+          echo "YaneuraOu HalfKP noeval WASM build failed; diagnostic log was uploaded."
           exit 1
