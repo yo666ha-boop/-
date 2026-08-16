@@ -45,26 +45,27 @@ window.FINAL21513_IMAGES=window.FINAL21513_IMAGES||{};window.FINAL21513_IMAGES.r
       const functionalOK=legalOK&&applyOK&&aiProbeOK&&strengthOrderOK;
       const ok=names.length===25&&uniqueNames===25&&ratingsOK&&stylesOK&&metasOK&&dialogueMissing.length===0&&cards.length===25&&badImages.length===0&&sideOK&&fullscreenOK&&recentAvoid&&tempCount===0&&strongOK&&functionalOK;
       window.AI_SHOGI_FINAL_AUDIT21517={version:'2.15.17',ok,total:names.length,uniqueNames,ratingsOK,stylesOK,metasOK,dialogueMissing,badImages,sideOK,fullscreenOK,recentAvoid,tempCount,strongOK,strongMarker,legalOK,applyOK,aiProbeOK,strengthOrderOK,functionalOK,probeError,names,ratings,checkedAt:new Date().toISOString()};
+      const newerAudit=!!window.AI_SHOGI_FUNCTIONAL_AUDIT21520||!!window.AI_SHOGI_FUNCTIONAL_AUDIT21519||!!window.AI_SHOGI_FUNCTIONAL_AUDIT21518;
       const badge=document.querySelector('.badge');
-      if(badge&&!window.AI_SHOGI_FUNCTIONAL_AUDIT21518)badge.textContent=ok?'v2.15.17 25キャラ完成・実戦監査OK版':'v2.15.17 25キャラ完成・監査注意版';
-      if(window.AI_SHOGI_SIDE_TEST&&!window.AI_SHOGI_FUNCTIONAL_AUDIT21518)window.AI_SHOGI_SIDE_TEST.version='2.15.17';
-      if(window.AI_SHOGI_FINAL21513&&!window.AI_SHOGI_FUNCTIONAL_AUDIT21518)window.AI_SHOGI_FINAL21513.version='2.15.17';
+      if(badge&&!newerAudit)badge.textContent=ok?'v2.15.17 25キャラ完成・実戦監査OK版':'v2.15.17 25キャラ完成・監査注意版';
+      if(window.AI_SHOGI_SIDE_TEST&&!newerAudit)window.AI_SHOGI_SIDE_TEST.version='2.15.17';
+      if(window.AI_SHOGI_FINAL21513&&!newerAudit)window.AI_SHOGI_FINAL21513.version='2.15.17';
       return ok;
     }catch(e){console.error('final audit 21517',e);return false}
   }
   let tries=0;const run=()=>{tries++;const ok=audit21517();if(!ok&&tries<5)setTimeout(run,1200)};setTimeout(run,2200);
 })();
 
-/* v2.15.18: 実際の25AI・後手・待った・R変動・振り返り・全画面まで非破壊自己監査 */
-(async function loadFunctional21518(){
+/* v2.15.20: 25AI・みつきMAX・後手・待った・R変動・振り返り・全画面を非破壊自己監査 */
+(async function loadFunctional21520(){
   try{
-    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.18 25キャラ完成・実戦フロー監査中';
-    const l=document.getElementById('strongLoad');if(l)l.textContent='AI将棋先生 v2.15.18 実戦フローを確認しています…';
-    const r=await fetch('./functional21518.js?v=21518',{cache:'no-store'});
+    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.20 みつきMAX・実戦フロー監査中';
+    const l=document.getElementById('strongLoad');if(l)l.textContent='AI将棋先生 v2.15.20 実戦フローを確認しています…';
+    const r=await fetch('./functional21518.js?v=21520',{cache:'no-store'});
     if(!r.ok)throw new Error('functional21518.js '+r.status);
     eval(await r.text());
   }catch(e){
-    console.error('functional21518 load failed',e);
-    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.18 実戦フロー監査読込エラー';
+    console.error('functional21520 load failed',e);
+    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.20 実戦フロー監査読込エラー';
   }
 })();
