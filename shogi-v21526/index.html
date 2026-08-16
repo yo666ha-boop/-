@@ -1,0 +1,52 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#07100e"><title>AI将棋先生 v2.15.26</title><script src="./coi-serviceworker.js?v=21526"></script><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06100d}iframe{border:0;width:100%;height:100%;display:block}#boot{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#06100df2;color:#f0daa0;font:800 18px/1.7 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif}</style></head><body><div id="boot">v2.15.26<br>26キャラを起動しています…</div><iframe id="game"></iframe><script>
+(async()=>{
+const boot=document.getElementById('boot'),fr=document.getElementById('game');
+const sleep=t=>new Promise(r=>setTimeout(r,t));
+const txt=async u=>{const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(u+' '+r.status);return r.text()};
+const EVA={しんじ:'shinji.webp',あやなみ:'ayanami.webp',あすか:'asuka.webp',まり:'mari.webp',ぺんぺん:'penpen.webp','げんどー':'gendo.webp','みさとさん':'misato.webp','カヲル':'kaworu.webp'};
+const HOKUTO={ケンシロウ:'kenshiro.webp',ジャギ:'jagi.webp',シン:'shin.webp',サウザー:'souther.webp',ラオウ:'raoh.webp'};
+let started=false;
+async function waitGame(){
+ for(let i=0;i<300;i++){
+  try{
+   const d=fr.contentDocument;
+   if(d){
+    d.getElementById('strongLoad')?.remove();
+    [...d.querySelectorAll('div')].filter(x=>/v2\.15\.20 実戦フローを確認しています/.test(x.textContent||'')).forEach(x=>x.remove());
+    const chars=d.querySelector('#chars');
+    if(chars&&chars.querySelectorAll('.ch').length>=25&&d.querySelectorAll('#board .sq').length===81)return;
+   }
+  }catch(e){}
+  await sleep(100);
+ }
+ throw new Error('25キャラ本体の起動待ちがタイムアウトしました');
+}
+async function patch(){
+ if(started)return; started=true;
+ await waitGame();
+ const w=fr.contentWindow,d=fr.contentDocument;
+ const rmOverlay=()=>{d.getElementById('strongLoad')?.remove();[...d.querySelectorAll('div')].filter(x=>/v2\.15\.20 実戦フローを確認しています/.test(x.textContent||'')).forEach(x=>x.remove())};
+ const fixBadge=()=>{const b=d.querySelector('.badge');if(b)b.textContent='v2.15.26 26キャラ・未来からやってきたみつき';d.title='AI将棋先生 v2.15.26'};
+ const fixImages=()=>d.querySelectorAll('img').forEach(img=>{const a=img.alt||'';if(a==='みっちゃん'){img.onerror=null;img.src='../shogi/micchan2154.svg?v=21526'}else if(EVA[a]){img.onerror=null;img.src='../shogi-side-test/eva2158/'+EVA[a]+'?v=21526'}else if(HOKUTO[a]){img.onerror=null;img.src='../shogi-side-test/hokuto21511/'+HOKUTO[a]+'?v=21526'}});
+ rmOverlay();fixBadge();fixImages();
+ const old=d.querySelectorAll('#chars .ch');for(let i=old.length-1;i>=25;i--)old[i].remove();
+ const imgSc=d.createElement('script');imgSc.src='../shogi-side-test/future-mitsuki-image21520.js?v=21526';d.head.appendChild(imgSc);
+ await new Promise((res,rej)=>{imgSc.onload=res;imgSc.onerror=()=>rej(new Error('未来みつき画像ロード失敗'))});
+ let future=await txt('../shogi-side-test/future21520.js?v=21526');
+ future=future.replace("const ENGINE_BASE='./yaneuraou/';","const ENGINE_BASE='../shogi-side-test/yaneuraou/';");
+ const sc=d.createElement('script');sc.textContent=future;d.body.appendChild(sc);
+ for(let i=0;i<100;i++){rmOverlay();fixBadge();fixImages();if(d.querySelectorAll('#chars .ch').length===26&&d.querySelector('[data-future-mitsuki="1"]'))break;await sleep(100)}
+ const fc=d.querySelector('[data-future-mitsuki="1"] img');if(fc&&w.FUTURE_MITSUKI_IMAGE21520){fc.onerror=null;fc.src=w.FUTURE_MITSUKI_IMAGE21520}
+ if(d.querySelectorAll('#chars .ch').length!==26)throw new Error('26人目追加失敗');
+ const keep=()=>{rmOverlay();fixBadge();fixImages()};
+ new MutationObserver(keep).observe(d.body,{childList:true,subtree:true,characterData:true});
+ setInterval(keep,800);
+ boot.remove();
+ w.AI_SHOGI_V21526={ok:true,characters:26,futureIndex:25,futureName:'未来からやってきたみつき',rating:3400,engine:'YaneuraOu HalfKP + Suisho5'};
+}
+fr.src='../shogi-v21524/?host=21526&nocache='+Date.now();
+const kick=()=>patch().catch(e=>{started=false;boot.innerHTML='v2.15.26 起動エラー<br><small>'+String(e.message||e)+'</small>';console.error(e)});
+fr.addEventListener('load',kick);
+setTimeout(kick,500);
+})().catch(e=>{document.getElementById('boot').innerHTML='v2.15.26 起動失敗<br><small>'+String(e.message||e)+'</small>'});
+</script></body></html>
