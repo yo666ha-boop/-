@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     name: Build official YaneuraOu HalfKP WASM
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
     steps:
       - name: Checkout game branch
@@ -29,7 +29,7 @@ jobs:
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
 
-      - name: Verify official WASM build route and tune iPhone worker pool
+      - name: Verify official WASM route and tune iPhone worker pool
         shell: bash
         run: |
           set -euxo pipefail
@@ -49,21 +49,43 @@ jobs:
           grep -F -- '-s PTHREAD_POOL_SIZE=4' YaneuraOu/source/Makefile
 
       - name: Build official YaneuraOu HalfKP WebAssembly
+        id: build
         shell: bash
         run: |
-          set -euxo pipefail
-          docker pull emscripten/emsdk:4.0.7
+          set -uo pipefail
+          docker pull emscripten/emsdk:3.1.43
+          set +e
           docker run --rm \
             -v "${{ github.workspace }}/YaneuraOu:/src" \
             -w /src \
-            emscripten/emsdk:4.0.7 \
-            node script/wasm_build.js halfkp
+            emscripten/emsdk:3.1.43 \
+            node script/wasm_build.js halfkp 2>&1 | tee yaneuraou-build.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          echo "YaneuraOu WASM build exit=${status}"
+          exit 0
+
+      - name: Upload build diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-mitsuki-yaneuraou-build-log
+          path: yaneuraou-build.log
+          retention-days: 7
+
+      - name: Verify generated engine files
+        if: steps.build.outputs.status == '0'
+        shell: bash
+        run: |
+          set -euxo pipefail
           test -s YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.js
           test -s YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.worker.js
           test -s YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.wasm
           ls -lh YaneuraOu/build/wasm/halfkp/lib/yaneuraou.halfkp.*
 
       - name: Install browser engine files
+        if: steps.build.outputs.status == '0'
         shell: bash
         run: |
           set -euxo pipefail
@@ -78,13 +100,14 @@ jobs:
             'edition=halfkp' \
             'target_cpu=WASM' \
             'pthread_pool=4' \
-            'emscripten=4.0.7' \
+            'emscripten=3.1.43' \
             > shogi-side-test/yaneuraou/build-info.txt
           sha256sum shogi-side-test/yaneuraou/YaneuraOu.js \
                     shogi-side-test/yaneuraou/YaneuraOu.worker.js \
                     shogi-side-test/yaneuraou/YaneuraOu.wasm
 
       - name: Commit official WASM artifacts to experiment branch
+        if: steps.build.outputs.status == '0'
         shell: bash
         run: |
           set -euxo pipefail
@@ -103,8 +126,16 @@ jobs:
           git push origin HEAD:future-mitsuki-yaneuraou
 
       - name: Upload WASM artifact
+        if: steps.build.outputs.status == '0'
         uses: actions/upload-artifact@v4
         with:
           name: future-mitsuki-yaneuraou-halfkp
           path: shogi-side-test/yaneuraou
           retention-days: 30
+
+      - name: Fail job when engine build failed
+        if: steps.build.outputs.status != '0'
+        shell: bash
+        run: |
+          echo "YaneuraOu WASM build failed; diagnostic log was uploaded."
+          exit 1
