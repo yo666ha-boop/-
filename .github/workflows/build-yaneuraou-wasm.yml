@@ -124,6 +124,14 @@ jobs:
           cat > "$LIB/smoke.js" <<'NODE'
           const fs=require('fs');
           const path=require('path');
+          const workerThreads=require('worker_threads');
+          const NativeWorker=workerThreads.Worker;
+          workerThreads.Worker=class Worker21520 extends NativeWorker {
+            constructor(filename,options){
+              if(typeof filename==='string'&&filename.startsWith('file://'))filename=new URL(filename);
+              super(filename,options);
+            }
+          };
           const dir=__dirname;
           const factory=require(path.join(dir,'yaneuraou.halfkp.noeval.js'));
           (async()=>{
