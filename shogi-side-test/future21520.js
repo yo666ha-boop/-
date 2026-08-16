@@ -146,8 +146,9 @@
         e.postMessage('setoption name EvalFile value '+ENGINE_EVAL);
         e.postMessage('setoption name FV_SCALE value 24');
         e.postMessage('setoption name Threads value '+(mobile?2:4));
-        e.postMessage('setoption name Hash value '+(mobile?64:256));
+        e.postMessage('setoption name USI_Hash value '+(mobile?64:256));
         e.postMessage('setoption name USI_Ponder value false');
+        e.postMessage('setoption name BookFile value no_book');
         p=waitLine21520(x=>x==='readyok',45000);e.postMessage('isready');await p;
         e.postMessage('usinewgame');engineReady21520=true;engineInitError21520='';
         setEngineState21520('やねうら王＋水匠5 接続済み',true);
