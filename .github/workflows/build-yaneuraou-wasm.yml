@@ -8,44 +8,106 @@ on:
       - .github/workflows/build-yaneuraou-wasm.yml
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    name: Build official YaneuraOu HalfKP WASM
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
-      - name: Checkout YaneuraOu official source
+      - name: Checkout game branch
+        uses: actions/checkout@v4
+        with:
+          ref: future-mitsuki-yaneuraou
+
+      - name: Checkout official YaneuraOu
         uses: actions/checkout@v4
         with:
           repository: yaneurao/YaneuraOu
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
-          path: yaneuraou
+          path: YaneuraOu
 
-      - name: Limit browser worker pool for iPhone
+      - name: Verify official source and browser settings
+        shell: bash
         run: |
+          set -euxo pipefail
+          test "$(git -C YaneuraOu rev-parse HEAD)" = "33ccf1f907eb7184889fa23051243f81ab0bf973"
+          grep -F "TARGET_CPU=NO_SSE" YaneuraOu/script/wasm_build.js
+          if grep -F "TARGET_CPU=WASM" YaneuraOu/script/wasm_build.js; then
+            echo "Unexpected TARGET_CPU=WASM in official build script" >&2
+            exit 1
+          fi
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('yaneuraou/source/Makefile')
+          p=Path('YaneuraOu/script/wasm_build.js')
           s=p.read_text()
-          s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=4')
-          p.write_text(s)
+          old='-sPTHREAD_POOL_SIZE=32'
+          if old not in s:
+              raise SystemExit('PTHREAD_POOL_SIZE=32 not found in official wasm_build.js')
+          p.write_text(s.replace(old,'-sPTHREAD_POOL_SIZE=4'))
           PY
+          grep -F -- "-sPTHREAD_POOL_SIZE=4" YaneuraOu/script/wasm_build.js
 
       - name: Build official YaneuraOu HalfKP WebAssembly
+        shell: bash
         run: |
-          docker pull emscripten/emsdk:3.1.43
-          docker run --rm -v ${PWD}/yaneuraou:/src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp
+          set -euxo pipefail
+          docker pull emscripten/emsdk:4.0.7
+          docker run --rm \
+            -v "${{ github.workspace }}/YaneuraOu:/src" \
+            -w /src \
+            emscripten/emsdk:4.0.7 \
+            node script/wasm_build.js
+          find YaneuraOu/source -maxdepth 1 -type f -name 'YaneuraOu-by-gcc*' -print
+          test -s YaneuraOu/source/YaneuraOu-by-gcc.js
+          test -s YaneuraOu/source/YaneuraOu-by-gcc.wasm
 
-      - name: Prepare artifact
+      - name: Install browser engine files
+        shell: bash
         run: |
-          mkdir -p artifact
-          cp yaneuraou/build/wasm/halfkp/lib/yaneuraou.halfkp.js artifact/
-          cp yaneuraou/build/wasm/halfkp/lib/yaneuraou.halfkp.worker.js artifact/
-          cp yaneuraou/build/wasm/halfkp/lib/yaneuraou.halfkp.wasm artifact/
-          cp yaneuraou/LICENSE artifact/YANEURAOU_LICENSE.txt
-          printf '%s\n' 'source=yaneurao/YaneuraOu' 'commit=33ccf1f907eb7184889fa23051243f81ab0bf973' 'edition=halfkp' 'pthread_pool=4' > artifact/build-info.txt
+          set -euxo pipefail
+          mkdir -p shogi-side-test/yaneuraou
+          cp YaneuraOu/source/YaneuraOu-by-gcc.js shogi-side-test/yaneuraou/YaneuraOu.js
+          cp YaneuraOu/source/YaneuraOu-by-gcc.wasm shogi-side-test/yaneuraou/YaneuraOu.wasm
+          if test -s YaneuraOu/source/YaneuraOu-by-gcc.worker.js; then
+            cp YaneuraOu/source/YaneuraOu-by-gcc.worker.js shogi-side-test/yaneuraou/YaneuraOu.worker.js
+          fi
+          cp YaneuraOu/LICENSE shogi-side-test/yaneuraou/YANEURAOU_LICENSE.txt
+          printf '%s\n' \
+            'source=yaneurao/YaneuraOu' \
+            'commit=33ccf1f907eb7184889fa23051243f81ab0bf973' \
+            'edition=YANEURAOU_ENGINE_NNUE_HALFKP' \
+            'target_cpu=NO_SSE' \
+            'pthread_pool=4' \
+            'emscripten=4.0.7' \
+            > shogi-side-test/yaneuraou/build-info.txt
+          sha256sum shogi-side-test/yaneuraou/YaneuraOu.js shogi-side-test/yaneuraou/YaneuraOu.wasm
+
+      - name: Commit official WASM artifacts to experiment branch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f shogi-side-test/yaneuraou/YaneuraOu.js \
+                     shogi-side-test/yaneuraou/YaneuraOu.wasm \
+                     shogi-side-test/yaneuraou/YANEURAOU_LICENSE.txt \
+                     shogi-side-test/yaneuraou/build-info.txt
+          if test -f shogi-side-test/yaneuraou/YaneuraOu.worker.js; then
+            git add -f shogi-side-test/yaneuraou/YaneuraOu.worker.js
+          fi
+          if git diff --cached --quiet; then
+            echo "No WASM artifact changes."
+            exit 0
+          fi
+          git commit -m "build: 公式やねうら王HalfKP WASMを追加"
+          git push origin HEAD:future-mitsuki-yaneuraou
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
           name: future-mitsuki-yaneuraou-halfkp
-          path: artifact
+          path: shogi-side-test/yaneuraou
           retention-days: 30
