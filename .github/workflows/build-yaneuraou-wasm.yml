@@ -21,74 +21,142 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
+
       - name: Prepare official browser build
+        shell: bash
         run: |
           set -euxo pipefail
           grep -F 'exportname: "YaneuraOu_HalfKP_noeval"' YaneuraOu/script/wasm_build.js
+          grep -F 'EMSCRIPTEN_KEEPALIVE extern "C" int usi_command' YaneuraOu/source/usi.cpp
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('YaneuraOu/source/Makefile');s=p.read_text();p.write_text(s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=4',1))
+          p=Path('YaneuraOu/source/Makefile')
+          s=p.read_text()
+          if '-s PTHREAD_POOL_SIZE=32' not in s:
+              raise SystemExit('pthread marker missing')
+          s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=4',1)
+          marker="LDFLAGS += -s FILESYSTEM=1 -s EXIT_RUNTIME=0 -s \"EXPORTED_RUNTIME_METHODS=['FS','ccall']\""
+          export="LDFLAGS += -s \"EXPORTED_FUNCTIONS=['_main','_usi_command']\""
+          if marker not in s:
+              raise SystemExit('runtime export marker missing')
+          s=s.replace(marker,marker+'\n\t\t'+export,1)
+          p.write_text(s)
           PY
+          grep -F "EXPORTED_FUNCTIONS=['_main','_usi_command']" YaneuraOu/source/Makefile
           mkdir -p YaneuraOu/.dl
           curl -fL --retry 4 -o YaneuraOu/.dl/suisho5.cpp.gz https://github.com/mizar/YaneuraOu/releases/download/resource/suisho5_20211123.halfkp.nnue.cpp.gz
           gzip -cd YaneuraOu/.dl/suisho5.cpp.gz > YaneuraOu/.dl/suisho5.cpp
           python3 - <<'PY'
           from pathlib import Path
           import re
-          s=Path('YaneuraOu/.dl/suisho5.cpp').read_text(errors='ignore');h=re.findall(r'\\x([0-9a-fA-F]{2})',s);b=bytes(int(x,16) for x in h)
-          assert len(b)>10_000_000,len(b);Path('YaneuraOu/nn.bin').write_bytes(b);print('NNUE',len(b))
+          s=Path('YaneuraOu/.dl/suisho5.cpp').read_text(errors='ignore')
+          h=re.findall(r'\\x([0-9a-fA-F]{2})',s)
+          b=bytes(int(x,16) for x in h)
+          assert len(b)>10_000_000,len(b)
+          Path('YaneuraOu/nn.bin').write_bytes(b)
+          print('NNUE',len(b))
           PY
+
       - name: Build HalfKP noeval WASM
+        shell: bash
         run: |
           set -euxo pipefail
           docker pull emscripten/emsdk:3.1.43
           docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval
           LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
-          test -s "$LIB/yaneuraou.halfkp.noeval.js";test -s "$LIB/yaneuraou.halfkp.noeval.worker.js";test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
-      - name: Install browser
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          grep -F '_usi_command' "$LIB/yaneuraou.halfkp.noeval.js" >/dev/null
+
+      - name: Install Chromium
+        shell: bash
         run: |
           mkdir -p /tmp/yane/site && cd /tmp/yane
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.48.2
           npx playwright install --with-deps chromium
-      - name: Run Chromium diagnostic
+
+      - name: Chromium USI smoke
         id: smoke
         shell: bash
         run: |
           set -euxo pipefail
-          ROOT=/tmp/yane/site;LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
-          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/";cp YaneuraOu/nn.bin "$ROOT/"
+          ROOT=/tmp/yane/site
+          LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
+          cp "$LIB"/yaneuraou.halfkp.noeval.js "$ROOT/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js "$ROOT/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.wasm "$ROOT/"
+          cp YaneuraOu/nn.bin "$ROOT/"
           cat > "$ROOT/index.html" <<'HTML'
-          <!doctype html><meta charset=utf-8><body data-result=running>starting</body><script src="./yaneuraou.halfkp.noeval.js"></script><script>
-          (async()=>{const b=document.body,fail=e=>{b.dataset.result='error';b.textContent=String(e&&e.stack||e);console.error('FAIL',b.textContent)};try{console.log('BOOT iso='+crossOriginIsolated+' factory='+typeof globalThis.YaneuraOu_HalfKP_noeval);if(!crossOriginIsolated)throw Error('not isolated');const f=globalThis.YaneuraOu_HalfKP_noeval;if(typeof f!=='function')throw Error('factory missing');const base=new URL('./',location.href);const e=await f({locateFile:p=>new URL(String(p).split('/').pop(),base).href});console.log('MODULE fs='+!!e.FS+' post='+typeof e.postMessage);const r=await fetch(new URL('nn.bin',base));const n=new Uint8Array(await r.arrayBuffer());console.log('NN '+n.byteLength);e.FS.writeFile('/nn.bin',n);let phase='usi',u=0,q=0;setTimeout(()=>fail(Error('timeout '+phase)),90000);e.addMessageListener(x=>{let l=String(x||'').trim();if(!l)return;console.log('ENGINE '+l);if(l==='usiok'&&!u){u=1;phase='ready';e.postMessage('setoption name EvalDir value .');e.postMessage('setoption name EvalFile value nn.bin');e.postMessage('setoption name USI_Hash value 32');e.postMessage('setoption name Threads value 1');e.postMessage('setoption name BookFile value no_book');e.postMessage('isready')}else if(l==='readyok'&&!q){q=1;phase='bestmove';e.postMessage('usinewgame');e.postMessage('position startpos');e.postMessage('go movetime 400')}else if(l.startsWith('bestmove ')){b.dataset.result='ok';b.textContent='USI_OK READY_OK '+l;console.log('SUCCESS '+b.textContent)}});e.postMessage('usi')}catch(e){fail(e)}})();
+          <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
+          <script src="./yaneuraou.halfkp.noeval.js"></script>
+          <script>
+          (async()=>{
+            const b=document.body,fail=e=>{b.dataset.result='error';b.textContent=String(e&&e.stack||e);console.error('FAIL',b.textContent)};
+            try{
+              console.log('BOOT iso='+crossOriginIsolated+' factory='+typeof globalThis.YaneuraOu_HalfKP_noeval);
+              if(!crossOriginIsolated)throw Error('not isolated');
+              const f=globalThis.YaneuraOu_HalfKP_noeval;
+              if(typeof f!=='function')throw Error('factory missing');
+              const e=await f({locateFile:p=>'./'+String(p).split('/').pop()});
+              console.log('MODULE fs='+!!e.FS+' post='+typeof e.postMessage);
+              const rr=await fetch('./nn.bin',{cache:'no-store'}),nn=new Uint8Array(await rr.arrayBuffer());
+              console.log('NN '+nn.byteLength);e.FS.writeFile('/nn.bin',nn);
+              let phase='usi',u=false,q=false;
+              const timer=setTimeout(()=>fail(Error('timeout '+phase)),90000);
+              e.addMessageListener(raw=>{
+                const l=String(raw||'').trim();if(!l)return;console.log('ENGINE '+l);
+                if(l==='usiok'&&!u){u=true;phase='ready';e.postMessage('setoption name EvalDir value .');e.postMessage('setoption name EvalFile value nn.bin');e.postMessage('setoption name USI_Hash value 32');e.postMessage('setoption name Threads value 1');e.postMessage('setoption name BookFile value no_book');e.postMessage('isready');}
+                else if(l==='readyok'&&!q){q=true;phase='bestmove';e.postMessage('usinewgame');e.postMessage('position startpos');e.postMessage('go movetime 400');}
+                else if(l.startsWith('bestmove ')){clearTimeout(timer);b.dataset.result='ok';b.textContent='USI_OK READY_OK '+l;console.log('SUCCESS '+b.textContent);}
+              });
+              e.postMessage('usi');
+            }catch(e){fail(e)}
+          })();
           </script>
           HTML
           cat > "$ROOT/server.cjs" <<'NODE'
-          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{let n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1')
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
           NODE
           cat > /tmp/yane/check.mjs <<'NODE'
-          import{chromium}from'playwright';import fs from'fs';let a=[],log=x=>{a.push(x);console.log(x)};try{let b=await chromium.launch({headless:true}),p=await b.newPage();p.on('console',m=>log('CONSOLE '+m.type()+' '+m.text()));p.on('pageerror',e=>log('PAGEERROR '+(e.stack||e)));await p.goto('http://127.0.0.1:4173/',{waitUntil:'load'});await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:120000});let r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,iso:crossOriginIsolated,factory:typeof globalThis.YaneuraOu_HalfKP_noeval}));log('FINAL '+JSON.stringify(r));await b.close();fs.writeFileSync('/tmp/yane/result.txt',a.join('\n')+'\n');process.exit(r.state==='ok'?0:1)}catch(e){log('CHECK_FATAL '+(e.stack||e));fs.writeFileSync('/tmp/yane/result.txt',a.join('\n')+'\n');process.exit(1)}
+          import{chromium}from'playwright';import fs from'fs';let a=[],log=x=>{a.push(x);console.log(x)};
+          try{const b=await chromium.launch({headless:true}),p=await b.newPage();p.on('console',m=>log('CONSOLE '+m.type()+' '+m.text()));p.on('pageerror',e=>log('PAGEERROR '+(e.stack||e)));await p.goto('http://127.0.0.1:4173/',{waitUntil:'load'});await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:120000});const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,iso:crossOriginIsolated,factory:typeof globalThis.YaneuraOu_HalfKP_noeval}));log('FINAL '+JSON.stringify(r));await b.close();fs.writeFileSync('/tmp/yane/result.txt',a.join('\n')+'\n');process.exit(r.state==='ok'?0:1)}catch(e){log('CHECK_FATAL '+(e.stack||e));fs.writeFileSync('/tmp/yane/result.txt',a.join('\n')+'\n');process.exit(1)}
           NODE
           node "$ROOT/server.cjs" >/tmp/yane/server.log 2>&1 & PID=$!;trap 'kill $PID 2>/dev/null||true' EXIT
           for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
-          cd /tmp/yane;set +e;node check.mjs;S=$?;set -e;cat result.txt;cat server.log||true;echo $S>status;echo "status=$S">>"$GITHUB_OUTPUT";exit 0
-      - name: Save diagnostic and verified engine
+          cd /tmp/yane
+          set +e;node check.mjs;S=$?;set -e
+          cat result.txt;cat server.log||true
+          echo "status=$S" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Save result and verified engine
         if: always()
+        shell: bash
         run: |
           set -euxo pipefail
           cp /tmp/yane/result.txt /tmp/result.txt||echo no-result>/tmp/result.txt
-          printf '\nSMOKE_STATUS=%s\n' '${{ steps.smoke.outputs.status }}' >>/tmp/result.txt
+          printf '\nSMOKE_STATUS=%s\n' '${{ steps.smoke.outputs.status }}' >> /tmp/result.txt
           if [ '${{ steps.smoke.outputs.status }}' = '0' ];then
             mkdir -p /tmp/engine;LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
-            cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} /tmp/engine/;cp YaneuraOu/nn.bin /tmp/engine/;cp YaneuraOu/LICENSE /tmp/engine/YANEURAOU_LICENSE.txt
+            cp "$LIB"/yaneuraou.halfkp.noeval.js /tmp/engine/
+            cp "$LIB"/yaneuraou.halfkp.noeval.worker.js /tmp/engine/
+            cp "$LIB"/yaneuraou.halfkp.noeval.wasm /tmp/engine/
+            cp YaneuraOu/nn.bin /tmp/engine/
+            cp YaneuraOu/LICENSE /tmp/engine/YANEURAOU_LICENSE.txt
             printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'Chromium: usiok / readyok / bestmove OK' >/tmp/engine/build-info.txt
           fi
-          git fetch origin future-mitsuki-yaneuraou;git reset --hard origin/future-mitsuki-yaneuraou
+          git fetch origin future-mitsuki-yaneuraou
+          git reset --hard origin/future-mitsuki-yaneuraou
           cp /tmp/result.txt shogi-side-test/yaneuraou-browser-smoke.txt
           if [ '${{ steps.smoke.outputs.status }}' = '0' ];then rm -rf shogi-side-test/yaneuraou;mkdir -p shogi-side-test/yaneuraou;cp -a /tmp/engine/. shogi-side-test/yaneuraou/;fi
-          git config user.name github-actions[bot];git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-side-test/yaneuraou-browser-smoke.txt shogi-side-test/yaneuraou || true
-          git diff --cached --quiet||git commit -m 'audit: やねうら王Chromium実動結果を保存'
+          git diff --cached --quiet||git commit -m 'audit: usi_command export後のやねうら王実動結果を保存'
           git push origin HEAD:future-mitsuki-yaneuraou
+
       - name: Require success
         run: test '${{ steps.smoke.outputs.status }}' = '0'
