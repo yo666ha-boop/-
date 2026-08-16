@@ -131,7 +131,7 @@
         await loadEngineScript21520();
         const factory=globalThis.YaneuraOu_HalfKP_noeval;
         if(typeof factory!=='function')throw new Error('YaneuraOu_HalfKP_noeval factory not found');
-        const e=await factory({locateFile:(p)=>ENGINE_BASE+p});
+        const e=await factory({locateFile:(p)=>ENGINE_BASE+String(p).split('/').pop()});
         if(!e||!e.FS)throw new Error('YaneuraOu FS not available');
         const evalRes=await fetch(ENGINE_BASE+ENGINE_EVAL+'?v=21520',{cache:'no-store'});
         if(!evalRes.ok)throw new Error('nn.bin '+evalRes.status);
