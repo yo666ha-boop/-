@@ -110,7 +110,7 @@ jobs:
           path: yaneuraou-build.log
           retention-days: 7
 
-      - name: Verify generated engine files and exported USI bridge
+      - name: Verify generated engine files
         if: steps.build.outputs.status == '0'
         shell: bash
         run: |
@@ -120,7 +120,6 @@ jobs:
           test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
           test -s YaneuraOu/nn.bin
-          grep -F 'z._usi_command' "$LIB/yaneuraou.halfkp.noeval.js"
           ls -lh "$LIB"/yaneuraou.halfkp.noeval.* YaneuraOu/nn.bin
 
       - name: USI smoke test through bestmove
