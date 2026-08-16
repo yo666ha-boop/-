@@ -29,13 +29,14 @@ jobs:
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
 
-      - name: Verify official WASM route and tune iPhone worker pool
+      - name: Verify official WASM route and patch browser export
         shell: bash
         run: |
           set -euxo pipefail
           test "$(git -C YaneuraOu rev-parse HEAD)" = "33ccf1f907eb7184889fa23051243f81ab0bf973"
           grep -F 'TARGET_CPU=WASM' YaneuraOu/script/wasm_build.js
           grep -F 'else ifeq ($(TARGET_CPU),WASM)' YaneuraOu/source/Makefile
+          grep -F 'EMSCRIPTEN_KEEPALIVE extern "C" int usi_command' YaneuraOu/source/usi.cpp
           python3 - <<'PY'
           from pathlib import Path
           p=Path('YaneuraOu/source/Makefile')
@@ -44,9 +45,16 @@ jobs:
           new='-s PTHREAD_POOL_SIZE=4'
           if old not in s:
               raise SystemExit('PTHREAD_POOL_SIZE=32 not found in official source/Makefile')
-          p.write_text(s.replace(old,new,1))
+          s=s.replace(old,new,1)
+          marker='LDFLAGS += -s FILESYSTEM=1 -s EXIT_RUNTIME=0 -s "EXPORTED_RUNTIME_METHODS=[\'FS\',\'ccall\']"'
+          export='LDFLAGS += -s "EXPORTED_FUNCTIONS=[\'_main\',\'_usi_command\']"'
+          if marker not in s:
+              raise SystemExit('WASM EXPORTED_RUNTIME_METHODS marker not found')
+          s=s.replace(marker,marker+'\n\t\t'+export,1)
+          p.write_text(s)
           PY
           grep -F -- '-s PTHREAD_POOL_SIZE=4' YaneuraOu/source/Makefile
+          grep -F -- "EXPORTED_FUNCTIONS=['_main','_usi_command']" YaneuraOu/source/Makefile
 
       - name: Reconstruct Suisho5 HalfKP evaluation file
         shell: bash
@@ -102,16 +110,69 @@ jobs:
           path: yaneuraou-build.log
           retention-days: 7
 
-      - name: Verify generated engine files
+      - name: Verify generated engine files and exported USI bridge
         if: steps.build.outputs.status == '0'
         shell: bash
         run: |
           set -euxo pipefail
-          test -s YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js
-          test -s YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js
-          test -s YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
           test -s YaneuraOu/nn.bin
-          ls -lh YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.* YaneuraOu/nn.bin
+          grep -F 'z._usi_command' "$LIB/yaneuraou.halfkp.noeval.js"
+          ls -lh "$LIB"/yaneuraou.halfkp.noeval.* YaneuraOu/nn.bin
+
+      - name: USI smoke test through bestmove
+        if: steps.build.outputs.status == '0'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
+          cat > "$LIB/smoke.js" <<'NODE'
+          const fs=require('fs');
+          const path=require('path');
+          const dir=__dirname;
+          const factory=require(path.join(dir,'yaneuraou.halfkp.noeval.js'));
+          (async()=>{
+            const engine=await factory({locateFile:(p)=>path.join(dir,p)});
+            if(!engine || !engine.FS || typeof engine.postMessage!=='function') throw new Error('engine module not ready');
+            const nn=fs.readFileSync(path.resolve(dir,'../../../../nn.bin'));
+            try{engine.FS.unlink('/nn.bin')}catch(_e){}
+            engine.FS.writeFile('/nn.bin',nn);
+            let phase='usi';
+            let sawUsi=false,sawReady=false,best='';
+            const timer=setTimeout(()=>{console.error('SMOKE_TIMEOUT',phase);try{engine.terminate()}catch(_e){};process.exit(2)},90000);
+            engine.addMessageListener((raw)=>{
+              const line=String(raw||'').trim();
+              if(!line)return;
+              console.log('<',line);
+              if(line==='usiok'&&!sawUsi){
+                sawUsi=true;phase='isready';
+                engine.postMessage('setoption name EvalDir value .');
+                engine.postMessage('setoption name EvalFile value nn.bin');
+                engine.postMessage('setoption name USI_Hash value 32');
+                engine.postMessage('setoption name Threads value 1');
+                engine.postMessage('setoption name USI_Ponder value false');
+                engine.postMessage('setoption name BookFile value no_book');
+                engine.postMessage('isready');
+              }else if(line==='readyok'&&!sawReady){
+                sawReady=true;phase='bestmove';
+                engine.postMessage('usinewgame');
+                engine.postMessage('position startpos');
+                engine.postMessage('go movetime 300');
+              }else if(line.startsWith('bestmove ')){
+                best=line.split(/\s+/)[1]||'';
+                if(!/^([1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i]|resign|win)$/.test(best)) throw new Error('bad bestmove '+best);
+                clearTimeout(timer);
+                console.log('BESTMOVE_OK',best);
+                setTimeout(()=>{try{engine.terminate()}catch(_e){};process.exit(0)},100);
+              }
+            });
+            engine.postMessage('usi');
+          })().catch(e=>{console.error('SMOKE_FATAL',e&&e.stack||e);process.exit(1)});
+          NODE
+          node "$LIB/smoke.js"
 
       - name: Install browser engine files
         if: steps.build.outputs.status == '0'
@@ -132,13 +193,14 @@ jobs:
             'target_cpu=WASM' \
             'pthread_pool=4' \
             'emscripten=3.1.43' \
+            'usi_smoke=usiok readyok bestmove verified in GitHub Actions' \
             > shogi-side-test/yaneuraou/build-info.txt
           sha256sum shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js \
                     shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.worker.js \
                     shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.wasm \
                     shogi-side-test/yaneuraou/nn.bin
 
-      - name: Commit official WASM artifacts to experiment branch
+      - name: Commit verified WASM artifacts to experiment branch
         if: steps.build.outputs.status == '0'
         shell: bash
         run: |
@@ -163,7 +225,7 @@ jobs:
             echo "No WASM artifact changes."
             exit 0
           fi
-          git commit -m "build: 公式やねうら王HalfKP noevalと水匠5を追加"
+          git commit -m "build: bestmove実動確認済みやねうら王WASMを追加"
           git push origin HEAD:future-mitsuki-yaneuraou
 
       - name: Upload WASM artifact
