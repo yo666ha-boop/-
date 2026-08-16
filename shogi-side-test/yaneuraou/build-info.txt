@@ -1,0 +1,7 @@
+source=yaneurao/YaneuraOu
+commit=33ccf1f907eb7184889fa23051243f81ab0bf973
+edition=halfkp.noeval
+eval=Suisho5_20211123 HalfKP reconstructed from mizar resource
+target_cpu=WASM
+pthread_pool=4
+emscripten=3.1.43
