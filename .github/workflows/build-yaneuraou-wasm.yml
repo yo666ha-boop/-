@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euxo pipefail
           test "$(git -C YaneuraOu rev-parse HEAD)" = "33ccf1f907eb7184889fa23051243f81ab0bf973"
-          grep -F 'EM_EXPORT_NAME=YaneuraOu' YaneuraOu/source/Makefile
+          grep -F 'YaneuraOu_HalfKP_noeval' YaneuraOu/script/wasm_build.js
           python3 - <<'PY'
           from pathlib import Path
           p=Path('YaneuraOu/source/Makefile')
@@ -82,7 +82,7 @@ jobs:
           test -s "$LIB/yaneuraou.halfkp.noeval.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
-          grep -F 'YaneuraOu' "$LIB/yaneuraou.halfkp.noeval.js" >/dev/null
+          grep -F 'YaneuraOu_HalfKP_noeval' "$LIB/yaneuraou.halfkp.noeval.js" >/dev/null
           ls -lh "$LIB"/yaneuraou.halfkp.noeval.*
 
       - name: Install Chromium smoke dependencies
@@ -114,10 +114,10 @@ jobs:
             const b=document.body;
             const fail=e=>{b.dataset.result='error';b.textContent=String(e&&e.stack||e);console.error('SMOKE_FAIL',e)};
             try{
-              console.log('ISOLATED',crossOriginIsolated,'FACTORY',typeof globalThis.YaneuraOu);
+              console.log('ISOLATED',crossOriginIsolated,'FACTORY',typeof globalThis.YaneuraOu_HalfKP_noeval);
               if(!crossOriginIsolated)throw new Error('crossOriginIsolated=false');
-              if(typeof globalThis.YaneuraOu!=='function')throw new Error('official factory YaneuraOu missing');
-              const engine=await globalThis.YaneuraOu({locateFile:p=>'./'+String(p).split('/').pop()});
+              if(typeof globalThis.YaneuraOu_HalfKP_noeval!=='function')throw new Error('official factory YaneuraOu_HalfKP_noeval missing');
+              const engine=await globalThis.YaneuraOu_HalfKP_noeval({locateFile:p=>'./'+String(p).split('/').pop()});
               if(!engine||!engine.FS||typeof engine.postMessage!=='function')throw new Error('engine API missing');
               const r=await fetch('./nn.bin',{cache:'no-store'});
               if(!r.ok)throw new Error('nn.bin HTTP '+r.status);
@@ -183,7 +183,7 @@ jobs:
           page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
           await page.goto('http://127.0.0.1:4173/',{waitUntil:'load',timeout:30000});
           await page.waitForFunction(()=>document.body.dataset.result==='ok'||document.body.dataset.result==='error',{timeout:150000});
-          const r=await page.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,isolated:crossOriginIsolated,factory:typeof globalThis.YaneuraOu}));
+          const r=await page.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,isolated:crossOriginIsolated,factory:typeof globalThis.YaneuraOu_HalfKP_noeval}));
           console.log('FINAL',JSON.stringify(r));
           await browser.close();
           if(r.state!=='ok'||!r.isolated||r.factory!=='function')process.exit(1);
@@ -212,7 +212,7 @@ jobs:
             'commit=33ccf1f907eb7184889fa23051243f81ab0bf973' \
             'edition=halfkp.noeval' \
             'eval=Suisho5_20211123 HalfKP' \
-            'factory=YaneuraOu' \
+            'factory=YaneuraOu_HalfKP_noeval' \
             'browser_smoke=usiok readyok bestmove OK' \
             > /tmp/yane-ready/build-info.txt
           git fetch origin future-mitsuki-yaneuraou
