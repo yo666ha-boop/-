@@ -25,15 +25,13 @@ window.FINAL21513_IMAGES=window.FINAL21513_IMAGES||{};window.FINAL21513_IMAGES.r
       const tempCount=document.querySelectorAll('#chars .ch .chTemp').length;
       const strongMarker=window.AI_SHOGI_STRONG_SCOPE_FIX21517||{};
       const strongOK=strongMarker.ok===true&&strongMarker.bindingChanged===true;
-
       let legalOK=false,applyOK=false,aiProbeOK=false,strengthOrderOK=false,probeError='';
       try{
         const ps=clone(st),lm=legal(ps);
         legalOK=Array.isArray(lm)&&lm.length>0;
         if(legalOK){const n=apply(clone(ps),lm[0]);applyOK=!!n&&Array.isArray(legal(n));}
         if(typeof chooseAI==='function'){
-          const p1=chooseAI(clone(st),0,45);
-          const p2=chooseAI(clone(st),16,45);
+          const p1=chooseAI(clone(st),0,45),p2=chooseAI(clone(st),16,45);
           aiProbeOK=!!p1&&!!p1.move&&!!p1.info&&!!p2&&!!p2.move&&!!p2.info;
         }
         if(typeof aiSettings==='function'){
@@ -41,7 +39,6 @@ window.FINAL21513_IMAGES=window.FINAL21513_IMAGES||{};window.FINAL21513_IMAGES.r
           strengthOrderOK=!!hi&&!!lo&&hi.maxDepth>lo.maxDepth&&hi.think>lo.think;
         }
       }catch(e){probeError=String(e&&e.message||e);}
-
       const functionalOK=legalOK&&applyOK&&aiProbeOK&&strengthOrderOK;
       const ok=names.length===25&&uniqueNames===25&&ratingsOK&&stylesOK&&metasOK&&dialogueMissing.length===0&&cards.length===25&&badImages.length===0&&sideOK&&fullscreenOK&&recentAvoid&&tempCount===0&&strongOK&&functionalOK;
       window.AI_SHOGI_FINAL_AUDIT21517={version:'2.15.17',ok,total:names.length,uniqueNames,ratingsOK,stylesOK,metasOK,dialogueMissing,badImages,sideOK,fullscreenOK,recentAvoid,tempCount,strongOK,strongMarker,legalOK,applyOK,aiProbeOK,strengthOrderOK,functionalOK,probeError,names,ratings,checkedAt:new Date().toISOString()};
@@ -55,7 +52,6 @@ window.FINAL21513_IMAGES=window.FINAL21513_IMAGES||{};window.FINAL21513_IMAGES.r
   let tries=0;const run=()=>{tries++;const ok=audit21517();if(!ok&&tries<5)setTimeout(run,1200)};setTimeout(run,2200);
 })();
 
-/* v2.15.19: 実際の25AI・後手・待った・R変動・振り返り・全画面まで非破壊自己監査 */
 (async function loadFunctional21519(){
   try{
     const b=document.querySelector('.badge');if(b)b.textContent='v2.15.19 みつきMAX・実戦フロー監査中';
@@ -69,14 +65,22 @@ window.FINAL21513_IMAGES=window.FINAL21513_IMAGES||{};window.FINAL21513_IMAGES.r
   }
 })();
 
-/* v2.15.20: 既存25人の起動監査を壊さず、26人目を同じcore lexical scopeへ接続する。 */
+/* 公式MakefileのEXPORT_NAMEは YaneuraOu。既存future21520の旧名へ安全にaliasする。 */
+try{
+  Object.defineProperty(globalThis,'YaneuraOu_HalfKP_noeval',{configurable:true,get(){return globalThis.YaneuraOu},set(v){globalThis.YaneuraOu=v}});
+}catch(e){console.warn('YaneuraOu factory alias',e)}
+
 setTimeout(async function loadFutureMitsuki21520(){
   try{
     const b=document.querySelector('.badge');if(b)b.textContent='v2.15.20 26人目・未来みつきを接続中';
     const r=await fetch('./future21520.js?v=21520',{cache:'no-store'});
     if(!r.ok)throw new Error('future21520.js '+r.status);
-    eval(await r.text());
-    window.AI_SHOGI_FUTURE_SCOPE21520={ok:!!window.AI_SHOGI_FUTURE_AUDIT21520,characters:Array.isArray(C)?C.length:0,installedAt:new Date().toISOString()};
+    let src=await r.text();
+    if(window.FUTURE_MITSUKI_IMAGE21520){
+      src=src.split('FIXED_IMG[0]').join('(window.FUTURE_MITSUKI_IMAGE21520||FIXED_IMG[0])');
+    }
+    eval(src);
+    window.AI_SHOGI_FUTURE_SCOPE21520={ok:!!window.AI_SHOGI_FUTURE_AUDIT21520,characters:Array.isArray(C)?C.length:0,officialFactory:'YaneuraOu',installedAt:new Date().toISOString()};
   }catch(e){
     console.error('future21520 load failed',e);
     const b=document.querySelector('.badge');if(b)b.textContent='v2.15.20 未来みつき接続エラー';
