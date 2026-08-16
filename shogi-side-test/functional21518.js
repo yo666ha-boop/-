@@ -37,12 +37,10 @@
     const out={version:VERSION,ok:false,checkedAt:new Date().toISOString(),errors:[]};
     let liveSnapshot=null;
     try{
-      /* 1) 将棋ルール監査 */
       const ra=rulesAudit();
       out.rules=ra;
       out.rulesOK=!!ra&&ra.pass===true;
 
-      /* 2) 25キャラ全員が同一局面で合法手を返せるか */
       const probe=initial();probe.t=G;
       const legalProbe=legal(probe);const legalUSI=new Set(legalProbe.map(usi));
       const ai25=[];
@@ -56,12 +54,10 @@
       out.ai25=ai25;
       out.ai25OK=ai25.length===25&&ai25.every(x=>x.legal);
 
-      /* 3) R値が実際の探索設定へ反映されているか */
       const hi=aiSettings(C[0][1],0),mid=aiSettings(C[5][1],5),lo=aiSettings(C[14][1],14);
       out.strengthSettings={high:hi,mid,low:lo};
       out.strengthOrderOK=hi.maxDepth>mid.maxDepth&&hi.think>mid.think&&mid.maxDepth>=lo.maxDepth&&mid.think>lo.think;
 
-      /* 4) 後手選択時：AIが先に指し、その後ユーザー側へ手番が渡る＋棋譜記号が反転するか */
       const g0=initial();g0.t=G;
       const gm=legal(g0)[0];
       const g1=gm?apply(g0,gm):null;
@@ -74,7 +70,6 @@
       out.goteFlow={aiFirst:!!gm,turnAfterAI:g1?.t,userHasMove:!!sm,aiText,userText};
       out.goteFlowOK=!!gm&&!!g1&&g1.t===S&&!!sm&&aiText.startsWith('▲')&&userText.startsWith('△');
 
-      /* 5) 本物の undo() を3手局面で実行し、ユーザーの直前手＋AI応手の2手が戻るか。最後に完全復元。 */
       liveSnapshot={
         st:clone(st),hist:hist.map(clone),repHistory:deep21518(repHistory),reviewTrail:reviewTrail.map(x=>({...x,before:clone(x.before),move:{...x.move}})),reviewResults:reviewResults.slice(),
         thinking,gameCounted,lastHumanBefore:lastHumanBefore?clone(lastHumanBefore):null,lastHumanMove:lastHumanMove?{...lastHumanMove}:null,
@@ -84,14 +79,14 @@
       if(typeof SIDE2157_GOTE!=='undefined')SIDE2157_GOTE=true;
       st=initial();st.t=G;hist=[];repHistory=[repEntry(st)];reviewTrail=[];reviewResults=[];thinking=false;gameCounted=false;sel=null;drop=null;
       const m1=legal(st)[0];if(m1)push(m1,'▲');
-      const m2=legal(st)[0];if(m2)push(m2,'△');
+      const m2=legal(st)[0];
+      if(m2){const beforeHuman=clone(st);reviewTrail.push({ply:st.log.length+1,before:beforeHuman,move:{...m2},moveText:jpMove(m2,beforeHuman)});push(m2,'△');}
       const m3=legal(st)[0];if(m3)push(m3,'▲');
       const preUndoPly=st.log.length;
       undo();
-      out.undoFlow={before:preUndoPly,after:st.log.length,turn:st.t};
-      out.undoOK=preUndoPly===3&&st.log.length===1&&st.t===S;
+      out.undoFlow={before:preUndoPly,after:st.log.length,turn:st.t,reviewAfter:reviewTrail.length};
+      out.undoOK=preUndoPly===3&&st.log.length===1&&st.t===S&&reviewTrail.length===0;
 
-      /* 6) R計算：勝てば上がる、負ければ下がる、千日手はR据え置きで引分数のみ増える。 */
       const savedCi=ci;ci=5;
       stats=freshStats();stats.rating=1500;gameCounted=false;const winDelta=recordResult(1);
       stats=freshStats();stats.rating=1500;gameCounted=false;const lossDelta=recordResult(0);
@@ -100,7 +95,6 @@
       out.ratingOK=winDelta>0&&lossDelta<0&&drawAfter===drawBefore&&stats.d===1;
       ci=savedCi;
 
-      /* 7) AI先生・振り返りの中核計算が実際に動くか */
       const rv=initial();
       const hm=legal(rv)[0];
       let reviewOK=false,reviewData={};
@@ -112,7 +106,6 @@
       }
       out.reviewData=reviewData;out.reviewOK=reviewOK;
 
-      /* 8) 全画面を実際に開閉できるか */
       const focus=document.getElementById('focus'),fb=document.getElementById('focusBtn'),cb=document.getElementById('closeBtn');
       let focusOpen=false,focusClose=false;
       if(focus&&fb&&cb){fb.click();focusOpen=focus.classList.contains('on');cb.click();focusClose=!focus.classList.contains('on');}
