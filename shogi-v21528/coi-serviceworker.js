@@ -19,9 +19,14 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    const n=navigator,controlling=n.serviceWorker&&n.serviceWorker.controller;
-    if(controlling){n.serviceWorker.controller.postMessage({type:'coepCredentialless',value:false});return}
-    if(window.crossOriginIsolated!==false||!window.isSecureContext||!n.serviceWorker)return;
-    n.serviceWorker.register(window.document.currentScript.src).then(reg=>{if(reg.active&&!n.serviceWorker.controller)location.reload()})
+    const n=navigator;
+    if(!window.isSecureContext||!n.serviceWorker)return;
+    const src=window.document.currentScript.src;
+    const hadController=!!n.serviceWorker.controller;
+    if(hadController)n.serviceWorker.controller.postMessage({type:'coepCredentialless',value:false});
+    n.serviceWorker.register(src,{updateViaCache:'none'}).then(async reg=>{
+      try{await reg.update()}catch(e){}
+      if(!hadController&&reg.active&&!n.serviceWorker.controller)location.reload();
+    }).catch(e=>console.error('coi service worker update',e));
   })()
 }
