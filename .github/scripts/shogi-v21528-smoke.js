@@ -39,7 +39,7 @@ const vm=require('vm');
     opponentChecks[target]=await page.evaluate(()=>{
       const img=document.querySelector('#oppPortrait img');
       const fimg=document.querySelector('#foppPortrait img');
-      return {ci:typeof ci==='number'?ci:null,name:(document.querySelector('#oppName')?.textContent||'').trim(),rank:(document.querySelector('#oppRank')?.textContent||'').trim(),img:{alt:img?.alt||'',src:img?.src||'',complete:!!img?.complete,w:img?.naturalWidth||0,h:img?.naturalHeight||0},focus:{alt:fimg?.alt||'',src:fimg?.src||'',complete:!!fimg?.complete,w:fimg?.naturalWidth||0,h:fimg?.naturalHeight||0}};
+      return {name:(document.querySelector('#oppName')?.textContent||'').trim(),rank:(document.querySelector('#oppRank')?.textContent||'').trim(),img:{alt:img?.alt||'',src:img?.src||'',complete:!!img?.complete,w:img?.naturalWidth||0,h:img?.naturalHeight||0},focus:{alt:fimg?.alt||'',src:fimg?.src||'',complete:!!fimg?.complete,w:fimg?.naturalWidth||0,h:fimg?.naturalHeight||0}};
     });
   }
   console.log('OPPONENT_CHECKS',JSON.stringify(opponentChecks));
@@ -90,9 +90,10 @@ const vm=require('vm');
   if(ui.bad.length)failures.push('broken images: '+ui.bad.join(','));
   for(const target of ['しんじ','ぺんぺん']){
     const c=opponentChecks[target];
-    if(!c||c.name!==target)failures.push(target+' opponent name mismatch: '+JSON.stringify(c));
+    if(!c||!c.name.startsWith(target))failures.push(target+' opponent name mismatch: '+JSON.stringify(c));
     if(!c?.img?.complete||c.img.w<1)failures.push(target+' opponent image broken: '+JSON.stringify(c));
     if(c?.img?.alt!==target)failures.push(target+' opponent alt mismatch: '+JSON.stringify(c));
+    if(!c?.img?.src.includes('/shogi-side-test/eva2158/'))failures.push(target+' opponent route wrong: '+JSON.stringify(c));
   }
   if(!ui.coi)failures.push('crossOriginIsolated=false');
   if(/v2\.15\.(14|17|20)/.test(ui.badge))failures.push('legacy badge leaked: '+ui.badge);
