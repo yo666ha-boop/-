@@ -17,6 +17,12 @@ const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const ENGINE_THREADS=MOBILE_WEBKIT?1:2;
 const ENGINE_HASH_MB=MOBILE_WEBKIT?32:128;
 const ENGINE_JS_URL=BASE+JS+'?v='+BUILD;
+const TOP5_MPV_BY_MS=new Map([
+  [4200,3],[6200,3],[2800,3],[4300,3],
+  [3400,2],[5100,2],[2300,2],[3600,2],
+  [2700,3],[4100,3],[1850,3],[3000,3],
+  [2200,3],[3500,3],[1500,3],[2500,3]
+]);
 let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};
 const stage=text=>self.postMessage({type:'stage',text});
 self.addEventListener('error',ev=>{try{self.postMessage({type:'fatal',text:'Worker内部エラー: '+String(ev.message||'unknown')+' @ '+String(ev.filename||'')+':'+String(ev.lineno||0)+':'+String(ev.colno||0)})}catch(e){}});
@@ -86,7 +92,12 @@ self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
   try{
     if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init',mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});return}
-    if(m.type==='bestmove'){const out=await bestmove(String(m.sfen||''),Number(m.ms)||6000,Number(m.multiPV)||1);self.postMessage({type:'result',id,ok:true,kind:'bestmove',...out});return}
+    if(m.type==='bestmove'){
+      const ms=Number(m.ms)||6000;
+      const inferred=m.multiPV==null?TOP5_MPV_BY_MS.get(ms):Number(m.multiPV);
+      const out=await bestmove(String(m.sfen||''),ms,inferred||1);
+      self.postMessage({type:'result',id,ok:true,kind:'bestmove',...out});return;
+    }
     if(m.type==='stop'){try{engine?.postMessage('stop')}catch(e){};return}
     if(m.type==='newgame'){try{engine?.postMessage('stop');engine?.postMessage('setoption name MultiPV value 1');engine?.postMessage('usinewgame')}catch(e){};return}
   }catch(e){self.postMessage({type:'result',id,ok:false,error:String(e&&e.message||e),mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
