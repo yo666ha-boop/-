@@ -11,7 +11,12 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const ENGINE_JS_URL=BASE+JS+'?v=21528w7';
+const BUILD='21528w8';
+const UA=String(self.navigator&&self.navigator.userAgent||'');
+const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
+const ENGINE_THREADS=MOBILE_WEBKIT?1:2;
+const ENGINE_HASH_MB=MOBILE_WEBKIT?32:128;
+const ENGINE_JS_URL=BASE+JS+'?v='+BUILD;
 let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={};
 const stage=text=>self.postMessage({type:'stage',text});
 self.addEventListener('error',ev=>{try{self.postMessage({type:'fatal',text:'Worker内部エラー: '+String(ev.message||'unknown')+' @ '+String(ev.filename||'')+':'+String(ev.lineno||0)+':'+String(ev.colno||0)})}catch(e){}});
@@ -44,19 +49,21 @@ async function init(){
     if(!engine||!engine.FS)throw new Error('YaneuraOu FS not available');
     stage('⑤-2 Worker内 Wasm本体起動完了');
     stage('⑤-3 水匠5 64MB取得中');
-    const r=await fetch(BASE+EVAL+'?v=21528w7',{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
+    const r=await fetch(BASE+EVAL+'?v='+BUILD,{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
     const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.byteLength<10000000)throw new Error('nn.bin too small '+bytes.byteLength);
     stage('⑤-3 水匠5 '+Math.round(bytes.byteLength/1024/1024)+'MB 読込完了');
     try{engine.FS.unlink('/'+EVAL)}catch(e){}
     engine.FS.writeFile('/'+EVAL,bytes);
     engine.addMessageListener(onLine);
     stage('⑤-4 usiok待ち');let p=waitLine(x=>x==='usiok',15000,'usiok');engine.postMessage('usi');await p;stage('⑤-4 usiok受信');
-    // Browser-stable YaneuraOu WASM accepts these options before isready.
-    // Match the engine thread count to the pre-created Emscripten pthread pool.
     engine.postMessage('setoption name EvalDir value .');
     engine.postMessage('setoption name EvalFile value '+EVAL);
     engine.postMessage('setoption name FV_SCALE value 24');
-    engine.postMessage('setoption name Threads value 2');
+    // YaneuraOu WASM defaults USI_Hash to 1024MB. That is too large for iPhone/WebKit.
+    // Set hash before isready, because YaneuraOu allocates hash and search threads on isready.
+    engine.postMessage('setoption name USI_Hash value '+ENGINE_HASH_MB);
+    engine.postMessage('setoption name Threads value '+ENGINE_THREADS);
+    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+'MB'+(MOBILE_WEBKIT?' / iPhone省メモリ':''));
     stage('⑤-5 readyok待ち');p=waitLine(x=>x==='readyok',60000,'readyok');engine.postMessage('isready');await p;stage('⑤-5 readyok受信');
     engine.postMessage('setoption name USI_Ponder value false');
     engine.postMessage('usinewgame');ready=true;stage('⑤成功 やねうら王＋水匠5 接続済み');return engine;
@@ -66,15 +73,15 @@ async function init(){
 async function bestmove(sfen,ms){
   const e=await init();latestInfo={};e.postMessage('position sfen '+sfen);stage('⑥ 思考中 bestmove待ち');
   const p=waitLine(x=>x.startsWith('bestmove '),ms+10000,'bestmove');e.postMessage('go movetime '+ms);const line=await p;stage('⑦ bestmove受信');
-  return{token:(line.split(/\s+/)[1]||'').trim(),info:{...latestInfo,ms,engine:'YaneuraOu HalfKP＋Suisho5'}};
+  return{token:(line.split(/\s+/)[1]||'').trim(),info:{...latestInfo,ms,engine:'YaneuraOu HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}};
 }
 self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
   try{
-    if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init'});return}
+    if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init',mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});return}
     if(m.type==='bestmove'){const out=await bestmove(String(m.sfen||''),Number(m.ms)||6000);self.postMessage({type:'result',id,ok:true,kind:'bestmove',...out});return}
     if(m.type==='stop'){try{engine?.postMessage('stop')}catch(e){};return}
     if(m.type==='newgame'){try{engine?.postMessage('stop');engine?.postMessage('usinewgame')}catch(e){};return}
-  }catch(e){self.postMessage({type:'result',id,ok:false,error:String(e&&e.message||e)});}
+  }catch(e){self.postMessage({type:'result',id,ok:false,error:String(e&&e.message||e),mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
 };
 self.postMessage({type:'stage',text:'⑤-W0 Worker待受開始'});
