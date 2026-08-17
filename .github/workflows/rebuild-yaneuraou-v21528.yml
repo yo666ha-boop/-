@@ -25,7 +25,6 @@ jobs:
           from pathlib import Path
           import re
 
-          # Keep the browser build light enough for iPhone/Firefox while still threaded.
           makefile=Path('YaneuraOu/source/Makefile')
           s=makefile.read_text()
           if '-s PTHREAD_POOL_SIZE=32' not in s:
@@ -33,20 +32,15 @@ jobs:
           s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
           makefile.write_text(s)
 
-          # The current upstream tree still contains an old usi_command implementation,
-          # but it sits inside a disabled #if 0 block.  Add a small public bridge to the
-          # current USIEngine so WebAssembly can execute one USI line at a time.
           h=Path('YaneuraOu/source/usi.h')
           hs=h.read_text()
           marker='\tvoid loop();\n'
-          bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\t// Browser bridge: execute one USI command without entering the blocking stdin loop.\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
+          bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
           if marker not in hs:
               raise SystemExit('USIEngine::loop marker missing')
           hs=hs.replace(marker,bridge,1)
           h.write_text(hs)
 
-          # Keep YaneuraOuEngine and USIEngine alive after main() returns in WebAssembly,
-          # and export a real (non-disabled) C symbol called usi_command.
           p=Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
           ys=p.read_text()
           tail_marker='using namespace YaneuraOu;\nnamespace {'
@@ -59,7 +53,7 @@ jobs:
           matches=list(pattern.finditer(ys))
           if len(matches)!=1:
               raise SystemExit(f'engine_main match count={len(matches)}')
-          replacement='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    // loop() is intentionally non-blocking under Emscripten.  The static objects\n    // above survive main() and are driven through exported usi_command().\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
+          replacement='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
           ys=pattern.sub(replacement,ys,count=1)
           p.write_text(ys)
           PY
@@ -156,15 +150,41 @@ jobs:
           cat > /tmp/yane/check.mjs <<'NODE'
           import{firefox}from'playwright';
           const b=await firefox.launch({headless:true}),p=await b.newPage();
-          p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
+          p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));
+          p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
+          p.on('requestfailed',r=>console.log('REQUESTFAILED',r.url(),r.failure()?.errorText||''));
           await p.goto('http://127.0.0.1:4173/',{waitUntil:'load'});
           await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:150000});
-          const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,coi:crossOriginIsolated}));console.log('FINAL',JSON.stringify(r));
+          const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,coi:crossOriginIsolated,sab:typeof SharedArrayBuffer}));
+          console.log('FINAL',JSON.stringify(r));
           await b.close();if(r.state!=='ok')process.exit(1);
           NODE
           node "$ROOT/server.cjs" >/tmp/yane/server.log 2>&1 & PID=$!;trap 'kill $PID 2>/dev/null||true' EXIT
           for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
-          cd /tmp/yane && node check.mjs
+          set +e
+          cd /tmp/yane
+          node check.mjs 2>&1 | tee /tmp/yane/firefox-smoke.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo '## Firefox YaneuraOu smoke'
+            echo '```text'
+            cat /tmp/yane/firefox-smoke.log || true
+            echo '--- server.log ---'
+            cat /tmp/yane/server.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+      - name: Upload Firefox diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaneuraou-firefox-smoke
+          path: |
+            /tmp/yane/firefox-smoke.log
+            /tmp/yane/server.log
+          if-no-files-found: ignore
+          retention-days: 2
       - name: Install verified runtime into v2.15.28
         shell: bash
         run: |
