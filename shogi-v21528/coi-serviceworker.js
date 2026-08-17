@@ -1,63 +1,35 @@
-let coepCredentialless=false;
-
 if(typeof window==='undefined'){
   self.addEventListener('install',()=>self.skipWaiting());
   self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
-  self.addEventListener('message',ev=>{if(ev.data?.type==='coepCredentialless')coepCredentialless=ev.data.value});
   self.addEventListener('fetch',event=>{
-    const r=event.request;
-    const isDocument=r.mode==='navigate'||r.destination==='document';
-    if(!isDocument)return;
-    const req=(coepCredentialless&&r.mode==='no-cors')?new Request(r,{credentials:'omit'}):r;
+    const req=event.request;
+    if(req.cache==='only-if-cached'&&req.mode!=='same-origin')return;
     event.respondWith((async()=>{
-      const res=await fetch(req);
-      if(res.status===0)return res;
-      const h=new Headers(res.headers);
-      h.set('Cross-Origin-Embedder-Policy',coepCredentialless?'credentialless':'require-corp');
-      h.set('Cross-Origin-Opener-Policy','same-origin');
-      h.set('Cache-Control','no-store');
-      return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h});
+      try{
+        const res=await fetch(req);
+        if(!res||res.status===0)return res;
+        const h=new Headers(res.headers);
+        h.set('Cross-Origin-Embedder-Policy','require-corp');
+        h.set('Cross-Origin-Opener-Policy','same-origin');
+        h.set('Cross-Origin-Resource-Policy','same-origin');
+        if(req.mode==='navigate'||req.destination==='document')h.set('Cache-Control','no-store');
+        return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h});
+      }catch(err){
+        console.error('COI fetch failed',req.url,err);
+        throw err;
+      }
     })());
   });
 }else{
   (()=>{
-    let done=false;
-    let obs=null;
-    const restore=(src)=>{
-      const cards=[...document.querySelectorAll('#chars .ch')];
-      const img=cards[1]?.querySelector('img');
-      if(img&&src&&img.src!==src){img.onerror=null;img.src=src;}
-    };
-    const capture=()=>{
-      if(done)return;
-      const cards=[...document.querySelectorAll('#chars .ch')];
-      if(cards.length<25)return;
-      const img=cards[1]?.querySelector('img');
-      const src=img?.src||'';
-      if(!src||src.includes('micchan2154.svg'))return;
-      done=true;window.__MICCHAN_ORIGINAL_21528=src;
-      try{obs?.disconnect()}catch(e){}
-      setTimeout(()=>restore(src),350);
-      setTimeout(()=>restore(src),900);
-      setTimeout(()=>restore(src),1800);
-      setTimeout(()=>restore(src),3200);
-    };
-    obs=new MutationObserver(capture);
-    obs.observe(document.documentElement,{subtree:true,childList:true});
-    capture();
-    setTimeout(()=>{try{obs?.disconnect()}catch(e){}},5000);
-
-    const fixBadge=()=>{const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
-    setTimeout(fixBadge,1500);setTimeout(fixBadge,3500);setTimeout(fixBadge,7000);setTimeout(fixBadge,12000);
-
-    const n=navigator;
-    if(!window.isSecureContext||!n.serviceWorker)return;
-    const src=window.document.currentScript.src;
-    const hadController=!!n.serviceWorker.controller;
-    if(hadController)n.serviceWorker.controller.postMessage({type:'coepCredentialless',value:false});
+    const n=navigator;if(!window.isSecureContext||!n.serviceWorker)return;
+    const src=document.currentScript.src;
+    const fixBadge=()=>{const b=document.querySelector('.badge');if(b&&b.textContent!=='v2.15.28 26キャラ・未来みつき Worker版')b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
+    let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
+    const had=!!n.serviceWorker.controller;
     n.serviceWorker.register(src,{updateViaCache:'none'}).then(async reg=>{
       try{await reg.update()}catch(e){}
-      if(!hadController&&reg.active&&!n.serviceWorker.controller)location.reload();
+      if(!had&&reg.active&&!n.serviceWorker.controller)location.reload();
     }).catch(e=>console.error('coi service worker update',e));
   })();
 }
