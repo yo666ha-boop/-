@@ -1,0 +1,32 @@
+name: Hotfix iPhone v2.15.28
+on:
+  push:
+    paths:
+      - '.github/workflows/hotfix-iphone-v21528.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply iPhone cache and portrait fixes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-v21528/index.html')
+          s=p.read_text()
+          s=s.replace('21528e','21528g')
+          css='''\n/* v2.15.28g iPhone portrait normalization */\n#chars [data-future-mitsuki="1"] .futureEngineState{display:none!important}\n#chars [data-future-mitsuki="1"]{min-height:64px!important}\n#chars [data-future-mitsuki="1"] .chPic{width:34px!important;height:34px!important}\n@media(min-width:721px){#chars [data-future-mitsuki="1"]{min-height:69px!important}#chars [data-future-mitsuki="1"] .chPic{width:38px!important;height:38px!important}}\n'''
+          if 'v2.15.28g iPhone portrait normalization' not in s:
+              s=s.replace('<style>','<style>'+css,1)
+          p.write_text(s)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/index.html
+          git diff --cached --quiet || git commit -m 'fix: iPhone cache bust and portrait sizing v2.15.28g'
+          git push
