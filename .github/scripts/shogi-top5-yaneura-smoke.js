@@ -12,16 +12,18 @@ const { firefox } = require('playwright');
   const audit=await page.evaluate(()=>{
     const api=window.AI_SHOGI_YANEURAOU_TOP5;
     const chars=window.AIShogiIOS.characters().slice(0,5),dummy={log:[]};
-    return {version:api.version,indices:api.indices,names:api.names,ratings:api.ratings,sharedWorker:api.sharedWorker,engine:api.engine,profiles:api.profiles,normalMs:api.indices.map(i=>api.profileMs(dummy,i)),chars,coi:crossOriginIsolated};
+    return {version:api.version,openingMode:api.openingMode,legacyOpeningBypass:api.legacyOpeningBypass,indices:api.indices,names:api.names,ratings:api.ratings,sharedWorker:api.sharedWorker,engine:api.engine,profiles:api.profiles,normalMs:api.indices.map(i=>api.profileMs(dummy,i)),chars,coi:crossOriginIsolated};
   });
   console.log('TOP5_AUDIT',JSON.stringify(audit));
   const expectedNames=['みつき','みっちゃん','あき王','おにまま','まま'];
   const expectedRatings=[3000,2850,2700,2600,2500];
   const expectedNormalMs=[5200,4200,3400,2700,2200];
-  const expectedMultiPV=[1,3,2,3,3];
+  const expectedMultiPV=[1,3,3,3,3];
   const expectedPersonalities=['master','aggressive','balanced','defensive','stable'];
   const failures=[];
-  if(audit.version!=='2.15.29-tune2')failures.push('version '+audit.version);
+  if(audit.version!=='2.15.29-tune3')failures.push('version '+audit.version);
+  if(audit.openingMode!=='engine-from-move-1')failures.push('openingMode '+audit.openingMode);
+  if(audit.legacyOpeningBypass!==false)failures.push('legacyOpeningBypass '+audit.legacyOpeningBypass);
   if(JSON.stringify(audit.indices)!==JSON.stringify([0,1,2,3,4]))failures.push('indices '+JSON.stringify(audit.indices));
   if(JSON.stringify(audit.names)!==JSON.stringify(expectedNames))failures.push('names '+JSON.stringify(audit.names));
   if(JSON.stringify(audit.ratings)!==JSON.stringify(expectedRatings))failures.push('ratings '+JSON.stringify(audit.ratings));
@@ -31,7 +33,10 @@ const { firefox } = require('playwright');
   if(!audit.sharedWorker)failures.push('sharedWorker=false');
   if(!/YaneuraOu/.test(audit.engine||''))failures.push('engine '+audit.engine);
   if(!audit.coi)failures.push('crossOriginIsolated=false');
-  for(const c of audit.chars)if(!String(c.feature||'').includes('やねうら王＋水匠5'))failures.push(c.name+' feature missing engine marker');
+  for(const c of audit.chars){
+    if(!String(c.feature||'').includes('やねうら王＋水匠5'))failures.push(c.name+' feature missing engine marker');
+    if(!String(c.feature||'').includes('初手から'))failures.push(c.name+' feature missing move-one marker');
+  }
 
   const cards=await page.locator('#chars .ch').all();
   for(let i=0;i<5;i++){
@@ -50,8 +55,8 @@ const { firefox } = require('playwright');
       return await api.bestMove({b,h:{1:{},'-1':{}},t:1,log:[],last:null},4);
     });
   }catch(e){engineError=String(e&&e.message||e)}
-  console.log('TOP5_ENGINE',JSON.stringify(engineResult),'ERROR',engineError);
-  if(!engineResult||(!engineResult.move&&!engineResult.resign&&!engineResult.declareWin))failures.push('shared engine bestmove failed '+(engineError||JSON.stringify(engineResult)));
+  console.log('TOP5_ENGINE_FROM_MOVE1',JSON.stringify(engineResult),'ERROR',engineError);
+  if(!engineResult||(!engineResult.move&&!engineResult.resign&&!engineResult.declareWin))failures.push('shared engine initial-position bestmove failed '+(engineError||JSON.stringify(engineResult)));
   if(engineResult?.info?.engine&&!String(engineResult.info.engine).includes('YaneuraOu'))failures.push('unexpected engine '+engineResult.info.engine);
   if(engineResult?.info?.ms!==2200)failures.push('R2500 movetime '+engineResult?.info?.ms);
   if(engineResult?.info?.multiPV!==3)failures.push('R2500 MultiPV '+engineResult?.info?.multiPV);
@@ -62,5 +67,5 @@ const { firefox } = require('playwright');
 
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS top5 tune2: shared YaneuraOu + MultiPV near-equal personality selection');
+  console.log('PASS top5 tune3: YaneuraOu from move one + MultiPV personality/opening bias');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
