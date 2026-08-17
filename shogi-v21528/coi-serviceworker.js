@@ -8,15 +8,16 @@ if(typeof window==='undefined'){
     const r=event.request;
     if(r.cache==='only-if-cached'&&r.mode!=='same-origin')return;
     const req=(coepCredentialless&&r.mode==='no-cors')?new Request(r,{credentials:'omit'}):r;
+    const isDocument=r.mode==='navigate'||r.destination==='document';
+    if(!isDocument){event.respondWith(fetch(req).catch(()=>fetch(r)));return;}
     event.respondWith(fetch(req).then(res=>{
       if(res.status===0)return res;
       const h=new Headers(res.headers);
       h.set('Cross-Origin-Embedder-Policy',coepCredentialless?'credentialless':'require-corp');
-      if(!coepCredentialless)h.set('Cross-Origin-Resource-Policy','cross-origin');
       h.set('Cross-Origin-Opener-Policy','same-origin');
       h.set('Cache-Control','no-store');
       return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h});
-    }))
+    }).catch(()=>fetch(r)));
   });
 }else{
   (()=>{
