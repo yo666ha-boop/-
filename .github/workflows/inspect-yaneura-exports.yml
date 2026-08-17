@@ -1,0 +1,24 @@
+name: Inspect YaneuraOu WASM exports
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect-yaneura-exports.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: List WASM exports
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm';
+          const mod=new WebAssembly.Module(fs.readFileSync(p));
+          const ex=WebAssembly.Module.exports(mod).map(x=>x.name);
+          console.log('EXPORT_COUNT',ex.length);
+          console.log('USI_EXPORTS',JSON.stringify(ex.filter(x=>/usi|command|main/i.test(x))));
+          console.log('ALL_EXPORTS',JSON.stringify(ex));
+          if(!ex.some(x=>/usi_command/i.test(x))) process.exitCode=2;
+          NODE
