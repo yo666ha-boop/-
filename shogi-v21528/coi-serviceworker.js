@@ -46,6 +46,9 @@ if(typeof window==='undefined'){
     capture();
     setTimeout(()=>{try{obs?.disconnect()}catch(e){}},5000);
 
+    const fixBadge=()=>{const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
+    setTimeout(fixBadge,1500);setTimeout(fixBadge,3500);setTimeout(fixBadge,7000);setTimeout(fixBadge,12000);
+
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=window.document.currentScript.src;
