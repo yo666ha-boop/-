@@ -1,0 +1,6 @@
+YaneuraOu HalfKP noeval + Suisho5
+SOURCE=0056b408e904f0733f3cfd2c2a7e57c3d74fcd62
+EMSCRIPTEN=3.1.43
+PTHREAD_POOL_SIZE=2
+THREAD_STARTED_RETRY=1
+Firefox: usiok / readyok / bestmove OK
