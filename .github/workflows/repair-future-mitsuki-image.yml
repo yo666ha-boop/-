@@ -1,0 +1,44 @@
+name: Repair Future Mitsuki image
+on:
+  push:
+    paths:
+      - '.github/repair-future-mitsuki-image.trigger'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Pillow
+        run: python3 -m pip install --user pillow
+      - name: Decode, validate and re-encode Future Mitsuki image as PNG
+        run: |
+          python3 - <<'PY'
+          import re,base64,io
+          from pathlib import Path
+          from PIL import Image, ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=True
+          p=Path('shogi-side-test/future-mitsuki-image21520.js')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'window\.FUTURE_MITSUKI_IMAGE21520="data:image/[^;]+;base64,([A-Za-z0-9+/=]+)";',s)
+          if not m: raise SystemExit('data URI not found')
+          raw=base64.b64decode(m.group(1))
+          print('SOURCE_BYTES',len(raw),'HEAD',raw[:8].hex(),'TAIL',raw[-8:].hex())
+          im=Image.open(io.BytesIO(raw))
+          print('SOURCE_FORMAT',im.format,'SIZE',im.size,'MODE',im.mode)
+          im.load()
+          if im.mode not in ('RGB','RGBA'): im=im.convert('RGB')
+          out=io.BytesIO();im.save(out,format='PNG',optimize=True)
+          b=base64.b64encode(out.getvalue()).decode('ascii')
+          p.write_text('window.FUTURE_MITSUKI_IMAGE21520="data:image/png;base64,'+b+'";\n',encoding='utf-8')
+          print('PNG_BYTES',len(out.getvalue()),'SIZE',im.size)
+          PY
+      - name: Commit repaired image
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add shogi-side-test/future-mitsuki-image21520.js
+          if git diff --cached --quiet; then echo 'No change'; exit 0; fi
+          git commit -m 'Re-encode Future Mitsuki portrait as valid PNG'
+          git push
