@@ -100,33 +100,33 @@ window.AI_SHOGI_SIDE_TEST={
   set:(mode)=>{if(!['sente','gote','random'].includes(mode))return false;SIDE2157_MODE=mode;const p=document.getElementById('sideSelect2157');if(p)p.value=mode;return true;}
 };
 
-/* v2.15.9: しんじ・ぺんぺん画像を正しい画像へ更新し、古い画像キャッシュを回避 */
+/* v2.15.28: しんじ・ぺんぺんの対局カード画像も /shogi-side-test/ を明示して404を防ぐ */
 setTimeout(()=>{
   try{
     if(typeof EVA2158_DATA!=='undefined'){
-      EVA2158_DATA[7].img='./eva2158/shinji.webp?v=2159';
-      EVA2158_DATA[16].img='./eva2158/penpen.webp?v=2159';
-      const b=document.querySelector('.badge');if(b)b.textContent='v2.15.9 EVA画像修正版・先手後手テスト';
+      EVA2158_DATA[7].img='../shogi-side-test/eva2158/shinji.webp?v=21528p';
+      EVA2158_DATA[16].img='../shogi-side-test/eva2158/penpen.webp?v=21528p';
+      const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 EVA画像経路修正版・先手後手テスト';
       if(typeof side2158ApplyCards==='function')side2158ApplyCards();
       render();renderStats();lastSpeech='';renderOpponent(true);
       setTimeout(()=>{if(typeof side2158ApplyCards==='function')side2158ApplyCards();renderOpponent(false)},120);
       setTimeout(()=>{if(typeof side2158ApplyCards==='function')side2158ApplyCards()},500);
-      if(window.AI_SHOGI_EVA2158)window.AI_SHOGI_EVA2158.version='2.15.9';
-      if(window.AI_SHOGI_SIDE_TEST)window.AI_SHOGI_SIDE_TEST.version='2.15.9';
+      if(window.AI_SHOGI_EVA2158)window.AI_SHOGI_EVA2158.version='2.15.28';
+      if(window.AI_SHOGI_SIDE_TEST)window.AI_SHOGI_SIDE_TEST.version='2.15.28';
     }
-  }catch(e){console.error('v2.15.9 EVA image fix',e)}
+  }catch(e){console.error('v2.15.28 EVA image path fix',e)}
 },0);
 
 /* v2.15.10: EVA8人の場面別セリフ増量＋直近4セリフ重複回避を後読み */
 (async function loadDialogue21510(){
   try{
-    const r=await fetch('./dialogue21510.js?v=21510',{cache:'no-store'});
+    const r=await fetch('../shogi-side-test/dialogue21510.js?v=21528p',{cache:'no-store'});
     if(!r.ok)throw new Error('dialogue21510.js '+r.status);
     const src=await r.text();
     eval(src);
   }catch(e){
     console.error('v2.15.10 dialogue patch load failed',e);
-    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.9 EVA画像修正版・セリフ更新失敗';
+    const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 EVA画像経路修正版・セリフ更新失敗';
   }
 })();
 
