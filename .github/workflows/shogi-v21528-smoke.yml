@@ -48,7 +48,15 @@ jobs:
       - name: Run top-five multi-position benchmark
         id: benchmark
         continue-on-error: true
-        run: node .github/scripts/shogi-top5-benchmark.js
+        run: |
+          set +e
+          node .github/scripts/shogi-top5-benchmark.js
+          code=$?
+          if [ $code -ne 0 ] && [ ! -f .github/benchmark-results/shogi-top5-latest.json ]; then
+            mkdir -p .github/benchmark-results
+            printf '{"generatedAt":"%s","pass":false,"failures":["benchmark process exited %s before report generation"]}\n' "$(date -u +%FT%TZ)" "$code" > .github/benchmark-results/shogi-top5-latest.json
+          fi
+          exit $code
       - name: Save benchmark result on benchmark branch
         if: always() && github.ref == 'refs/heads/feature/shogi-top5-benchmark-21531-20260818'
         run: |
