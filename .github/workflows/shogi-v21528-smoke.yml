@@ -1,0 +1,35 @@
+name: Shogi v2.15.28 Firefox smoke
+on:
+  push:
+    paths:
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/future21520.js'
+      - 'shogi-side-test/future-yaneura-worker21528.js'
+      - 'shogi-side-test/final21513_rinimg.js'
+      - '.github/scripts/shogi-v21528-smoke.js'
+      - '.github/workflows/shogi-v21528-smoke.yml'
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright Firefox
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps firefox
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-server.log 2>&1 &
+          echo $! > /tmp/shogi-server.pid
+          sleep 2
+      - name: Run v2.15.28 Firefox smoke
+        run: node .github/scripts/shogi-v21528-smoke.js
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/shogi-server.log || true
