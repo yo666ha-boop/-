@@ -5,7 +5,7 @@
   const FUTURE_NAME='未来からやってきたみつき';
   const FUTURE_RATING=3400;
   const SIDE_BASE=new URL('../shogi-side-test/',location.href).href;
-  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w7',location.href).href;
+  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w8',location.href).href;
 
   window.AI_SHOGI_FUNCTIONAL_AUDIT21520=window.AI_SHOGI_FUNCTIONAL_AUDIT21520||{future:true,version:VERSION};
 
@@ -107,7 +107,7 @@
       if(res.resign){thinking=false;const delta=recordResult(1);setStatus(FUTURE_NAME+'が投了しました。あなたの勝ちです。');setResult('win','未来みつき投了・勝ち　R '+(delta>=0?'+':'')+delta);speechMood='loss';lastSpeech='';render();renderOpponent(true);refreshFutureImages();return}
       if(res.declareWin){thinking=false;const delta=recordResult(0);setStatus(FUTURE_NAME+'の入玉宣言勝ちです。');setResult('loss','未来みつき宣言勝ち・負け　R '+(delta>=0?'+':'')+delta);speechMood='win';lastSpeech='';render();renderOpponent(true);refreshFutureImages();return}
       if(res.move)push(res.move,'△');thinking=false;speechMood='auto';lastSpeech='';render();renderOpponent(true);refreshFutureImages();if(finishIfEnded())return;
-      const x=lastAIInfo||{};setStatus('あなたの手番です。'+(x.fallback?'内蔵MAX退避':'やねうら王＋水匠5')+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
+      const x=lastAIInfo||{};const engineLabel=x.fallback?'内蔵MAX退避（'+String(x.error||engineError||'原因不明').slice(0,80)+'）':'やねうら王＋水匠5';setStatus('あなたの手番です。'+engineLabel+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
     })();
   };
 
