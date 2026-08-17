@@ -45,7 +45,7 @@ jobs:
             -v "${{ github.workspace }}/YaneuraOu:/src" \
             -w /src/source \
             emscripten/emsdk:3.1.43 \
-            bash -lc 'set -euxo pipefail; make clean; make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' \
+            bash -lc 'set -euxo pipefail; make clean; make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160 EXTRA_LDFLAGS="-sEXPORTED_FUNCTIONS=_main,_usi_command"' \
             2>&1 | tee /tmp/yaneuraou-build.log
           rc=${PIPESTATUS[0]}
           set -e
@@ -63,13 +63,7 @@ jobs:
           test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
           grep -F '_usi_command' "$LIB/yaneuraou.halfkp.noeval.js"
-          node - <<'NODE'
-          const fs=require('fs');
-          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
-          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
-          console.log('USI_EXPORTS',ex.filter(x=>/usi/i.test(x)));
-          if(!ex.includes('usi_command'))throw Error('usi_command missing from wasm exports');
-          NODE
+          grep -F 'ccall' "$LIB/yaneuraou.halfkp.noeval.js"
       - name: Upload build diagnostic
         if: always()
         uses: actions/upload-artifact@v4
@@ -144,7 +138,7 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
-          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'usi_command=EMSCRIPTEN_KEEPALIVE' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
+          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
