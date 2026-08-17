@@ -19,6 +19,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Syntax check Future Mitsuki scripts
+        run: |
+          node --check shogi-side-test/future21520.js
+          node --check shogi-side-test/future-yaneura-worker21528.js
+          node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
           npm init -y
