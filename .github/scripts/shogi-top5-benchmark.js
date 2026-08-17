@@ -1,4 +1,5 @@
 const { firefox } = require('playwright');
+const fs = require('fs');
 
 (async()=>{
   const browser=await firefox.launch({headless:true});
@@ -64,6 +65,7 @@ const { firefox } = require('playwright');
   if(!result.coi)failures.push('crossOriginIsolated=false');
   if(!/YaneuraOu/.test(result.engine||''))failures.push('engine='+result.engine);
   const expectedOrder=['未来みつき','みつき','みっちゃん','あき王','おにまま','まま'];
+  const phaseSummary={};
   for(const phase of ['opening','middlegame','late']){
     const rs=result.rows.filter(r=>r.phase===phase);
     if(JSON.stringify(rs.map(r=>r.who))!==JSON.stringify(expectedOrder))failures.push(phase+' order '+JSON.stringify(rs.map(r=>r.who)));
@@ -74,6 +76,7 @@ const { firefox } = require('playwright');
       if(!r.move)failures.push(phase+' '+r.who+' no move');
     }
     const unique=new Set(rs.map(r=>r.move)).size;
+    phaseSummary[phase]={uniqueMoves:unique,moves:Object.fromEntries(rs.map(r=>[r.who,r.move]))};
     console.log('BENCH_PHASE',phase,'uniqueMoves',unique,'rows',JSON.stringify(rs));
   }
 
@@ -87,6 +90,9 @@ const { firefox } = require('playwright');
     openingBias:rs.filter(x=>x.openingBias).length
   }]));
   console.log('BENCH_SUMMARY',JSON.stringify(summary));
+  const out={generatedAt:new Date().toISOString(),pass:failures.length===0,failures,version:result.version,engine:result.engine,coi:result.coi,phaseSummary,summary,rows:result.rows};
+  fs.mkdirSync('.github/benchmark-results',{recursive:true});
+  fs.writeFileSync('.github/benchmark-results/shogi-top5-latest.json',JSON.stringify(out,null,2)+'\n');
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
   console.log('PASS top5 multi-position benchmark: strength budgets + personality loss guards');
