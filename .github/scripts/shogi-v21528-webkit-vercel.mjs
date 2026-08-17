@@ -4,14 +4,14 @@ const page=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 
 page.on('console',m=>console.log('CONSOLE',m.type(),m.text()));
 page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
 page.on('requestfailed',r=>console.log('REQUESTFAILED',r.url(),r.failure()?.errorText||''));
-const url='https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528/?proof=webkit21528i';
+const url='https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528/?proof=webkit21528j';
 await page.goto(url,{waitUntil:'domcontentloaded',timeout:120000});
 await page.waitForFunction(()=>window.AI_SHOGI_YANEURAOU_FUTURE&&document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
 const env=await page.evaluate(()=>({coi:crossOriginIsolated,sab:typeof SharedArrayBuffer,ua:navigator.userAgent}));
 console.log('ENV',JSON.stringify(env));
 if(!env.coi||env.sab!=='function')throw new Error('WebKit is not cross-origin isolated');
 const out=await page.evaluate(async()=>{
-  const worker=new Worker('./future-yaneura-worker21528.js?proof=webkit21528i');
+  const worker=new Worker('./future-yaneura-worker21528.js?proof=webkit21528j');
   let seq=0;const pending=new Map();const stages=[];
   worker.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(new Error(m.error||'worker error'))}}};
   worker.onerror=e=>{stages.push('WORKER_ERROR '+String(e.message||'unknown'))};
@@ -21,6 +21,10 @@ const out=await page.evaluate(async()=>{
   worker.terminate();return{init,bm,stages};
 });
 console.log('RESULT',JSON.stringify(out));
+if(out.init?.mobileWebKit!==true)throw new Error('iPhone WebKit mode not detected');
+if(out.init?.threads!==1)throw new Error('iPhone thread setting is not 1');
+if(out.init?.hashMB!==32)throw new Error('iPhone hash setting is not 32MB');
+if(!out.stages.some(x=>x.includes('Hash=32MB')&&x.includes('Threads=1')))throw new Error('low-memory stage not observed');
 if(!out.bm?.token||out.bm.token==='resign')throw new Error('WebKit no usable bestmove');
 await browser.close();
-console.log('PASS WebKit Vercel COI + readyok + bestmove',out.bm.token);
+console.log('PASS iPhone WebKit Vercel low-memory YaneuraOu + readyok + bestmove',out.bm.token);
