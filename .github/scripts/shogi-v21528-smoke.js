@@ -6,8 +6,7 @@ const vm=require('vm');
   vm.runInContext(fs.readFileSync('shogi-side-test/future-mitsuki-image21520.js','utf8'),staticCtx);
   const data=staticCtx.window.FUTURE_MITSUKI_IMAGE21520||'';
   const b64=(data.split(',')[1]||'');const buf=Buffer.from(b64,'base64');
-  const imgStatic={dataPrefix:data.slice(0,30),b64Length:b64.length,bytes:buf.length,head:buf.subarray(0,8).toString('hex'),tail:buf.subarray(-8).toString('hex')};
-  console.log('FUTURE_IMAGE_STATIC',JSON.stringify(imgStatic));
+  console.log('FUTURE_IMAGE_STATIC',JSON.stringify({dataPrefix:data.slice(0,30),b64Length:b64.length,bytes:buf.length,head:buf.subarray(0,8).toString('hex'),tail:buf.subarray(-8).toString('hex')}));
 
   const browser=await firefox.launch({headless:true});
   const page=await browser.newPage();
@@ -30,8 +29,7 @@ const vm=require('vm');
   console.log('UI',JSON.stringify(ui));
 
   const probes=await page.evaluate(async()=>{
-    async function test(path,limit=3){
-      const url=new URL(path+(path.includes('?')?'&':'?')+'probe='+Date.now(),location.href).href;
+    async function testUrl(url,limit=1){
       return await new Promise(resolve=>{
         const out={url,messages:[],error:null};let w,done=false;
         const finish=()=>{if(done)return;done=true;try{w?.terminate()}catch(e){};resolve(out)};
@@ -41,7 +39,13 @@ const vm=require('vm');
         setTimeout(finish,3000);
       });
     }
-    return {minimal:await test('../shogi-side-test/worker-probe21528.js',1),future:await test('../shogi-side-test/future-yaneura-worker21528.js',3)};
+    const blob=URL.createObjectURL(new Blob(["self.postMessage({ok:true,type:'blob',coi:globalThis.crossOriginIsolated,sab:typeof SharedArrayBuffer})"],{type:'text/javascript'}));
+    const out={};
+    out.blob=await testUrl(blob,1);URL.revokeObjectURL(blob);
+    out.local=await testUrl(new URL('./worker-local21528.js?probe='+Date.now(),location.href).href,1);
+    out.side=await testUrl(new URL('../shogi-side-test/worker-probe21528.js?probe='+Date.now(),location.href).href,1);
+    out.future=await testUrl(new URL('../shogi-side-test/future-yaneura-worker21528.js?probe='+Date.now(),location.href).href,3);
+    return out;
   });
   console.log('WORKER_PROBES',JSON.stringify(probes));
 
@@ -70,11 +74,11 @@ const vm=require('vm');
   if(ui.bad.length)failures.push('broken images: '+ui.bad.join(','));
   if(!ui.coi)failures.push('crossOriginIsolated=false');
   if(/v2\.15\.(14|17|20)/.test(ui.badge))failures.push('legacy badge leaked: '+ui.badge);
-  if(probes.minimal.error||!probes.minimal.messages.length)failures.push('minimal worker failed: '+JSON.stringify(probes.minimal));
+  for(const k of ['blob','local','side'])if(probes[k].error||!probes[k].messages.length)failures.push(k+' worker failed: '+JSON.stringify(probes[k]));
   if(probes.future.error)failures.push('future worker probe error: '+JSON.stringify(probes.future));
   if(!init||!init.ready)failures.push('engine init failed: '+(initError||JSON.stringify(init))+' state='+JSON.stringify(engineState));
   if(init&&init.ready&&(!best||(!best.move&&!best.resign&&!best.declareWin)))failures.push('bestmove failed: '+(bestError||JSON.stringify(best)));
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS v2.15.28 Firefox: 26 chars, images, COI, no legacy badge, readyok, bestmove');
+  console.log('PASS v2.15.28 Firefox: 26 chars, images, workers, COI, readyok, bestmove');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
