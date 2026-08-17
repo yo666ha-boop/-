@@ -13,6 +13,8 @@ on:
       - '.github/scripts/shogi-top5-benchmark.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -45,6 +47,16 @@ jobs:
         run: node .github/scripts/shogi-top5-yaneura-smoke.js
       - name: Run top-five multi-position benchmark
         run: node .github/scripts/shogi-top5-benchmark.js
+      - name: Save benchmark result on benchmark branch
+        if: success() && github.ref == 'refs/heads/feature/shogi-top5-benchmark-21531-20260818'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/benchmark-results/shogi-top5-latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'bench: update top-five engine benchmark result [skip ci]'
+            git push
+          fi
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
