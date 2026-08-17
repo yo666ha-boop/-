@@ -10,6 +10,7 @@ on:
       - 'shogi-side-test/top5-yaneura21529.js'
       - '.github/scripts/shogi-v21528-smoke.js'
       - '.github/scripts/shogi-top5-yaneura-smoke.js'
+      - '.github/scripts/shogi-top5-benchmark.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
 jobs:
@@ -26,6 +27,7 @@ jobs:
           node --check shogi-side-test/future21520.js
           node --check shogi-side-test/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
+          node --check .github/scripts/shogi-top5-benchmark.js
           node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
@@ -41,6 +43,8 @@ jobs:
         run: node .github/scripts/shogi-v21528-smoke.js
       - name: Run top-five shared YaneuraOu smoke
         run: node .github/scripts/shogi-top5-yaneura-smoke.js
+      - name: Run top-five multi-position benchmark
+        run: node .github/scripts/shogi-top5-benchmark.js
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
