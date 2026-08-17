@@ -1,8 +1,9 @@
 {
-  "generatedAt": "2026-08-17T23:23:19.643Z",
+  "generatedAt": "2026-08-17T23:29:27.704Z",
   "pass": true,
   "withTokens": 5,
   "preferred": 0,
+  "prefVisible4": 1,
   "rows": [
     {
       "who": "みつき",
@@ -17,7 +18,9 @@
       "selectedRank": 1,
       "cpLoss": 0,
       "depth": 13,
-      "targetMs": 5200
+      "targetMs": 5200,
+      "pv4": [],
+      "prefInPv4": []
     },
     {
       "who": "みっちゃん",
@@ -31,7 +34,34 @@
       "selectedRank": 1,
       "cpLoss": 0,
       "depth": 10,
-      "targetMs": 4200
+      "targetMs": 4200,
+      "pv4": [
+        {
+          "rank": 1,
+          "token": "2b8h+",
+          "cp": 51,
+          "depth": 10
+        },
+        {
+          "rank": 2,
+          "token": "4c4d",
+          "cp": -41,
+          "depth": 10
+        },
+        {
+          "rank": 3,
+          "token": "1a1b",
+          "cp": -95,
+          "depth": 10
+        },
+        {
+          "rank": 4,
+          "token": "2b4d",
+          "cp": -105,
+          "depth": 10
+        }
+      ],
+      "prefInPv4": []
     },
     {
       "who": "あき王",
@@ -45,7 +75,36 @@
       "selectedRank": 1,
       "cpLoss": 0,
       "depth": 10,
-      "targetMs": 3400
+      "targetMs": 3400,
+      "pv4": [
+        {
+          "rank": 1,
+          "token": "2b8h+",
+          "cp": 36,
+          "depth": 11
+        },
+        {
+          "rank": 2,
+          "token": "1a1b",
+          "cp": -31,
+          "depth": 11
+        },
+        {
+          "rank": 3,
+          "token": "8b7b",
+          "cp": -37,
+          "depth": 11
+        },
+        {
+          "rank": 4,
+          "token": "4c4d",
+          "cp": -48,
+          "depth": 11
+        }
+      ],
+      "prefInPv4": [
+        "2b8h+"
+      ]
     },
     {
       "who": "おにまま",
@@ -59,7 +118,34 @@
       "selectedRank": 1,
       "cpLoss": 0,
       "depth": 10,
-      "targetMs": 2700
+      "targetMs": 2700,
+      "pv4": [
+        {
+          "rank": 1,
+          "token": "2b8h+",
+          "cp": 21,
+          "depth": 10
+        },
+        {
+          "rank": 2,
+          "token": "1a1b",
+          "cp": -26,
+          "depth": 10
+        },
+        {
+          "rank": 3,
+          "token": "4c4d",
+          "cp": -40,
+          "depth": 10
+        },
+        {
+          "rank": 4,
+          "token": "8b7b",
+          "cp": -76,
+          "depth": 9
+        }
+      ],
+      "prefInPv4": []
     },
     {
       "who": "まま",
@@ -72,7 +158,34 @@
       "selectedRank": 1,
       "cpLoss": 0,
       "depth": 10,
-      "targetMs": 2200
+      "targetMs": 2200,
+      "pv4": [
+        {
+          "rank": 1,
+          "token": "2b8h+",
+          "cp": 52,
+          "depth": 10
+        },
+        {
+          "rank": 2,
+          "token": "6a5b",
+          "cp": 2,
+          "depth": 10
+        },
+        {
+          "rank": 3,
+          "token": "4c4d",
+          "cp": -32,
+          "depth": 10
+        },
+        {
+          "rank": 4,
+          "token": "8b7b",
+          "cp": -36,
+          "depth": 10
+        }
+      ],
+      "prefInPv4": []
     }
   ],
   "version": "2.15.29-tune3"
