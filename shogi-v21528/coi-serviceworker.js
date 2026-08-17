@@ -6,13 +6,19 @@ if(typeof window==='undefined'){
     if(req.cache==='only-if-cached'&&req.mode!=='same-origin')return;
     event.respondWith((async()=>{
       try{
-        const res=await fetch(req);
+        const url=new URL(req.url);
+        const isMicchan=url.pathname.endsWith('/shogi/micchan21528.jpg');
+        const sourceReq=isMicchan?new Request(new URL('../shogi/micchan21528.webp',self.location.href),{cache:'no-store'}):req;
+        const res=await fetch(sourceReq);
         if(!res||res.status===0)return res;
         const h=new Headers(res.headers);
         h.set('Cross-Origin-Embedder-Policy','require-corp');
         h.set('Cross-Origin-Opener-Policy','same-origin');
         h.set('Cross-Origin-Resource-Policy','same-origin');
-        if(req.mode==='navigate'||req.destination==='document')h.set('Cache-Control','no-store');
+        if(isMicchan){
+          h.set('Content-Type','image/webp');
+          h.set('Cache-Control','no-store');
+        }else if(req.mode==='navigate'||req.destination==='document')h.set('Cache-Control','no-store');
         return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h});
       }catch(err){
         console.error('COI fetch failed',req.url,err);
