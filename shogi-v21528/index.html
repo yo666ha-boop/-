@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#07100e">
 <title>AI将棋先生 v2.15.28</title>
-<script src="./coi-serviceworker.js?v=21528c"></script>
-<script src="../shogi-side-test/future-mitsuki-image21520.js?v=21528c"></script>
-<link rel="stylesheet" href="../shogi/strong213.css?v=21528c">
+<script src="./coi-serviceworker.js?v=21528e"></script>
+<script src="../shogi-side-test/future-mitsuki-image21520.js?v=21528e"></script>
+<link rel="stylesheet" href="../shogi/strong213.css?v=21528e">
 <style>
 .oppPortrait img,.focusPortrait img,.chPic{display:block;width:100%;height:100%;object-fit:cover}
 #boot{position:fixed;inset:0;z-index:99999;background:#06100df2;color:#f0daa0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-weight:900}
@@ -59,13 +59,13 @@
   const base='../shogi/',test='../shogi-side-test/';
   const coreFiles=['strong213_01.part','strong213_02.part','strong213_02b.part','strong213_03.part','strong213_04.part','strong213_05.part','strong213_06.part'];
   stage('① 既存25人の部品を読込中…');
-  const coreParts=await Promise.all(coreFiles.map(f=>get(base+f+'?v=21528c')));
+  const coreParts=await Promise.all(coreFiles.map(f=>get(base+f+'?v=21528e')));
   let [sidePatch,evaPatch,dialoguePatch,hokutoPatch,hanaPatch,hanaImagesPatch,batImg,rinImg,yuriaImg,tamaImg,finalPatch,strongPatch,futurePatch]=await Promise.all([
-   get(test+'side2157.js?v=21528c'),get(test+'eva2158.js?v=21528c'),get(test+'dialogue21510.js?v=21528c'),
-   get(test+'hokuto21511.js?v=21528c'),get(test+'hanakeiji21512.js?v=21528c'),get(test+'hanaimages21512.js?v=21528c'),
-   get(test+'final21513_batimg.js?v=21528c'),get(test+'final21513_rinimg.js?v=21528c'),get(test+'final21513_yuriaimg.js?v=21528c'),
-   get(test+'final21513_tamachanimg.js?v=21528c'),get(test+'final21513.js?v=21528c'),get(base+'strong2155.js?v=21528c'),
-   get(test+'future21520.js?v=21528c')
+   get(test+'side2157.js?v=21528e'),get(test+'eva2158.js?v=21528e'),get(test+'dialogue21510.js?v=21528e'),
+   get(test+'hokuto21511.js?v=21528e'),get(test+'hanakeiji21512.js?v=21528e'),get(test+'hanaimages21512.js?v=21528e'),
+   get(test+'final21513_batimg.js?v=21528e'),get(test+'final21513_rinimg.js?v=21528e'),get(test+'final21513_yuriaimg.js?v=21528e'),
+   get(test+'final21513_tamachanimg.js?v=21528e'),get(test+'final21513.js?v=21528e'),get(base+'strong2155.js?v=21528e'),
+   get(test+'future21520.js?v=21528e')
   ]);
   evaPatch=evaPatch.replaceAll("./eva2158/","../shogi-side-test/eva2158/");
   hokutoPatch=hokutoPatch.replaceAll("./hokuto21511/","../shogi-side-test/hokuto21511/");
@@ -96,9 +96,9 @@
   if(boot)boot.remove();
   stage('①成功: 既存'+Math.min(baseCount,25)+'人表示 / ②26人目を確認中…',false);
   const NAME_IMG={
-   'みっちゃん':'../shogi/micchan2154.svg?v=21528c',
-   'しんじ':'../shogi-side-test/eva2158/shinji.webp?v=21528c','あやなみ':'../shogi-side-test/eva2158/ayanami.webp?v=21528c','あすか':'../shogi-side-test/eva2158/asuka.webp?v=21528c','まり':'../shogi-side-test/eva2158/mari.webp?v=21528c','ぺんぺん':'../shogi-side-test/eva2158/penpen.webp?v=21528c','げんどー':'../shogi-side-test/eva2158/gendo.webp?v=21528c','みさとさん':'../shogi-side-test/eva2158/misato.webp?v=21528c','カヲル':'../shogi-side-test/eva2158/kaworu.webp?v=21528c',
-   'ケンシロウ':'../shogi-side-test/hokuto21511/kenshiro.webp?v=21528c','ジャギ':'../shogi-side-test/hokuto21511/jagi.webp?v=21528c','シン':'../shogi-side-test/hokuto21511/shin.webp?v=21528c','サウザー':'../shogi-side-test/hokuto21511/souther.webp?v=21528c','ラオウ':'../shogi-side-test/hokuto21511/raoh.webp?v=21528c'
+   'みっちゃん':'../shogi/micchan2154.svg?v=21528e',
+   'しんじ':'../shogi-side-test/eva2158/shinji.webp?v=21528e','あやなみ':'../shogi-side-test/eva2158/ayanami.webp?v=21528e','あすか':'../shogi-side-test/eva2158/asuka.webp?v=21528e','まり':'../shogi-side-test/eva2158/mari.webp?v=21528e','ぺんぺん':'../shogi-side-test/eva2158/penpen.webp?v=21528e','げんどー':'../shogi-side-test/eva2158/gendo.webp?v=21528e','みさとさん':'../shogi-side-test/eva2158/misato.webp?v=21528e','カヲル':'../shogi-side-test/eva2158/kaworu.webp?v=21528e',
+   'ケンシロウ':'../shogi-side-test/hokuto21511/kenshiro.webp?v=21528e','ジャギ':'../shogi-side-test/hokuto21511/jagi.webp?v=21528e','シン':'../shogi-side-test/hokuto21511/shin.webp?v=21528e','サウザー':'../shogi-side-test/hokuto21511/souther.webp?v=21528e','ラオウ':'../shogi-side-test/hokuto21511/raoh.webp?v=21528e'
   };
   function cardName(card){return (card.querySelector('.chName')?.textContent||card.querySelector('img')?.alt||'').trim()}
   function fixImages(){
@@ -116,16 +116,19 @@
   const ch=document.querySelectorAll('#chars .ch').length;
   const future=findFuture();
   const names=[...document.querySelectorAll('#chars .ch')].map(cardName);
-  if(ch!==26||!future){showDiag('①成功 / ②失敗: 現在'+ch+'人\n末尾: '+names.slice(-4).join(' / ')+(runtimeErrors.length?'\nJS: '+runtimeErrors.at(-1):''));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:2,characters:ch,names,runtimeErrors,build:'2.15.28c'};return}
+  if(ch!==26||!future){showDiag('①成功 / ②失敗: 現在'+ch+'人\n末尾: '+names.slice(-4).join(' / ')+(runtimeErrors.length?'\nJS: '+runtimeErrors.at(-1):''));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:2,characters:ch,names,runtimeErrors,build:'2.15.28e'};return}
   stage('①成功 / ②成功: 26人目「未来からやってきたみつき」追加済み / ③画像確認中…',false);
-  await sleep(800);fixImages();
+  await sleep(1800);fixImages();
+  const imageList=[...document.querySelectorAll('#chars .ch img')];
+  await Promise.all(imageList.map(i=>i.complete?Promise.resolve():new Promise(r=>{const done=()=>r();i.addEventListener('load',done,{once:true});i.addEventListener('error',done,{once:true});setTimeout(r,2200)})));
+  fixImages();await sleep(250);
   const brokenCards=[...document.querySelectorAll('#chars .ch')].filter(c=>{const i=c.querySelector('img');return i&&(!i.complete||i.naturalWidth===0)});
   const brokenNames=brokenCards.map(cardName);
   if(brokenNames.length)showDiag('①成功 / ②成功 / ③画像エラー '+brokenNames.length+'人: '+brokenNames.join('、'));
-  else{showDiag('①成功 / ②成功 / ③成功: 26人画像OK\n次: 未来みつきを選択して④通常対局を確認');setTimeout(()=>{diag.style.display='none'},4500)}
+  else{showDiag('①成功 / ②成功 / ③成功: 26人画像OK\n次: 未来みつきを選択して④通常対局を確認');setTimeout(()=>{diag.style.display='none'},2500)}
   const keep=()=>fixImages();new MutationObserver(keep).observe(document.body,{childList:true,subtree:true,characterData:true});setInterval(keep,1200);
-  window.AI_SHOGI_WEB_AUDIT={ok:brokenNames.length===0,stage:brokenNames.length?3:4,characters:26,future:true,brokenImages:brokenNames,build:'2.15.28c',runtimeErrors,crossOriginIsolated:!!window.crossOriginIsolated};
- }catch(e){if(boot)boot.remove();showDiag('起動失敗: '+String(e.message||e));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:1,error:String(e.message||e),build:'2.15.28c'};console.error(e)}
+  window.AI_SHOGI_WEB_AUDIT={ok:brokenNames.length===0,stage:brokenNames.length?3:4,characters:26,future:true,brokenImages:brokenNames,build:'2.15.28e',runtimeErrors,crossOriginIsolated:!!window.crossOriginIsolated};
+ }catch(e){if(boot)boot.remove();showDiag('起動失敗: '+String(e.message||e));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:1,error:String(e.message||e),build:'2.15.28e'};console.error(e)}
 })();
 </script>
 </body>
