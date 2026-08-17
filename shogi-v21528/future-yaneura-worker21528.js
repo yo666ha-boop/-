@@ -11,6 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
+const ENGINE_JS_URL=BASE+JS+'?v=21528w5';
 let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={};
 const stage=text=>self.postMessage({type:'stage',text});
 self.addEventListener('error',ev=>{try{self.postMessage({type:'fatal',text:'Worker内部エラー: '+String(ev.message||'unknown')+' @ '+String(ev.filename||'')+':'+String(ev.lineno||0)+':'+String(ev.colno||0)})}catch(e){}});
@@ -31,16 +32,19 @@ async function init(){
   if(initPromise)return initPromise;
   initPromise=(async()=>{
     stage('⑤-1 Worker内 Wasm JS読込中');
-    try{importScripts(BASE+JS+'?v=21528w3')}catch(e){throw new Error('importScripts失敗: '+String(e&&e.message||e))}
+    try{importScripts(ENGINE_JS_URL)}catch(e){throw new Error('importScripts失敗: '+String(e&&e.message||e))}
     stage('⑤-1 Worker内 Wasm JS読込完了');
     if(typeof self.YaneuraOu_HalfKP_noeval!=='function'&&typeof YaneuraOu_HalfKP_noeval!=='function')throw new Error('YaneuraOu factory not found');
     const factory=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;
     stage('⑤-2 Worker内 Wasm本体起動中');
-    engine=await factory({locateFile:p=>BASE+String(p).split('/').pop()});
+    engine=await factory({
+      locateFile:p=>BASE+String(p).split('/').pop(),
+      mainScriptUrlOrBlob:ENGINE_JS_URL
+    });
     if(!engine||!engine.FS)throw new Error('YaneuraOu FS not available');
     stage('⑤-2 Worker内 Wasm本体起動完了');
     stage('⑤-3 水匠5 64MB取得中');
-    const r=await fetch(BASE+EVAL+'?v=21528w3',{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
+    const r=await fetch(BASE+EVAL+'?v=21528w5',{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
     const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.byteLength<10000000)throw new Error('nn.bin too small '+bytes.byteLength);
     stage('⑤-3 水匠5 '+Math.round(bytes.byteLength/1024/1024)+'MB 読込完了');
     try{engine.FS.unlink('/'+EVAL)}catch(e){}
