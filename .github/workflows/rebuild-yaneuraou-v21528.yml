@@ -17,21 +17,56 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
-      - name: Prepare official browser build
+      - name: Prepare official browser build and live USI bridge
         shell: bash
         run: |
           set -euxo pipefail
-          grep -F 'EMSCRIPTEN_KEEPALIVE extern "C" int usi_command' YaneuraOu/source/usi.cpp
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('YaneuraOu/source/Makefile')
-          s=p.read_text()
+          import re
+
+          # Keep the browser build light enough for iPhone/Firefox while still threaded.
+          makefile=Path('YaneuraOu/source/Makefile')
+          s=makefile.read_text()
           if '-s PTHREAD_POOL_SIZE=32' not in s:
               raise SystemExit('pthread marker missing')
           s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
-          p.write_text(s)
+          makefile.write_text(s)
+
+          # The current upstream tree still contains an old usi_command implementation,
+          # but it sits inside a disabled #if 0 block.  Add a small public bridge to the
+          # current USIEngine so WebAssembly can execute one USI line at a time.
+          h=Path('YaneuraOu/source/usi.h')
+          hs=h.read_text()
+          marker='\tvoid loop();\n'
+          bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\t// Browser bridge: execute one USI command without entering the blocking stdin loop.\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
+          if marker not in hs:
+              raise SystemExit('USIEngine::loop marker missing')
+          hs=hs.replace(marker,bridge,1)
+          h.write_text(hs)
+
+          # Keep YaneuraOuEngine and USIEngine alive after main() returns in WebAssembly,
+          # and export a real (non-disabled) C symbol called usi_command.
+          p=Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
+          ys=p.read_text()
+          tail_marker='using namespace YaneuraOu;\nnamespace {'
+          if tail_marker not in ys:
+              raise SystemExit('engine entry tail marker missing')
+          live='''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\n\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd || !wasm_usi)\n        return 1;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
+          ys=ys.replace(tail_marker,live,1)
+
+          pattern=re.compile(r'void engine_main\(\) \{.*?\n\}',re.S)
+          matches=list(pattern.finditer(ys))
+          if len(matches)!=1:
+              raise SystemExit(f'engine_main match count={len(matches)}')
+          replacement='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    // loop() is intentionally non-blocking under Emscripten.  The static objects\n    // above survive main() and are driven through exported usi_command().\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
+          ys=pattern.sub(replacement,ys,count=1)
+          p.write_text(ys)
           PY
           grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu/source/Makefile
+          grep -F 'bool wasm_command' YaneuraOu/source/usi.h
+          grep -F 'extern "C" EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
+          grep -F 'wasm_usi = std::make_unique<USIEngine>()' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
           cp shogi-v21528/yaneuraou/nn.bin YaneuraOu/nn.bin
           test $(stat -c%s YaneuraOu/nn.bin) -gt 10000000
       - name: Build HalfKP noeval WASM
@@ -138,7 +173,7 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
-          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
+          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'LIVE_WASM_USI_BRIDGE=1' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
