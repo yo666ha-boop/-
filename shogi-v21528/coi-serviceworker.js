@@ -28,7 +28,8 @@ if(typeof window==='undefined'){
     const RELOAD_KEY='ai-shogi-coi-reload-21528g';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
-    const fixBadge=()=>{const b=document.querySelector('.badge');if(b&&b.textContent!=='v2.15.28 26キャラ・未来みつき Worker版')b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
+    const fixBadge=()=>{const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
+    let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
     if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
     hide();
     let reloading=false;
@@ -55,7 +56,6 @@ if(typeof window==='undefined'){
       }
       reloadOnce();
     }).catch(e=>{console.error('coi service worker update',e);show()});
-    let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
     setTimeout(show,7000);
   })();
 }
