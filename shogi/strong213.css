@@ -1,6 +1,6 @@
 @import url("./strong213-base21528.css?v=21528h");
 
-/* v2.15.28j: 未来みつきを既存25人と同じ大きな楕円カードへ固定 */
+/* v2.15.28m: 未来みつきを既存25人と同じ大きな楕円カードへ固定 */
 html body #chars [data-future-mitsuki="1"].ch{padding:4px 2px!important;overflow:hidden!important}
 html body #chars [data-future-mitsuki="1"] .chPic{
   width:calc(100% - 4px)!important;
