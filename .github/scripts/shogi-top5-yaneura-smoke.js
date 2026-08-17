@@ -45,6 +45,22 @@ const { firefox } = require('playwright');
     if(!String(op||'').startsWith(expectedNames[i]))failures.push('opponent '+i+' '+op);
   }
 
+  const saveAudit=await page.evaluate(()=>{
+    const api=window.AI_SHOGI_GAME_SAVE;
+    if(!api)return{api:false};
+    localStorage.removeItem(api.key);
+    const before=api.snapshot(),saved=api.saveSilent(),raw=localStorage.getItem(api.key),has=api.hasSave(),loaded=api.load();
+    const after=api.snapshot();
+    return{api:true,version:api.version,saved,has,loaded,rawBytes:raw?raw.length:0,beforeCi:before.ci,afterCi:after.ci,beforeLog:before.st.log.length,afterLog:after.st.log.length,saveBtn:!!document.getElementById('saveGameBtn21530'),resumeBtn:!!document.getElementById('resumeGameBtn21530')};
+  });
+  console.log('GAME_SAVE',JSON.stringify(saveAudit));
+  if(!saveAudit.api)failures.push('game save api missing');
+  if(saveAudit.version!=='2.15.30')failures.push('game save version '+saveAudit.version);
+  if(!saveAudit.saved||!saveAudit.has||!saveAudit.loaded)failures.push('save/load failed '+JSON.stringify(saveAudit));
+  if(saveAudit.rawBytes<100)failures.push('save payload too small '+saveAudit.rawBytes);
+  if(saveAudit.beforeCi!==saveAudit.afterCi||saveAudit.beforeLog!==saveAudit.afterLog)failures.push('save restore mismatch '+JSON.stringify(saveAudit));
+  if(!saveAudit.saveBtn||!saveAudit.resumeBtn)failures.push('save buttons missing '+JSON.stringify(saveAudit));
+
   let engineResult=null,engineError='';
   try{
     engineResult=await page.evaluate(async()=>{
@@ -67,5 +83,5 @@ const { firefox } = require('playwright');
 
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS top5 tune3: YaneuraOu from move one + MultiPV personality/opening bias');
+  console.log('PASS top5 tune3 + persistent game save/resume');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
