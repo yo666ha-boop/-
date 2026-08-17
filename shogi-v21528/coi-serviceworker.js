@@ -22,14 +22,40 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    const n=navigator;if(!window.isSecureContext||!n.serviceWorker)return;
+    const n=navigator;
+    if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
+    const RELOAD_KEY='ai-shogi-coi-reload-21528g';
+    const show=()=>{document.documentElement.style.visibility=''};
+    const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
     const fixBadge=()=>{const b=document.querySelector('.badge');if(b&&b.textContent!=='v2.15.28 26キャラ・未来みつき Worker版')b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
-    let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
-    const had=!!n.serviceWorker.controller;
+    if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
+    hide();
+    let reloading=false;
+    const reloadOnce=()=>{
+      if(reloading||window.crossOriginIsolated)return;
+      let count=0;try{count=Number(sessionStorage.getItem(RELOAD_KEY)||0)}catch(e){}
+      if(count>=2){show();return;}
+      reloading=true;try{sessionStorage.setItem(RELOAD_KEY,String(count+1))}catch(e){}
+      location.reload();
+    };
+    n.serviceWorker.addEventListener('controllerchange',()=>reloadOnce(),{once:true});
     n.serviceWorker.register(src,{updateViaCache:'none'}).then(async reg=>{
       try{await reg.update()}catch(e){}
-      if(!had&&reg.active&&!n.serviceWorker.controller)location.reload();
-    }).catch(e=>console.error('coi service worker update',e));
+      try{await n.serviceWorker.ready}catch(e){}
+      if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
+      if(n.serviceWorker.controller){reloadOnce();return;}
+      const sw=reg.installing||reg.waiting||reg.active;
+      if(sw&&sw.state!=='activated'){
+        await new Promise(resolve=>{
+          const done=()=>resolve();
+          sw.addEventListener('statechange',()=>{if(sw.state==='activated')done()});
+          setTimeout(done,1800);
+        });
+      }
+      reloadOnce();
+    }).catch(e=>{console.error('coi service worker update',e);show()});
+    let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
+    setTimeout(show,7000);
   })();
 }
