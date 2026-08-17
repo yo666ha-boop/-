@@ -1,8 +1,19 @@
 @import url("./strong213-base21528.css?v=21528h");
 
-/* v2.15.28i: 未来みつきは既存25人と同じ画像レイアウトに任せる */
+/* v2.15.28j: 未来みつきを既存25人と同じ大きな楕円カードへ固定 */
 html body #chars [data-future-mitsuki="1"].ch{padding:4px 2px!important;overflow:hidden!important}
-html body #chars [data-future-mitsuki="1"] .chPic{object-position:50% 42%!important;margin-left:auto!important;margin-right:auto!important}
+html body #chars [data-future-mitsuki="1"] .chPic{
+  width:calc(100% - 4px)!important;
+  height:auto!important;
+  aspect-ratio:.72!important;
+  border-radius:50%!important;
+  object-fit:cover!important;
+  object-position:50% 42%!important;
+  display:block!important;
+  margin:0 auto 2px!important;
+  border:1px solid #8a6c35!important;
+  background:#f5ecd2!important
+}
 html body #chars [data-future-mitsuki="1"] .chName,
 html body #chars [data-future-mitsuki="1"] .chRating,
 html body #chars [data-future-mitsuki="1"] .chStyle,
