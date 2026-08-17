@@ -1,4 +1,4 @@
-/* AI将棋先生 v2.15.29 tune3: 上位5人を初手から共通やねうら王＋水匠5で思考＋棋風/戦法バイアス + 対局セーブ */
+/* AI将棋先生 v2.15.31 tune4: 上位5人を初手から共通やねうら王＋水匠5で思考＋強さを守る棋風バイアス + 対局セーブ */
 (function installTop5Yaneura21529(){
   if(window.AI_SHOGI_YANEURAOU_TOP5)return;
   const TOP5=[0,1,2,3,4];
@@ -12,10 +12,10 @@
   const RATINGS=TOP5.map(i=>C[i]?.[1]||0);
   const PROFILES={
     0:{label:'R3000・最善重視',personality:'master',multiPV:1,maxLoss:0,openingBonus:0,desktop:{normal:5200,endgame:7600},mobile:{normal:3300,endgame:5000}},
-    1:{label:'R2850・攻め重視',personality:'aggressive',multiPV:3,maxLoss:35,openingBonus:16,desktop:{normal:4200,endgame:6200},mobile:{normal:2800,endgame:4300}},
-    2:{label:'R2700・本格万能',personality:'balanced',multiPV:3,maxLoss:28,openingBonus:18,desktop:{normal:3400,endgame:5100},mobile:{normal:2300,endgame:3600}},
-    3:{label:'R2600・受け重視',personality:'defensive',multiPV:3,maxLoss:45,openingBonus:14,desktop:{normal:2700,endgame:4100},mobile:{normal:1850,endgame:3000}},
-    4:{label:'R2500・安定重視',personality:'stable',multiPV:3,maxLoss:65,openingBonus:14,desktop:{normal:2200,endgame:3500},mobile:{normal:1500,endgame:2500}}
+    1:{label:'R2850・攻め重視',personality:'aggressive',multiPV:3,maxLoss:35,openingBonus:40,desktop:{normal:4200,endgame:6200},mobile:{normal:2800,endgame:4300}},
+    2:{label:'R2700・本格万能',personality:'balanced',multiPV:3,maxLoss:28,openingBonus:33,desktop:{normal:3400,endgame:5100},mobile:{normal:2300,endgame:3600}},
+    3:{label:'R2600・受け重視',personality:'defensive',multiPV:3,maxLoss:45,openingBonus:50,desktop:{normal:2700,endgame:4100},mobile:{normal:1850,endgame:3000}},
+    4:{label:'R2500・安定重視',personality:'stable',multiPV:3,maxLoss:65,openingBonus:70,desktop:{normal:2200,endgame:3500},mobile:{normal:1500,endgame:2500}}
   };
 
   for(const i of TOP5){
@@ -30,8 +30,12 @@
   function openingTokens(s,who){
     try{
       if(typeof bookCandidatesV294!=='function'||(s.log?.length||0)>=20||incheck(s,s.t))return new Set();
-      const lm=legal(s),prefs=bookCandidatesV294(s,who,lm)||[];
-      return new Set(prefs.slice(0,5).map(m=>usi(m)));
+      const lm=legal(s),prefs=bookCandidatesV294(s,who,lm)||[],out=new Set(prefs.slice(0,5).map(m=>usi(m)));
+      if((s.log?.length||0)<8){
+        const extra={1:['4c4d','8c8d'],2:['2b8h+','8c8d'],3:['4a3b','6a5b'],4:['4a3b','6a5b']}[who]||[];
+        for(const u of extra)if(lm.some(m=>usi(m)===u))out.add(u);
+      }
+      return out;
     }catch(e){return new Set()}
   }
   function candidateList(s,res){
@@ -42,35 +46,38 @@
   }
   function cpLoss(best,c){if(Number.isFinite(best?.cp)&&Number.isFinite(c?.cp))return Math.max(0,best.cp-c.cp);return c===best?0:9999}
   function moveFlags(s,m){
+    const before=m.f!=null?s.b[m.f]:null,base=BASE(m.drop||before?.k||''),from=m.f!=null?xy(m.f):null,to=xy(m.to),fwd=s.t===S?-1:1;
     let capture=!!s.b[m.to],promote=!!m.prom,check=false,replyChecks=0;
+    const advance=from?(to[1]-from[1])*fwd:0,centerGain=from?(Math.abs(from[0]-4)+Math.abs(from[1]-4))-(Math.abs(to[0]-4)+Math.abs(to[1]-4)):0;
+    const develop=(base==='G'||base==='S')&&!!from,kingMove=base==='K',major=base==='R'||base==='B';
     try{const n=apply(s,m);check=incheck(n,n.t);const replies=legal(n).slice(0,80);for(const r of replies){const nn=apply(n,r);if(incheck(nn,nn.t))replyChecks++}}catch(e){}
-    return{capture,promote,check,replyChecks};
+    return{capture,promote,check,replyChecks,advance,centerGain,develop,kingMove,major,base};
   }
   function selectProfileMove(s,res,who){
     const p=PROFILES[who]||PROFILES[4],cands=candidateList(s,res),best=cands[0];
     if(!best||p.personality==='master'||best.mate!==undefined&&best.mate!==null)return{move:res.move,rank:1,loss:0,reason:p.personality,opening:false};
     const pool=cands.filter(c=>cpLoss(best,c)<=p.maxLoss&&!(c.mate!==undefined&&c.mate!==null&&c.mate<0));
-    if(pool.length<2)return{move:best.move,rank:best.rank||1,loss:0,reason:p.personality,opening:false};
+    if(pool.length<2)return{move:best.move,rank:best.rank||1,loss:0,reason:p.personality,opening:openingTokens(s,who).has(best.token)};
     const preferred=openingTokens(s,who);
     let winner=best,winnerScore=-1e9,winnerOpening=false;
     for(const c of pool){
       const loss=cpLoss(best,c),f=moveFlags(s,c.move),opening=preferred.has(c.token);let score=-loss;
       if(opening)score+=p.openingBonus||0;
-      if(p.personality==='aggressive')score+=f.capture*22+f.promote*18+f.check*32-f.replyChecks*2;
-      else if(p.personality==='balanced')score+=f.capture*6+f.promote*5+f.check*5-f.replyChecks*4;
-      else if(p.personality==='defensive')score+=f.capture*8-f.replyChecks*18+(!f.check)*4;
-      else if(p.personality==='stable')score+=f.capture*6-f.replyChecks*11-f.check*3-f.promote*1;
+      if(p.personality==='aggressive')score+=f.capture*28+f.promote*22+f.check*40+Math.max(0,f.advance)*8+Math.max(0,f.centerGain)*3+f.major*8-f.replyChecks*2;
+      else if(p.personality==='balanced')score+=f.capture*8+f.promote*6+f.check*6+f.develop*8+f.centerGain*2-f.replyChecks*4;
+      else if(p.personality==='defensive')score+=f.capture*8-f.replyChecks*20+f.develop*24+f.kingMove*14-Math.max(0,f.advance)*2+(!f.check)*4;
+      else if(p.personality==='stable')score+=f.capture*6-f.replyChecks*12-f.check*4-f.promote+f.develop*32+f.kingMove*10+Math.max(0,f.centerGain)*2;
       score-=(Math.max(1,c.rank||1)-1)*2;
       if(score>winnerScore){winnerScore=score;winner=c;winnerOpening=opening}
     }
     return{move:winner.move,rank:winner.rank||1,loss:cpLoss(best,winner),reason:p.personality,opening:winnerOpening};
   }
   async function profiledBest(s,who){
-    const p=PROFILES[who]||PROFILES[4],targetMs=profileMs(s,who);
-    const res=await shared.bestMove(s,{ms:targetMs,multiPV:p.multiPV});
+    const p=PROFILES[who]||PROFILES[4],targetMs=profileMs(s,who),opening=(s.log?.length||0)<8,multiPV=opening&&who>0?4:p.multiPV;
+    const res=await shared.bestMove(s,{ms:targetMs,multiPV});
     if(res?.resign||res?.declareWin||!res?.move)return{...res,profile:p,targetMs,selectedRank:1,cpLoss:0,openingBias:false};
     const picked=selectProfileMove(s,res,who);
-    return{...res,move:picked.move,info:{...(res.info||{}),selectedRank:picked.rank,cpLoss:picked.loss,personality:picked.reason,openingBias:picked.opening},profile:p,targetMs,selectedRank:picked.rank,cpLoss:picked.loss,openingBias:picked.opening};
+    return{...res,move:picked.move,info:{...(res.info||{}),selectedRank:picked.rank,cpLoss:picked.loss,personality:picked.reason,openingBias:picked.opening,profileMultiPV:multiPV},profile:p,targetMs,selectedRank:picked.rank,cpLoss:picked.loss,openingBias:picked.opening};
   }
 
   const aiMoveBaseTop5=aiMove;
@@ -85,7 +92,7 @@
       try{await shared.init();res=await profiledBest(startState,startCi)}
       catch(e){usedFallback=true;engineError=String(e&&e.message||e);console.error('TOP5 YaneuraOu fallback',charName,e);const fb=chooseAI(clone(startState),startCi);res={move:fb.move,info:{...(fb.info||{}),engine:'内蔵AI fallback',error:engineError}}}
       if(ci!==startCi||posKey(st)!==startKey||gameCounted){thinking=false;return}
-      lastAIInfo={...(res?.info||{}),elapsed:Math.round(performance.now()-started),fallback:usedFallback,book:false,top5Engine:true,engineFromMove1:true,character:charName,strengthProfile:profile.label,targetMs,multiPV:profile.multiPV};
+      lastAIInfo={...(res?.info||{}),elapsed:Math.round(performance.now()-started),fallback:usedFallback,book:false,top5Engine:true,engineFromMove1:true,character:charName,strengthProfile:profile.label,targetMs,multiPV:res?.info?.profileMultiPV||profile.multiPV};
       if(res?.resign){thinking=false;const delta=recordResult(1);setStatus(charName+'が投了しました。あなたの勝ちです。');setResult('win',charName+'投了・勝ち　R '+(delta>=0?'+':'')+delta);speechMood='loss';lastSpeech='';render();renderOpponent(true);return}
       if(res?.declareWin){thinking=false;const delta=recordResult(0);setStatus(charName+'の入玉宣言勝ちです。');setResult('loss',charName+'宣言勝ち・負け　R '+(delta>=0?'+':'')+delta);speechMood='win';lastSpeech='';render();renderOpponent(true);return}
       if(res?.move)push(res.move,'△');thinking=false;speechMood='auto';lastSpeech='';render();renderOpponent(true);if(finishIfEnded())return;
@@ -146,7 +153,7 @@
 
   window.AI_SHOGI_GAME_SAVE={version:'2.15.30',key:GAME_SAVE_KEY,save:()=>saveGame21530(false),saveSilent:()=>saveGame21530(true),load:()=>loadGame21530(),hasSave:()=>!!savedGame(),snapshot:()=>makeGameSave()};
   window.AI_SHOGI_YANEURAOU_TOP5={
-    version:'2.15.29-tune3',openingMode:'engine-from-move-1',legacyOpeningBypass:false,indices:TOP5.slice(),names:NAMES.slice(),ratings:RATINGS.slice(),profiles:JSON.parse(JSON.stringify(PROFILES)),sharedWorker:true,engine:'YaneuraOu HalfKP + Suisho5',
+    version:'2.15.31-tune4',openingMode:'engine-from-move-1',legacyOpeningBypass:false,indices:TOP5.slice(),names:NAMES.slice(),ratings:RATINGS.slice(),profiles:JSON.parse(JSON.stringify(PROFILES)),sharedWorker:true,engine:'YaneuraOu HalfKP + Suisho5',
     enabled:i=>TOP5_SET.has(Number(i)),profileMs:(s,i)=>profileMs(s,Number(i)),status:()=>shared.status(),init:()=>shared.init(),bestMove:(s,i=0)=>profiledBest(s,Number(i)),selectProfileMove:(s,res,i)=>selectProfileMove(s,res,Number(i)),openingTokens:(s,i)=>[...openingTokens(s,Number(i))]
   };
   try{render();renderStats();renderOpponent(false);updateSaveButtons()}catch(e){}
