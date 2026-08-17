@@ -5,10 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#07100e">
 <title>AI将棋先生 v2.15.28</title>
-<script src="./coi-serviceworker.js?v=21528e"></script>
-<script src="../shogi-side-test/future-mitsuki-image21520.js?v=21528e"></script>
-<link rel="stylesheet" href="../shogi/strong213.css?v=21528e">
+<script src="./coi-serviceworker.js?v=21528g"></script>
+<script src="../shogi-side-test/future-mitsuki-image21520.js?v=21528g"></script>
+<link rel="stylesheet" href="../shogi/strong213.css?v=21528g">
 <style>
+/* v2.15.28g iPhone portrait normalization */
+#chars [data-future-mitsuki="1"] .futureEngineState{display:none!important}
+#chars [data-future-mitsuki="1"]{min-height:64px!important}
+#chars [data-future-mitsuki="1"] .chPic{width:34px!important;height:34px!important}
+@media(min-width:721px){#chars [data-future-mitsuki="1"]{min-height:69px!important}#chars [data-future-mitsuki="1"] .chPic{width:38px!important;height:38px!important}}
+
 .oppPortrait img,.focusPortrait img,.chPic{display:block;width:100%;height:100%;object-fit:cover}
 #boot{position:fixed;inset:0;z-index:99999;background:#06100df2;color:#f0daa0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-weight:900}
 #diag28{position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:99998;background:#06100ef2;color:#f0daa0;border:1px solid #9d7728;border-radius:12px;padding:8px 12px;font:700 12px/1.45 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;display:none;white-space:pre-wrap;pointer-events:none}
@@ -59,13 +65,13 @@
   const base='../shogi/',test='../shogi-side-test/';
   const coreFiles=['strong213_01.part','strong213_02.part','strong213_02b.part','strong213_03.part','strong213_04.part','strong213_05.part','strong213_06.part'];
   stage('① 既存25人の部品を読込中…');
-  const coreParts=await Promise.all(coreFiles.map(f=>get(base+f+'?v=21528e')));
+  const coreParts=await Promise.all(coreFiles.map(f=>get(base+f+'?v=21528g')));
   let [sidePatch,evaPatch,dialoguePatch,hokutoPatch,hanaPatch,hanaImagesPatch,batImg,rinImg,yuriaImg,tamaImg,finalPatch,strongPatch,futurePatch]=await Promise.all([
-   get(test+'side2157.js?v=21528e'),get(test+'eva2158.js?v=21528e'),get(test+'dialogue21510.js?v=21528e'),
-   get(test+'hokuto21511.js?v=21528e'),get(test+'hanakeiji21512.js?v=21528e'),get(test+'hanaimages21512.js?v=21528e'),
-   get(test+'final21513_batimg.js?v=21528e'),get(test+'final21513_rinimg.js?v=21528e'),get(test+'final21513_yuriaimg.js?v=21528e'),
-   get(test+'final21513_tamachanimg.js?v=21528e'),get(test+'final21513.js?v=21528e'),get(base+'strong2155.js?v=21528e'),
-   get(test+'future21520.js?v=21528e')
+   get(test+'side2157.js?v=21528g'),get(test+'eva2158.js?v=21528g'),get(test+'dialogue21510.js?v=21528g'),
+   get(test+'hokuto21511.js?v=21528g'),get(test+'hanakeiji21512.js?v=21528g'),get(test+'hanaimages21512.js?v=21528g'),
+   get(test+'final21513_batimg.js?v=21528g'),get(test+'final21513_rinimg.js?v=21528g'),get(test+'final21513_yuriaimg.js?v=21528g'),
+   get(test+'final21513_tamachanimg.js?v=21528g'),get(test+'final21513.js?v=21528g'),get(base+'strong2155.js?v=21528g'),
+   get(test+'future21520.js?v=21528g')
   ]);
   evaPatch=evaPatch.replaceAll("./eva2158/","../shogi-side-test/eva2158/");
   hokutoPatch=hokutoPatch.replaceAll("./hokuto21511/","../shogi-side-test/hokuto21511/");
@@ -96,9 +102,9 @@
   if(boot)boot.remove();
   stage('①成功: 既存'+Math.min(baseCount,25)+'人表示 / ②26人目を確認中…',false);
   const NAME_IMG={
-   'みっちゃん':'../shogi/micchan2154.svg?v=21528e',
-   'しんじ':'../shogi-side-test/eva2158/shinji.webp?v=21528e','あやなみ':'../shogi-side-test/eva2158/ayanami.webp?v=21528e','あすか':'../shogi-side-test/eva2158/asuka.webp?v=21528e','まり':'../shogi-side-test/eva2158/mari.webp?v=21528e','ぺんぺん':'../shogi-side-test/eva2158/penpen.webp?v=21528e','げんどー':'../shogi-side-test/eva2158/gendo.webp?v=21528e','みさとさん':'../shogi-side-test/eva2158/misato.webp?v=21528e','カヲル':'../shogi-side-test/eva2158/kaworu.webp?v=21528e',
-   'ケンシロウ':'../shogi-side-test/hokuto21511/kenshiro.webp?v=21528e','ジャギ':'../shogi-side-test/hokuto21511/jagi.webp?v=21528e','シン':'../shogi-side-test/hokuto21511/shin.webp?v=21528e','サウザー':'../shogi-side-test/hokuto21511/souther.webp?v=21528e','ラオウ':'../shogi-side-test/hokuto21511/raoh.webp?v=21528e'
+   'みっちゃん':'../shogi/micchan2154.svg?v=21528g',
+   'しんじ':'../shogi-side-test/eva2158/shinji.webp?v=21528g','あやなみ':'../shogi-side-test/eva2158/ayanami.webp?v=21528g','あすか':'../shogi-side-test/eva2158/asuka.webp?v=21528g','まり':'../shogi-side-test/eva2158/mari.webp?v=21528g','ぺんぺん':'../shogi-side-test/eva2158/penpen.webp?v=21528g','げんどー':'../shogi-side-test/eva2158/gendo.webp?v=21528g','みさとさん':'../shogi-side-test/eva2158/misato.webp?v=21528g','カヲル':'../shogi-side-test/eva2158/kaworu.webp?v=21528g',
+   'ケンシロウ':'../shogi-side-test/hokuto21511/kenshiro.webp?v=21528g','ジャギ':'../shogi-side-test/hokuto21511/jagi.webp?v=21528g','シン':'../shogi-side-test/hokuto21511/shin.webp?v=21528g','サウザー':'../shogi-side-test/hokuto21511/souther.webp?v=21528g','ラオウ':'../shogi-side-test/hokuto21511/raoh.webp?v=21528g'
   };
   function cardName(card){return (card.querySelector('.chName')?.textContent||card.querySelector('img')?.alt||'').trim()}
   function fixImages(){
