@@ -1,12 +1,15 @@
-/* AI将棋先生 v2.15.20 - 26人目「未来からやってきたみつき」YaneuraOu WASM test */
-(function installFutureMitsuki21520(){
-  const VERSION='2.15.20';
+/* AI将棋先生 v2.15.28 - 26人目「未来からやってきたみつき」安定版 */
+(function installFutureMitsuki21528(){
+  const VERSION='2.15.28';
   const FUTURE_INDEX=25;
   const FUTURE_NAME='未来からやってきたみつき';
   const FUTURE_RATING=3400;
-  const ENGINE_BASE='./yaneuraou/';
+  const SIDE_BASE=new URL('../shogi-side-test/',location.href).href;
+  const ENGINE_BASE=SIDE_BASE+'yaneuraou/';
   const ENGINE_JS='yaneuraou.halfkp.noeval.js';
   const ENGINE_EVAL='nn.bin';
+
+  window.AI_SHOGI_FUNCTIONAL_AUDIT21520=window.AI_SHOGI_FUNCTIONAL_AUDIT21520||{future:true,version:VERSION};
 
   const FUTURE_DIALOGUE={
     start:['未来から来たよ。ここでは本気で指すね。','この盤面、未来では何度も見てきたよ。','準備できた？　未来の一手を見せるね。','今のみつきより、ずっと先まで読むよ。'],
@@ -29,185 +32,125 @@
     try{saveStats()}catch(e){}
   }
 
-  const rankTextBase21520=rankText;
-  rankText=function(i){return i===FUTURE_INDEX?'未来・やねうら王':rankTextBase21520(i)};
+  const futureImage=()=>window.FUTURE_MITSUKI_IMAGE21520||FIXED_IMG[0];
+  async function ensureFutureImage(){
+    if(window.FUTURE_MITSUKI_IMAGE21520)return true;
+    try{
+      const r=await fetch(SIDE_BASE+'future-mitsuki-image21520.js?v=21528e',{cache:'no-store'});
+      if(!r.ok)throw new Error('future image '+r.status);
+      const t=await r.text();
+      (0,eval)(t);
+      return typeof window.FUTURE_MITSUKI_IMAGE21520==='string'&&window.FUTURE_MITSUKI_IMAGE21520.startsWith('data:image/');
+    }catch(e){console.error('future image load',e);return false;}
+  }
+  function refreshFutureImages(){
+    const src=futureImage();
+    document.querySelectorAll('[data-future-mitsuki="1"] img,#oppPortrait img[alt="'+FUTURE_NAME+'"],#foppPortrait img[alt="'+FUTURE_NAME+'"]').forEach(img=>{
+      if(img.src!==src){img.onerror=null;img.src=src;}
+    });
+  }
 
-  const portraitHTMLBase21520=portraitHTML;
+  const rankTextBase=rankText;
+  rankText=function(i){return i===FUTURE_INDEX?'未来・やねうら王':rankTextBase(i)};
+  const portraitHTMLBase=portraitHTML;
   portraitHTML=function(i,c){
-    if(i===FUTURE_INDEX)return '<img alt="'+FUTURE_NAME+'" src="'+FIXED_IMG[0]+'" style="box-shadow:inset 0 0 0 3px #75e7ff,0 0 18px #4fd8ff88"><span class="oppFixed" style="background:#07526a;color:#d9fbff">FUTURE・やねうら王</span>';
-    return portraitHTMLBase21520(i,c);
+    if(i===FUTURE_INDEX)return '<img alt="'+FUTURE_NAME+'" src="'+futureImage()+'" style="box-shadow:inset 0 0 0 3px #75e7ff,0 0 18px #4fd8ff88"><span class="oppFixed" style="background:#07526a;color:#d9fbff">FUTURE・やねうら王</span>';
+    return portraitHTMLBase(i,c);
   };
 
-  function addFutureCard21520(){
+  function addFutureCard(){
     const box=document.getElementById('chars');
     if(!box||box.querySelector('[data-future-mitsuki="1"]'))return;
     const b=document.createElement('button');
     b.className='ch';b.dataset.futureMitsuki='1';
     b.style.cssText='border-color:#39caef;box-shadow:0 0 0 1px #39caef55,0 0 18px #39caef33';
-    b.innerHTML='<img class="chPic" alt="'+FUTURE_NAME+'" src="'+FIXED_IMG[0]+'"><span class="chFixed" style="background:#07526a;color:#d9fbff">未来</span><div class="chName">'+FUTURE_NAME+'</div><div class="chRating">R'+FUTURE_RATING+'・やねうら王</div><div class="chStyle">未来型・超深読み</div><div class="futureEngineState" style="font-size:10px;color:#72dff6;margin-top:4px">ENGINE：未起動</div>';
+    b.innerHTML='<img class="chPic" alt="'+FUTURE_NAME+'" src="'+futureImage()+'"><span class="chFixed" style="background:#07526a;color:#d9fbff">未来</span><div class="chName">'+FUTURE_NAME+'</div><div class="chRating">R'+FUTURE_RATING+'・やねうら王</div><div class="chStyle">未来型・超深読み</div><div class="futureEngineState" style="font-size:10px;color:#72dff6;margin-top:4px">ENGINE：未起動</div>';
     b.title=FUTURE_NAME+'｜R'+FUTURE_RATING+'｜やねうら王 HalfKP＋水匠5';
-    b.onclick=()=>{ci=FUTURE_INDEX;lastSpeech='';speechMood='start';initFutureEngine21520().catch(()=>{});newGame()};
+    b.onclick=()=>{ci=FUTURE_INDEX;lastSpeech='';speechMood='start';newGame();ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}});initFutureEngine().catch(()=>{});};
     box.appendChild(b);
   }
-  addFutureCard21520();
+  addFutureCard();
+  ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}});
 
-  function setEngineState21520(text,ok=false){
+  function setEngineState(text,ok=false){
     document.querySelectorAll('.futureEngineState').forEach(e=>{e.textContent='ENGINE：'+text;e.style.color=ok?'#7dffb2':'#72dff6'});
     window.AI_SHOGI_YANEURAOU_FUTURE=window.AI_SHOGI_YANEURAOU_FUTURE||{};
     window.AI_SHOGI_YANEURAOU_FUTURE.state=text;
+    window.AI_SHOGI_YANEURAOU_FUTURE.stage=text;
+    try{if(ci===FUTURE_INDEX){const s=document.getElementById('status');if(s)s.textContent='未来みつき ENGINE：'+text;}}catch(e){}
   }
+  const withTimeout=(p,ms,label)=>Promise.race([Promise.resolve(p),new Promise((_,rej)=>setTimeout(()=>rej(new Error(label+' timeout '+ms+'ms')),ms))]);
 
-  function sfenPiece21520(p){
-    if(!p)return'';
-    let k=p.k||'',prom=k[0]==='+',base=prom?k.slice(1):k;
-    let ch=p.o===S?base:base.toLowerCase();
-    return (prom?'+':'')+ch;
-  }
-  function handSfen21520(s){
-    const order=['R','B','G','S','N','L','P'];
-    let out='';
-    for(const side of [S,G])for(const k of order){
-      const n=(s.h?.[side]?.[k]||0);if(!n)continue;
-      const ch=side===S?k:k.toLowerCase();out+=(n>1?String(n):'')+ch;
-    }
-    return out||'-';
-  }
-  function toSFEN21520(s){
-    const rows=[];
-    for(let y=0;y<9;y++){
-      let row='',empty=0;
-      for(let x=0;x<9;x++){
-        const p=s.b[idx(x,y)];
-        if(!p){empty++;continue}
-        if(empty){row+=empty;empty=0}
-        row+=sfenPiece21520(p);
-      }
-      if(empty)row+=empty;rows.push(row);
-    }
-    return rows.join('/')+' '+(s.t===S?'b':'w')+' '+handSfen21520(s)+' '+Math.max(1,(s.log?.length||0)+1);
-  }
+  function sfenPiece(p){if(!p)return'';const k=p.k||'',prom=k[0]==='+',base=prom?k.slice(1):k;const ch=p.o===S?base:base.toLowerCase();return (prom?'+':'')+ch;}
+  function handSfen(s){const order=['R','B','G','S','N','L','P'];let out='';for(const side of [S,G])for(const k of order){const n=(s.h?.[side]?.[k]||0);if(!n)continue;const ch=side===S?k:k.toLowerCase();out+=(n>1?String(n):'')+ch;}return out||'-';}
+  function toSFEN(s){const rows=[];for(let y=0;y<9;y++){let row='',empty=0;for(let x=0;x<9;x++){const p=s.b[idx(x,y)];if(!p){empty++;continue}if(empty){row+=empty;empty=0}row+=sfenPiece(p);}if(empty)row+=empty;rows.push(row);}return rows.join('/')+' '+(s.t===S?'b':'w')+' '+handSfen(s)+' '+Math.max(1,(s.log?.length||0)+1);}
 
-  let engine21520=null,enginePromise21520=null,engineReady21520=false,engineInitError21520='';
-  let waiters21520=[],latestInfo21520={},engineScriptPromise21520=null;
-  function onEngineLine21520(raw){
+  let engine=null,enginePromise=null,engineReady=false,engineInitError='';
+  let waiters=[],latestInfo={},engineScriptPromise=null;
+  function onEngineLine(raw){
     const line=String(raw||'').trim();
-    if(line.startsWith('info ')){
-      const d=/\bdepth\s+(\d+)/.exec(line),n=/\bnodes\s+(\d+)/.exec(line),cp=/\bscore\s+cp\s+(-?\d+)/.exec(line),mate=/\bscore\s+mate\s+(-?\d+)/.exec(line);
-      latestInfo21520={...latestInfo21520,line,depth:d?+d[1]:latestInfo21520.depth||0,nodes:n?+n[1]:latestInfo21520.nodes||0,cp:cp?+cp[1]:latestInfo21520.cp,mate:mate?+mate[1]:latestInfo21520.mate};
-    }
-    for(const w of waiters21520.slice()){
-      let hit=false;try{hit=w.pred(line)}catch(e){}
-      if(hit){waiters21520=waiters21520.filter(x=>x!==w);clearTimeout(w.timer);w.resolve(line)}
-    }
+    if(line.startsWith('info ')){const d=/\bdepth\s+(\d+)/.exec(line),n=/\bnodes\s+(\d+)/.exec(line),cp=/\bscore\s+cp\s+(-?\d+)/.exec(line),mate=/\bscore\s+mate\s+(-?\d+)/.exec(line);latestInfo={...latestInfo,line,depth:d?+d[1]:latestInfo.depth||0,nodes:n?+n[1]:latestInfo.nodes||0,cp:cp?+cp[1]:latestInfo.cp,mate:mate?+mate[1]:latestInfo.mate};}
+    for(const w of waiters.slice()){let hit=false;try{hit=w.pred(line)}catch(e){}if(hit){waiters=waiters.filter(x=>x!==w);clearTimeout(w.timer);w.resolve(line)}}
   }
-  function waitLine21520(pred,timeout=10000){
-    return new Promise((resolve,reject)=>{
-      const w={pred,resolve,reject,timer:null};
-      w.timer=setTimeout(()=>{waiters21520=waiters21520.filter(x=>x!==w);reject(new Error('YaneuraOu timeout'))},timeout);
-      waiters21520.push(w);
-    });
-  }
-  function loadEngineScript21520(){
+  function waitLine(pred,timeout,label){return new Promise((resolve,reject)=>{const w={pred,resolve,reject,timer:null};w.timer=setTimeout(()=>{waiters=waiters.filter(x=>x!==w);reject(new Error((label||'YaneuraOu')+' timeout '+timeout+'ms'))},timeout);waiters.push(w);});}
+  function loadEngineScript(){
     if(typeof globalThis.YaneuraOu_HalfKP_noeval==='function')return Promise.resolve();
-    if(engineScriptPromise21520)return engineScriptPromise21520;
-    engineScriptPromise21520=new Promise((resolve,reject)=>{
-      const old=document.querySelector('script[data-yaneuraou21520="1"]');
-      if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',()=>reject(new Error('YaneuraOu script load failed')),{once:true});return}
-      const sc=document.createElement('script');
-      sc.dataset.yaneuraou21520='1';sc.src=ENGINE_BASE+ENGINE_JS+'?v=21520';sc.async=true;
-      sc.onload=()=>resolve();sc.onerror=()=>reject(new Error('YaneuraOu script load failed'));
-      document.head.appendChild(sc);
+    if(engineScriptPromise)return engineScriptPromise;
+    engineScriptPromise=new Promise((resolve,reject)=>{
+      document.querySelectorAll('script[data-yaneuraou-future]').forEach(x=>x.remove());
+      const sc=document.createElement('script');sc.dataset.yaneuraouFuture='1';sc.src=ENGINE_BASE+ENGINE_JS+'?v=21528e';sc.async=true;sc.onload=resolve;sc.onerror=()=>reject(new Error('YaneuraOu JS load failed'));document.head.appendChild(sc);
     });
-    return engineScriptPromise21520;
+    return engineScriptPromise;
   }
 
-  async function initFutureEngine21520(){
-    if(engineReady21520&&engine21520)return engine21520;
-    if(enginePromise21520)return enginePromise21520;
-    enginePromise21520=(async()=>{
+  async function initFutureEngine(){
+    if(engineReady&&engine)return engine;
+    if(enginePromise)return enginePromise;
+    enginePromise=(async()=>{
       try{
-        setEngineState21520('起動中…');
+        setEngineState('⑤-0 起動開始');
         if(!globalThis.crossOriginIsolated)throw new Error('crossOriginIsolated=false');
-        await loadEngineScript21520();
-        const factory=globalThis.YaneuraOu_HalfKP_noeval;
-        if(typeof factory!=='function')throw new Error('YaneuraOu_HalfKP_noeval factory not found');
-        const e=await factory({locateFile:(p)=>ENGINE_BASE+String(p).split('/').pop()});
-        if(!e||!e.FS)throw new Error('YaneuraOu FS not available');
-        const evalRes=await fetch(ENGINE_BASE+ENGINE_EVAL+'?v=21520',{cache:'no-store'});
-        if(!evalRes.ok)throw new Error('nn.bin '+evalRes.status);
-        const evalBytes=new Uint8Array(await evalRes.arrayBuffer());
-        if(evalBytes.byteLength<10000000)throw new Error('nn.bin too small '+evalBytes.byteLength);
-        try{e.FS.unlink('/'+ENGINE_EVAL)}catch(_e){}
-        e.FS.writeFile('/'+ENGINE_EVAL,evalBytes);
-        e.addMessageListener(onEngineLine21520);engine21520=e;
-        let p=waitLine21520(x=>x==='usiok',15000);e.postMessage('usi');await p;
-        const mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent);
-        e.postMessage('setoption name EvalDir value .');
-        e.postMessage('setoption name EvalFile value '+ENGINE_EVAL);
-        e.postMessage('setoption name FV_SCALE value 24');
-        e.postMessage('setoption name Threads value '+(mobile?2:4));
-        e.postMessage('setoption name USI_Hash value '+(mobile?64:256));
-        e.postMessage('setoption name USI_Ponder value false');
-        e.postMessage('setoption name BookFile value no_book');
-        p=waitLine21520(x=>x==='readyok',45000);e.postMessage('isready');await p;
-        e.postMessage('usinewgame');engineReady21520=true;engineInitError21520='';
-        setEngineState21520('やねうら王＋水匠5 接続済み',true);
-        const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.20 26キャラ・未来みつき やねうら王＋水匠5接続OK';
-        return e;
-      }catch(err){engineInitError21520=String(err&&err.message||err);engineReady21520=false;setEngineState21520('起動失敗');throw err}
+        setEngineState('⑤-1 Wasm JS読込中');await withTimeout(loadEngineScript(),10000,'Wasm JS');setEngineState('⑤-1 Wasm JS読込完了');
+        const factory=globalThis.YaneuraOu_HalfKP_noeval;if(typeof factory!=='function')throw new Error('YaneuraOu_HalfKP_noeval factory not found');
+        setEngineState('⑤-2 Wasm本体起動中');const e=await withTimeout(factory({locateFile:p=>ENGINE_BASE+String(p).split('/').pop()}),20000,'Wasm factory');if(!e||!e.FS)throw new Error('YaneuraOu FS not available');setEngineState('⑤-2 Wasm本体起動完了');
+        setEngineState('⑤-3 水匠5 nn.bin取得中');const evalRes=await withTimeout(fetch(ENGINE_BASE+ENGINE_EVAL+'?v=21528e',{cache:'no-store'}),20000,'nn.bin fetch');if(!evalRes.ok)throw new Error('nn.bin '+evalRes.status);
+        setEngineState('⑤-3 水匠5 64MB読込中');const evalBytes=new Uint8Array(await withTimeout(evalRes.arrayBuffer(),45000,'nn.bin body'));if(evalBytes.byteLength<10000000)throw new Error('nn.bin too small '+evalBytes.byteLength);try{e.FS.unlink('/'+ENGINE_EVAL)}catch(_e){}e.FS.writeFile('/'+ENGINE_EVAL,evalBytes);setEngineState('⑤-3 水匠5読込完了 '+Math.round(evalBytes.byteLength/1024/1024)+'MB');
+        e.addMessageListener(onEngineLine);engine=e;
+        setEngineState('⑤-4 usiok待ち');let p=waitLine(x=>x==='usiok',15000,'usiok');e.postMessage('usi');await p;setEngineState('⑤-4 usiok受信');
+        const mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent);e.postMessage('setoption name EvalDir value .');e.postMessage('setoption name EvalFile value '+ENGINE_EVAL);e.postMessage('setoption name FV_SCALE value 24');e.postMessage('setoption name Threads value '+(mobile?2:4));e.postMessage('setoption name USI_Hash value '+(mobile?64:256));e.postMessage('setoption name USI_Ponder value false');e.postMessage('setoption name BookFile value no_book');
+        setEngineState('⑤-5 readyok待ち');p=waitLine(x=>x==='readyok',30000,'readyok');e.postMessage('isready');await p;setEngineState('⑤-5 readyok受信');e.postMessage('usinewgame');engineReady=true;engineInitError='';setEngineState('⑤成功 やねうら王＋水匠5 接続済み',true);const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.28 26キャラ・未来みつき やねうら王＋水匠5接続OK';return e;
+      }catch(err){engineInitError=String(err&&err.message||err);engineReady=false;setEngineState('⑤失敗 '+engineInitError);throw err}
     })();
-    try{return await enginePromise21520}finally{if(!engineReady21520)enginePromise21520=null}
+    try{return await enginePromise}finally{if(!engineReady)enginePromise=null}
   }
 
-  async function futureBest21520(s){
-    const e=await initFutureEngine21520();
-    latestInfo21520={};
-    const sfen=toSFEN21520(s);
-    e.postMessage('position sfen '+sfen);
-    const mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent);
-    const endgame=(s.log?.length||0)>=55;
-    const ms=mobile?(endgame?9000:6000):(endgame?18000:12000);
-    const p=waitLine21520(x=>x.startsWith('bestmove '),ms+8000);
-    e.postMessage('go movetime '+ms);
-    const line=await p;
-    const tok=(line.split(/\s+/)[1]||'').trim();
-    if(tok==='resign')return{resign:true,info:{...latestInfo21520,engine:'YaneuraOu HalfKP＋Suisho5',ms}};
-    if(tok==='win')return{declareWin:true,info:{...latestInfo21520,engine:'YaneuraOu HalfKP＋Suisho5',ms}};
-    const lm=legal(s),m=lm.find(x=>usi(x)===tok);
-    if(!m)throw new Error('YaneuraOu illegal/unmapped bestmove '+tok+' for '+sfen);
-    return{move:m,info:{...latestInfo21520,engine:'YaneuraOu HalfKP＋Suisho5',usi:tok,ms}};
+  async function futureBest(s){
+    const e=await initFutureEngine();latestInfo={};const sfen=toSFEN(s);e.postMessage('position sfen '+sfen);const mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent);const endgame=(s.log?.length||0)>=55;const ms=mobile?(endgame?9000:6000):(endgame?18000:12000);setEngineState('⑥ 思考中 bestmove待ち');const p=waitLine(x=>x.startsWith('bestmove '),ms+10000,'bestmove');e.postMessage('go movetime '+ms);const line=await p;setEngineState('⑦ bestmove受信',true);const tok=(line.split(/\s+/)[1]||'').trim();if(tok==='resign')return{resign:true,info:{...latestInfo,engine:'YaneuraOu HalfKP＋Suisho5',ms}};if(tok==='win')return{declareWin:true,info:{...latestInfo,engine:'YaneuraOu HalfKP＋Suisho5',ms}};const lm=legal(s),m=lm.find(x=>usi(x)===tok);if(!m)throw new Error('YaneuraOu illegal/unmapped bestmove '+tok+' for '+sfen);return{move:m,info:{...latestInfo,engine:'YaneuraOu HalfKP＋Suisho5',usi:tok,ms}};
   }
 
-  const aiMoveBase21520=aiMove;
+  const aiMoveBase=aiMove;
   aiMove=function(){
-    if(ci!==FUTURE_INDEX)return aiMoveBase21520();
+    if(ci!==FUTURE_INDEX)return aiMoveBase();
     if(st.t!=G||thinking||gameCounted)return;if(finishIfEnded())return;
     thinking=true;showSpeech('think',true);setStatus(FUTURE_NAME+'がやねうら王で未来を読んでいます…');
     const startKey=posKey(st),startCi=ci,startState=clone(st),started=performance.now();
     (async()=>{
       let res=null,usedFallback=false;
-      try{res=await futureBest21520(startState)}catch(e){
-        usedFallback=true;console.error('Future Mitsuki YaneuraOu fallback',e);
-        const fb=chooseAI(clone(startState),0);res={move:fb.move,info:{...(fb.info||{}),engine:'内蔵MAX fallback',error:String(e&&e.message||e)}};
-        setEngineState21520('接続失敗・内蔵MAXへ退避');
-      }
+      try{res=await futureBest(startState)}catch(e){usedFallback=true;console.error('Future Mitsuki YaneuraOu fallback',e);setEngineState('⑤失敗 → 内蔵MAXへ退避: '+String(e&&e.message||e));const fb=chooseAI(clone(startState),0);res={move:fb.move,info:{...(fb.info||{}),engine:'内蔵MAX fallback',error:String(e&&e.message||e)}};}
       if(ci!==startCi||posKey(st)!==startKey||gameCounted){thinking=false;return}
       lastAIInfo={...(res.info||{}),elapsed:Math.round(performance.now()-started),fallback:usedFallback};
       if(res.resign){thinking=false;const delta=recordResult(1);setStatus(FUTURE_NAME+'が投了しました。あなたの勝ちです。');setResult('win','未来みつき投了・勝ち　R '+(delta>=0?'+':'')+delta);speechMood='loss';lastSpeech='';render();renderOpponent(true);return}
       if(res.declareWin){thinking=false;const delta=recordResult(0);setStatus(FUTURE_NAME+'の入玉宣言勝ちです。');setResult('loss','未来みつき宣言勝ち・負け　R '+(delta>=0?'+':'')+delta);speechMood='win';lastSpeech='';render();renderOpponent(true);return}
-      if(res.move)push(res.move,'△');thinking=false;speechMood='auto';lastSpeech='';render();renderOpponent(true);if(finishIfEnded())return;
-      const x=lastAIInfo||{};setStatus('あなたの手番です。やねうら王 '+(x.depth?'深さ'+x.depth+' / ':'')+(x.nodes?Number(x.nodes).toLocaleString()+'局面 / ':'')+(x.fallback?'内蔵MAX退避':'水匠5本格エンジン'));
+      if(res.move)push(res.move,'△');thinking=false;speechMood='auto';lastSpeech='';render();renderOpponent(true);refreshFutureImages();if(finishIfEnded())return;const x=lastAIInfo||{};setStatus('あなたの手番です。'+(x.fallback?'内蔵MAX退避':'やねうら王＋水匠5')+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
     })();
   };
 
-  const newGameBase21520=newGame;
-  newGame=function(){try{if(engine21520){engine21520.postMessage('stop');engine21520.postMessage('usinewgame')}}catch(e){}return newGameBase21520()};
-  const undoBase21520=undo;
-  undo=function(){try{if(engine21520)engine21520.postMessage('stop')}catch(e){}return undoBase21520()};
+  const newGameBase=newGame;newGame=function(){try{if(engine){engine.postMessage('stop');engine.postMessage('usinewgame')}}catch(e){}const r=newGameBase();setTimeout(refreshFutureImages,0);return r};
+  const undoBase=undo;undo=function(){try{if(engine)engine.postMessage('stop')}catch(e){}const r=undoBase();setTimeout(refreshFutureImages,0);return r};
   document.getElementById('newBtn').onclick=newGame;document.getElementById('undoBtn').onclick=undo;document.getElementById('fundoBtn').onclick=undo;
 
-  window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine21520,toSFEN:toSFEN21520,bestMove:futureBest21520,status:()=>({ready:engineReady21520,error:engineInitError21520,crossOriginIsolated:globalThis.crossOriginIsolated,latestInfo:latestInfo21520})};
-  window.AI_SHOGI_FUTURE_AUDIT21520={version:VERSION,characters:C.length,card:!!document.querySelector('[data-future-mitsuki="1"]'),sfenOK:toSFEN21520(initial()).startsWith('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -'),factory:typeof globalThis.YaneuraOu_HalfKP_noeval==='function',crossOriginIsolated:globalThis.crossOriginIsolated,engineBase:ENGINE_BASE,evalFile:ENGINE_EVAL};
-  const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.20 26キャラ・未来みつき やねうら王＋水匠5テスト版';
-  render();renderStats();renderOpponent(false);
+  window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine,toSFEN,bestMove:futureBest,status:()=>({ready:engineReady,error:engineInitError,crossOriginIsolated:globalThis.crossOriginIsolated,latestInfo})};
+  window.AI_SHOGI_FUTURE_AUDIT21520={version:VERSION,characters:C.length,card:!!document.querySelector('[data-future-mitsuki="1"]'),sfenOK:toSFEN(initial()).startsWith('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -'),factory:typeof globalThis.YaneuraOu_HalfKP_noeval==='function',crossOriginIsolated:globalThis.crossOriginIsolated,engineBase:ENGINE_BASE,evalFile:ENGINE_EVAL};
+  const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.28 26キャラ・未来みつき やねうら王＋水匠5診断版';
+  render();renderStats();renderOpponent(false);refreshFutureImages();
 })();
