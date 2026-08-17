@@ -17,7 +17,7 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
-      - name: Patch official browser build for USI export
+      - name: Prepare official browser build
         shell: bash
         run: |
           set -euxo pipefail
@@ -29,14 +29,9 @@ jobs:
           if '-s PTHREAD_POOL_SIZE=32' not in s:
               raise SystemExit('pthread marker missing')
           s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
-          marker="LDFLAGS += -s FILESYSTEM=1 -s EXIT_RUNTIME=0 -s \"EXPORTED_RUNTIME_METHODS=['FS','ccall']\""
-          export="LDFLAGS += -s \"EXPORTED_FUNCTIONS=['_main','_usi_command']\""
-          if marker not in s:
-              raise SystemExit('runtime export marker missing')
-          s=s.replace(marker,marker+'\n\t\t'+export,1)
           p.write_text(s)
           PY
-          grep -F "EXPORTED_FUNCTIONS=['_main','_usi_command']" YaneuraOu/source/Makefile
+          grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu/source/Makefile
           cp shogi-v21528/yaneuraou/nn.bin YaneuraOu/nn.bin
           test $(stat -c%s YaneuraOu/nn.bin) -gt 10000000
       - name: Build HalfKP noeval WASM
@@ -44,7 +39,25 @@ jobs:
         run: |
           set -euxo pipefail
           docker pull emscripten/emsdk:3.1.43
-          docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval
+          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
+          set +e
+          docker run --rm \
+            -v "${{ github.workspace }}/YaneuraOu:/src" \
+            -w /src/source \
+            emscripten/emsdk:3.1.43 \
+            bash -lc 'set -euxo pipefail; make clean; make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' \
+            2>&1 | tee /tmp/yaneuraou-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            {
+              echo '## YaneuraOu WASM build failed'
+              echo '```text'
+              tail -n 220 /tmp/yaneuraou-build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$rc"
+          fi
           LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
           test -s "$LIB/yaneuraou.halfkp.noeval.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
@@ -57,6 +70,14 @@ jobs:
           console.log('USI_EXPORTS',ex.filter(x=>/usi/i.test(x)));
           if(!ex.includes('usi_command'))throw Error('usi_command missing from wasm exports');
           NODE
+      - name: Upload build diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaneuraou-build-log
+          path: /tmp/yaneuraou-build.log
+          if-no-files-found: ignore
+          retention-days: 2
       - name: Install Firefox
         shell: bash
         run: |
@@ -123,9 +144,9 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
-          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
+          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'usi_command=EMSCRIPTEN_KEEPALIVE' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
-          git diff --cached --quiet || git commit -m 'fix: rebuild YaneuraOu WASM with usi_command export'
+          git diff --cached --quiet || git commit -m 'fix: rebuild YaneuraOu WASM verified in Firefox'
           git push
