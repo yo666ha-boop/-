@@ -15,83 +15,50 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: yaneurao/YaneuraOu
-          ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
+          # This revision has the WebAssembly-specific threadStarted retry and
+          # live EMSCRIPTEN_KEEPALIVE usi_command used by wasm_pre.js.
+          ref: 0056b408e904f0733f3cfd2c2a7e57c3d74fcd62
           path: YaneuraOu
-      - name: Prepare official browser build and live USI bridge
+
+      - name: Verify browser-stable YaneuraOu source
         shell: bash
         run: |
           set -euxo pipefail
+          grep -F 'EMSCRIPTEN_KEEPALIVE extern "C" int usi_command' YaneuraOu/source/usi.cpp
+          grep -F 'threadStarted = true' YaneuraOu/source/thread.cpp
+          grep -F 'if (!th->threadStarted)' YaneuraOu/source/usi.cpp
+          grep -F '"halfkp.noeval"' YaneuraOu/script/wasm_build.js
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          makefile=Path('YaneuraOu/source/Makefile')
-          s=makefile.read_text()
+          p=Path('YaneuraOu/source/Makefile')
+          s=p.read_text()
           if '-s PTHREAD_POOL_SIZE=32' not in s:
-              raise SystemExit('pthread marker missing')
-          s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
-          makefile.write_text(s)
-
-          engine_cpp=Path('YaneuraOu/source/engine.cpp')
-          es=engine_cpp.read_text()
-          marker='"Threads", Option(4, 1, MaxThreads, [this](const Option&) {'
-          if marker not in es:
-              raise SystemExit('default Threads marker missing')
-          es=es.replace(marker,'"Threads", Option(2, 1, MaxThreads, [this](const Option&) {',1)
-          engine_cpp.write_text(es)
-
-          h=Path('YaneuraOu/source/usi.h')
-          hs=h.read_text()
-          marker='\tvoid loop();\n'
-          bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
-          if marker not in hs:
-              raise SystemExit('USIEngine::loop marker missing')
-          hs=hs.replace(marker,bridge,1)
-          h.write_text(hs)
-
-          p=Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
-          ys=p.read_text()
-          tail_marker='using namespace YaneuraOu;\nnamespace {'
-          if tail_marker not in ys:
-              raise SystemExit('engine entry tail marker missing')
-          live='''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\n\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd || !wasm_usi)\n        return 1;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
-          ys=ys.replace(tail_marker,live,1)
-
-          pattern=re.compile(r'void engine_main\(\) \{.*?\n\}',re.S)
-          matches=list(pattern.finditer(ys))
-          if len(matches)!=1:
-              raise SystemExit(f'engine_main match count={len(matches)}')
-          replacement='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
-          ys=pattern.sub(replacement,ys,count=1)
-          p.write_text(ys)
+              raise SystemExit('pthread pool marker missing')
+          p.write_text(s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
           PY
           grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu/source/Makefile
-          grep -F '"Threads", Option(2, 1, MaxThreads' YaneuraOu/source/engine.cpp
-          grep -F 'bool wasm_command' YaneuraOu/source/usi.h
-          grep -F 'extern "C" EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
-          grep -F 'wasm_usi = std::make_unique<USIEngine>()' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
-          cp shogi-v21528/yaneuraou/nn.bin YaneuraOu/nn.bin
-          test $(stat -c%s YaneuraOu/nn.bin) -gt 10000000
-      - name: Build HalfKP noeval WASM
+          test -s shogi-v21528/yaneuraou/nn.bin
+          test $(stat -c%s shogi-v21528/yaneuraou/nn.bin) -gt 60000000
+
+      - name: Build official HalfKP noeval WASM
         shell: bash
         run: |
           set -euxo pipefail
           docker pull emscripten/emsdk:3.1.43
-          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
           set +e
           docker run --rm \
             -v "${{ github.workspace }}/YaneuraOu:/src" \
-            -w /src/source \
+            -w /src \
             emscripten/emsdk:3.1.43 \
-            bash -lc 'set -euxo pipefail; make clean; make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160 EXTRA_LDFLAGS="-sEXPORTED_FUNCTIONS=_main,_usi_command"' \
+            node script/wasm_build.js halfkp.noeval \
             2>&1 | tee /tmp/yaneuraou-build.log
           rc=${PIPESTATUS[0]}
           set -e
           if [ "$rc" -ne 0 ]; then
             {
-              echo '## YaneuraOu WASM build failed'
+              echo '## YaneuraOu browser-stable WASM build failed'
               echo '```text'
-              tail -n 220 /tmp/yaneuraou-build.log
+              tail -n 240 /tmp/yaneuraou-build.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
             exit "$rc"
@@ -102,6 +69,8 @@ jobs:
           test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
           grep -F '_usi_command' "$LIB/yaneuraou.halfkp.noeval.js"
           grep -F 'ccall' "$LIB/yaneuraou.halfkp.noeval.js"
+          test $(stat -c%s "$LIB/yaneuraou.halfkp.noeval.wasm") -gt 1000000
+
       - name: Upload build diagnostic
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,6 +79,7 @@ jobs:
           path: /tmp/yaneuraou-build.log
           if-no-files-found: ignore
           retention-days: 2
+
       - name: Install Firefox
         shell: bash
         run: |
@@ -117,7 +87,8 @@ jobs:
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0
           npx playwright install --with-deps firefox
-      - name: Firefox wrapper smoke - usiok readyok bestmove
+
+      - name: Firefox proof - usiok readyok bestmove
         shell: bash
         run: |
           set -euxo pipefail
@@ -138,23 +109,24 @@ jobs:
             try{
               out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
               if(!crossOriginIsolated)throw Error('not isolated');
-              const w=new Worker('./future-yaneura-worker21528.js?buildtest=1');
+              if(typeof SharedArrayBuffer!=='function')throw Error('SharedArrayBuffer unavailable');
+              const w=new Worker('./future-yaneura-worker21528.js?buildproof=20241128');
               let seq=0,pending=new Map();
               w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){out('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}}};
-              w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));
-              const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},120000)});
+              w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno+':'+e.colno));
+              const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},150000)});
               const init=await call('init');out('INIT '+JSON.stringify(init));
               const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
-              const bm=await call('bestmove',{sfen,ms:500});out('BEST '+JSON.stringify(bm));
-              if(!bm.token)throw Error('bestmove token missing');
-              b.dataset.result='ok';out('PASS');w.terminate();
+              const bm=await call('bestmove',{sfen,ms:800});out('BEST '+JSON.stringify(bm));
+              if(!bm.token||bm.token==='resign')throw Error('usable bestmove token missing: '+String(bm.token));
+              b.dataset.result='ok';out('PASS usiok readyok bestmove '+bm.token);w.terminate();
             }catch(e){fail(e)}
           })();
           </script>
           HTML
           cat > "$ROOT/server.cjs" <<'NODE'
           const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
-          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
           NODE
           cat > /tmp/yane/check.mjs <<'NODE'
           import{firefox}from'playwright';
@@ -163,7 +135,7 @@ jobs:
           p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
           p.on('requestfailed',r=>console.log('REQUESTFAILED',r.url(),r.failure()?.errorText||''));
           await p.goto('http://127.0.0.1:4173/',{waitUntil:'load'});
-          await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:150000});
+          await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:180000});
           const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,coi:crossOriginIsolated,sab:typeof SharedArrayBuffer}));
           console.log('FINAL',JSON.stringify(r));
           await b.close();if(r.state!=='ok')process.exit(1);
@@ -176,7 +148,7 @@ jobs:
           rc=${PIPESTATUS[0]}
           set -e
           {
-            echo '## Firefox YaneuraOu smoke'
+            echo '## Firefox YaneuraOu proof'
             echo '```text'
             cat /tmp/yane/firefox-smoke.log || true
             echo '--- server.log ---'
@@ -184,6 +156,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
+
       - name: Upload Firefox diagnostic
         if: always()
         uses: actions/upload-artifact@v4
@@ -194,7 +167,8 @@ jobs:
             /tmp/yane/server.log
           if-no-files-found: ignore
           retention-days: 2
-      - name: Install verified runtime into v2.15.28
+
+      - name: Install only verified runtime into v2.15.28
         shell: bash
         run: |
           set -euxo pipefail
@@ -202,9 +176,16 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
-          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'DEFAULT_THREADS=2' 'LIVE_WASM_USI_BRIDGE=1' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
+          printf '%s\n' \
+            'YaneuraOu HalfKP noeval + Suisho5' \
+            'SOURCE=0056b408e904f0733f3cfd2c2a7e57c3d74fcd62' \
+            'EMSCRIPTEN=3.1.43' \
+            'PTHREAD_POOL_SIZE=2' \
+            'THREAD_STARTED_RETRY=1' \
+            'Firefox: usiok / readyok / bestmove OK' \
+            > shogi-v21528/yaneuraou/build-info.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
-          git diff --cached --quiet || git commit -m 'fix: rebuild YaneuraOu WASM verified in Firefox'
+          git diff --cached --quiet || git commit -m 'fix: install Firefox-verified YaneuraOu Suisho5 runtime'
           git push
