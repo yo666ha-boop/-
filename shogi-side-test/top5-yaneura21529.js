@@ -1,4 +1,4 @@
-/* AI将棋先生 v2.15.29 tune3: 上位5人を初手から共通やねうら王＋水匠5で思考＋棋風/戦法バイアス */
+/* AI将棋先生 v2.15.29 tune3: 上位5人を初手から共通やねうら王＋水匠5で思考＋棋風/戦法バイアス + 対局セーブ */
 (function installTop5Yaneura21529(){
   if(window.AI_SHOGI_YANEURAOU_TOP5)return;
   const TOP5=[0,1,2,3,4];
@@ -97,9 +97,57 @@
   const chars=document.getElementById('chars');
   if(chars&&!chars.dataset.top5YaneuraWarm){chars.dataset.top5YaneuraWarm='1';chars.addEventListener('click',ev=>{const card=ev.target.closest?.('.ch');if(!card)return;const cards=[...chars.querySelectorAll('.ch')],i=cards.indexOf(card);if(TOP5_SET.has(i))setTimeout(()=>shared.init().catch(()=>{}),80)},true)}
 
+  const GAME_SAVE_KEY='aiShogiSenseiGameV21530';
+  const plainCopy=x=>x==null?x:JSON.parse(JSON.stringify(x));
+  function validSavedState(x){return !!x&&Array.isArray(x.b)&&x.b.length===81&&x.h&&Array.isArray(x.log)&&Number.isFinite(x.t)}
+  function makeGameSave(){
+    return{version:'2.15.30',savedAt:Date.now(),ci:Number(ci)||0,st:clone(st),hist:Array.isArray(hist)?hist.map(x=>clone(x)):[],repHistory:plainCopy(repHistory||[]),gameCounted:!!gameCounted,lastHumanBefore:lastHumanBefore?clone(lastHumanBefore):null,lastHumanMove:lastHumanMove?{...lastHumanMove}:null,reviewTrail:Array.isArray(reviewTrail)?reviewTrail.map(x=>({ply:x.ply,before:clone(x.before),move:{...x.move},moveText:x.moveText})):[]};
+  }
+  function savedGame(){try{const x=JSON.parse(localStorage.getItem(GAME_SAVE_KEY)||'null');return x&&validSavedState(x.st)?x:null}catch(e){return null}}
+  function updateSaveButtons(){
+    const b=document.getElementById('resumeGameBtn21530'),x=savedGame();
+    if(!b)return;
+    b.disabled=!x;
+    if(x){const moves=x.st?.log?.length||0,name=C[Math.max(0,Math.min(C.length-1,Number(x.ci)||0))]?.[0]||'';b.textContent='続きから'+(moves?'（'+moves+'手）':'')+(name?'':'')}
+    else b.textContent='続きから';
+  }
+  function saveGame21530(silent=false){
+    try{localStorage.setItem(GAME_SAVE_KEY,JSON.stringify(makeGameSave()));updateSaveButtons();if(!silent)setStatus('この対局をセーブしました。いつでも「続きから」で戻れます。');return true}catch(e){if(!silent)setStatus('セーブできませんでした。');return false}
+  }
+  function loadGame21530(){
+    const x=savedGame();if(!x){setStatus('セーブされた対局はありません。');updateSaveButtons();return false}
+    try{
+      ci=Math.max(0,Math.min(C.length-1,Number(x.ci)||0));st=clone(x.st);hist=Array.isArray(x.hist)?x.hist.filter(validSavedState).map(y=>clone(y)):[];
+      repHistory=Array.isArray(x.repHistory)&&x.repHistory.length?plainCopy(x.repHistory):[repEntry(st)];gameCounted=!!x.gameCounted;
+      lastHumanBefore=validSavedState(x.lastHumanBefore)?clone(x.lastHumanBefore):null;lastHumanMove=x.lastHumanMove?{...x.lastHumanMove}:null;
+      reviewTrail=Array.isArray(x.reviewTrail)?x.reviewTrail.filter(y=>validSavedState(y.before)&&y.move).map(y=>({ply:y.ply,before:clone(y.before),move:{...y.move},moveText:y.moveText||jpMove(y.move,y.before)})):[];
+      reviewResults=[];reviewRunning=false;analysisRunning=false;thinking=false;sel=null;drop=null;lastSpeech='';speechMood='auto';clearResult();resetTeacher();
+      let sum=document.getElementById('reviewSummary'),pf=document.getElementById('reviewProgressFill'),rs=document.getElementById('reviewStatus');if(sum)sum.innerHTML='';if(pf)pf.style.width='0%';if(rs)rs.textContent=reviewTrail.length?'セーブした棋譜を復元しました。ここまで '+reviewTrail.length+'手、振り返れます。':'あなたが1手以上指すと振り返れます。';
+      render();renderStats();renderOpponent(true);updateSaveButtons();
+      if(gameCounted)setStatus('セーブした終局局面を読み込みました。');
+      else if(st.t===G){setStatus('セーブした対局を読み込みました。相手の手番を再開します。');setTimeout(()=>{if(st.t===G&&!thinking&&!gameCounted)aiMove()},180)}
+      else setStatus('セーブした対局を読み込みました。あなたの手番です。');
+      return true;
+    }catch(e){console.error('game save load failed',e);setStatus('セーブデータを読み込めませんでした。');return false}
+  }
+  function installSaveUi(){
+    if(document.getElementById('gameSaveRow21530'))return;
+    const controls=document.querySelector('.controls');if(!controls)return;
+    const row=document.createElement('div');row.id='gameSaveRow21530';row.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 0';
+    row.innerHTML='<button class="btn" id="saveGameBtn21530">セーブ</button><button class="btn" id="resumeGameBtn21530">続きから</button>';
+    controls.insertAdjacentElement('afterend',row);
+    document.getElementById('saveGameBtn21530').onclick=()=>saveGame21530(false);document.getElementById('resumeGameBtn21530').onclick=()=>loadGame21530();updateSaveButtons();
+  }
+  const pushBeforeSave21530=push;push=function(m,mark){pushBeforeSave21530(m,mark);setTimeout(()=>saveGame21530(true),0)};
+  const undoBeforeSave21530=undo;undo=function(){undoBeforeSave21530();setTimeout(()=>saveGame21530(true),0)};
+  window.addEventListener('pagehide',()=>{try{if(st&&st.log&&st.log.length)saveGame21530(true)}catch(e){}});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){try{if(st&&st.log&&st.log.length)saveGame21530(true)}catch(e){}}});
+  installSaveUi();
+
+  window.AI_SHOGI_GAME_SAVE={version:'2.15.30',key:GAME_SAVE_KEY,save:()=>saveGame21530(false),saveSilent:()=>saveGame21530(true),load:()=>loadGame21530(),hasSave:()=>!!savedGame(),snapshot:()=>makeGameSave()};
   window.AI_SHOGI_YANEURAOU_TOP5={
     version:'2.15.29-tune3',openingMode:'engine-from-move-1',legacyOpeningBypass:false,indices:TOP5.slice(),names:NAMES.slice(),ratings:RATINGS.slice(),profiles:JSON.parse(JSON.stringify(PROFILES)),sharedWorker:true,engine:'YaneuraOu HalfKP + Suisho5',
     enabled:i=>TOP5_SET.has(Number(i)),profileMs:(s,i)=>profileMs(s,Number(i)),status:()=>shared.status(),init:()=>shared.init(),bestMove:(s,i=0)=>profiledBest(s,Number(i)),selectProfileMove:(s,res,i)=>selectProfileMove(s,res,Number(i)),openingTokens:(s,i)=>[...openingTokens(s,Number(i))]
   };
-  try{render();renderStats();renderOpponent(false)}catch(e){}
+  try{render();renderStats();renderOpponent(false);updateSaveButtons()}catch(e){}
 })();
