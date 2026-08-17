@@ -1,1 +1,1 @@
-v2.15.28n Micchan static JPEG + Future Mitsuki portrait verification
+v2.15.28n Micchan verified image bytes test 2
