@@ -25,10 +25,17 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21528g';
+    const RELOAD_KEY='ai-shogi-coi-reload-21528h';
+    const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
     const fixBadge=()=>{const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
+    const goRealHeaders=()=>{
+      if(location.hostname!=='yo666ha-boop.github.io')return false;
+      const path=location.pathname.replace(/^\/-\//,'/');
+      location.replace(VERCEL+path+location.search+location.hash);
+      return true;
+    };
     let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
     if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
     hide();
@@ -36,7 +43,7 @@ if(typeof window==='undefined'){
     const reloadOnce=()=>{
       if(reloading||window.crossOriginIsolated)return;
       let count=0;try{count=Number(sessionStorage.getItem(RELOAD_KEY)||0)}catch(e){}
-      if(count>=2){show();return;}
+      if(count>=2){if(!goRealHeaders())show();return;}
       reloading=true;try{sessionStorage.setItem(RELOAD_KEY,String(count+1))}catch(e){}
       location.reload();
     };
@@ -55,7 +62,7 @@ if(typeof window==='undefined'){
         });
       }
       reloadOnce();
-    }).catch(e=>{console.error('coi service worker update',e);show()});
-    setTimeout(show,7000);
+    }).catch(e=>{console.error('coi service worker update',e);if(!goRealHeaders())show()});
+    setTimeout(()=>{if(!window.crossOriginIsolated&&!goRealHeaders())show()},7000);
   })();
 }
