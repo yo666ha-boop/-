@@ -29,18 +29,21 @@ const vm=require('vm');
   });
   console.log('UI',JSON.stringify(ui));
 
-  const workerProbe=await page.evaluate(async()=>{
-    const url=new URL('../shogi-side-test/future-yaneura-worker21528.js?probe='+Date.now(),location.href).href;
-    return await new Promise(resolve=>{
-      const out={url,messages:[],error:null};let w;
-      try{w=new Worker(url)}catch(e){out.error='construct '+String(e&&e.message||e);resolve(out);return}
-      const finish=()=>{try{w.terminate()}catch(e){};resolve(out)};
-      w.onmessage=e=>{out.messages.push(e.data);if(out.messages.length>=3)finish()};
-      w.onerror=e=>{out.error={message:e.message,filename:e.filename,lineno:e.lineno,colno:e.colno};finish()};
-      setTimeout(finish,3000);
-    });
+  const probes=await page.evaluate(async()=>{
+    async function test(path,limit=3){
+      const url=new URL(path+(path.includes('?')?'&':'?')+'probe='+Date.now(),location.href).href;
+      return await new Promise(resolve=>{
+        const out={url,messages:[],error:null};let w,done=false;
+        const finish=()=>{if(done)return;done=true;try{w?.terminate()}catch(e){};resolve(out)};
+        try{w=new Worker(url)}catch(e){out.error='construct '+String(e&&e.message||e);finish();return}
+        w.onmessage=e=>{out.messages.push(e.data);if(out.messages.length>=limit)finish()};
+        w.onerror=e=>{out.error={message:e.message||'',filename:e.filename||'',lineno:e.lineno||0,colno:e.colno||0,type:e.type||''};finish()};
+        setTimeout(finish,3000);
+      });
+    }
+    return {minimal:await test('../shogi-side-test/worker-probe21528.js',1),future:await test('../shogi-side-test/future-yaneura-worker21528.js',3)};
   });
-  console.log('WORKER_PROBE',JSON.stringify(workerProbe));
+  console.log('WORKER_PROBES',JSON.stringify(probes));
 
   let init=null,initError='',engineState=null;
   try{init=await page.evaluate(async()=>{const api=window.AI_SHOGI_YANEURAOU_FUTURE;if(!api)throw new Error('future API missing');await api.init();return api.status();});}
@@ -67,7 +70,8 @@ const vm=require('vm');
   if(ui.bad.length)failures.push('broken images: '+ui.bad.join(','));
   if(!ui.coi)failures.push('crossOriginIsolated=false');
   if(/v2\.15\.(14|17|20)/.test(ui.badge))failures.push('legacy badge leaked: '+ui.badge);
-  if(workerProbe.error)failures.push('worker probe error: '+JSON.stringify(workerProbe.error));
+  if(probes.minimal.error||!probes.minimal.messages.length)failures.push('minimal worker failed: '+JSON.stringify(probes.minimal));
+  if(probes.future.error)failures.push('future worker probe error: '+JSON.stringify(probes.future));
   if(!init||!init.ready)failures.push('engine init failed: '+(initError||JSON.stringify(init))+' state='+JSON.stringify(engineState));
   if(init&&init.ready&&(!best||(!best.move&&!best.resign&&!best.declareWin)))failures.push('bestmove failed: '+(bestError||JSON.stringify(best)));
   await browser.close();
