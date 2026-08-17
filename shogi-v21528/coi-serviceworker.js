@@ -20,6 +20,32 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
+    let done=false;
+    let obs=null;
+    const restore=(src)=>{
+      const cards=[...document.querySelectorAll('#chars .ch')];
+      const img=cards[1]?.querySelector('img');
+      if(img&&src&&img.src!==src){img.onerror=null;img.src=src;}
+    };
+    const capture=()=>{
+      if(done)return;
+      const cards=[...document.querySelectorAll('#chars .ch')];
+      if(cards.length<25)return;
+      const img=cards[1]?.querySelector('img');
+      const src=img?.src||'';
+      if(!src||src.includes('micchan2154.svg'))return;
+      done=true;window.__MICCHAN_ORIGINAL_21528=src;
+      try{obs?.disconnect()}catch(e){}
+      setTimeout(()=>restore(src),350);
+      setTimeout(()=>restore(src),900);
+      setTimeout(()=>restore(src),1800);
+      setTimeout(()=>restore(src),3200);
+    };
+    obs=new MutationObserver(capture);
+    obs.observe(document.documentElement,{subtree:true,childList:true});
+    capture();
+    setTimeout(()=>{try{obs?.disconnect()}catch(e){}},5000);
+
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=window.document.currentScript.src;
