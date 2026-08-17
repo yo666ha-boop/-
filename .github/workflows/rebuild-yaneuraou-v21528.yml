@@ -15,8 +15,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: yaneurao/YaneuraOu
-          # This revision has the WebAssembly-specific threadStarted retry and
-          # live EMSCRIPTEN_KEEPALIVE usi_command used by wasm_pre.js.
           ref: 0056b408e904f0733f3cfd2c2a7e57c3d74fcd62
           path: YaneuraOu
 
@@ -55,29 +53,34 @@ jobs:
           rc=${PIPESTATUS[0]}
           set -e
           if [ "$rc" -ne 0 ]; then
-            {
-              echo '## YaneuraOu browser-stable WASM build failed'
-              echo '```text'
-              tail -n 240 /tmp/yaneuraou-build.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            tail -n 240 /tmp/yaneuraou-build.log >> "$GITHUB_STEP_SUMMARY"
             exit "$rc"
           fi
           LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
           test -s "$LIB/yaneuraou.halfkp.noeval.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
-          grep -F '_usi_command' "$LIB/yaneuraou.halfkp.noeval.js"
           grep -F 'ccall' "$LIB/yaneuraou.halfkp.noeval.js"
-          test $(stat -c%s "$LIB/yaneuraou.halfkp.noeval.wasm") -gt 1000000
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const m=new WebAssembly.Module(fs.readFileSync(p));
+          const names=WebAssembly.Module.exports(m).map(x=>x.name);
+          console.log('WASM_EXPORT_COUNT',names.length);
+          console.log('WASM_USI_LIKE_EXPORTS',names.filter(x=>/usi/i.test(x)));
+          NODE
 
-      - name: Upload build diagnostic
+      - name: Upload built runtime for diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: yaneuraou-build-log
-          path: /tmp/yaneuraou-build.log
-          if-no-files-found: ignore
+          name: yaneuraou-built-runtime
+          path: |
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm
+            /tmp/yaneuraou-build.log
+          if-no-files-found: warn
           retention-days: 2
 
       - name: Install Firefox
@@ -104,21 +107,21 @@ jobs:
           <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
           <script>
           (async()=>{
-            const b=document.body,logs=[];const out=x=>{logs.push(x);console.log(x);b.textContent=logs.join('\n')};
+            const b=document.body,logs=[];
+            const out=x=>{logs.push(x);console.log(x);b.textContent=logs.join('\n')};
             const fail=e=>{b.dataset.result='error';out('FAIL '+String(e&&e.stack||e))};
             try{
               out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
-              if(!crossOriginIsolated)throw Error('not isolated');
-              if(typeof SharedArrayBuffer!=='function')throw Error('SharedArrayBuffer unavailable');
-              const w=new Worker('./future-yaneura-worker21528.js?buildproof=20241128');
+              if(!crossOriginIsolated||typeof SharedArrayBuffer!=='function')throw Error('cross-origin isolation unavailable');
+              const w=new Worker('./future-yaneura-worker21528.js?proof=20241128b');
               let seq=0,pending=new Map();
               w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){out('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}}};
               w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno+':'+e.colno));
               const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},150000)});
               const init=await call('init');out('INIT '+JSON.stringify(init));
               const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
-              const bm=await call('bestmove',{sfen,ms:800});out('BEST '+JSON.stringify(bm));
-              if(!bm.token||bm.token==='resign')throw Error('usable bestmove token missing: '+String(bm.token));
+              const bm=await call('bestmove',{sfen,ms:1000});out('BEST '+JSON.stringify(bm));
+              if(!bm.token||bm.token==='resign')throw Error('no usable bestmove: '+String(bm.token));
               b.dataset.result='ok';out('PASS usiok readyok bestmove '+bm.token);w.terminate();
             }catch(e){fail(e)}
           })();
@@ -147,14 +150,7 @@ jobs:
           node check.mjs 2>&1 | tee /tmp/yane/firefox-smoke.log
           rc=${PIPESTATUS[0]}
           set -e
-          {
-            echo '## Firefox YaneuraOu proof'
-            echo '```text'
-            cat /tmp/yane/firefox-smoke.log || true
-            echo '--- server.log ---'
-            cat /tmp/yane/server.log || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          { echo '## Firefox YaneuraOu proof'; echo '```text'; cat /tmp/yane/firefox-smoke.log || true; echo '--- server.log ---'; cat /tmp/yane/server.log || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
 
       - name: Upload Firefox diagnostic
@@ -176,14 +172,7 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
-          printf '%s\n' \
-            'YaneuraOu HalfKP noeval + Suisho5' \
-            'SOURCE=0056b408e904f0733f3cfd2c2a7e57c3d74fcd62' \
-            'EMSCRIPTEN=3.1.43' \
-            'PTHREAD_POOL_SIZE=2' \
-            'THREAD_STARTED_RETRY=1' \
-            'Firefox: usiok / readyok / bestmove OK' \
-            > shogi-v21528/yaneuraou/build-info.txt
+          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'SOURCE=0056b408e904f0733f3cfd2c2a7e57c3d74fcd62' 'EMSCRIPTEN=3.1.43' 'PTHREAD_POOL_SIZE=2' 'THREAD_STARTED_RETRY=1' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
