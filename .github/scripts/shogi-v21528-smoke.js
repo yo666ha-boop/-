@@ -28,6 +28,22 @@ const vm=require('vm');
   });
   console.log('UI',JSON.stringify(ui));
 
+  const opponentChecks={};
+  for(const target of ['しんじ','ぺんぺん']){
+    await page.evaluate(name=>{
+      const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===name);
+      if(!card)throw new Error('card missing '+name);
+      card.click();
+    },target);
+    await page.waitForTimeout(700);
+    opponentChecks[target]=await page.evaluate(()=>{
+      const img=document.querySelector('#oppPortrait img');
+      const fimg=document.querySelector('#foppPortrait img');
+      return {ci:typeof ci==='number'?ci:null,name:(document.querySelector('#oppName')?.textContent||'').trim(),rank:(document.querySelector('#oppRank')?.textContent||'').trim(),img:{alt:img?.alt||'',src:img?.src||'',complete:!!img?.complete,w:img?.naturalWidth||0,h:img?.naturalHeight||0},focus:{alt:fimg?.alt||'',src:fimg?.src||'',complete:!!fimg?.complete,w:fimg?.naturalWidth||0,h:fimg?.naturalHeight||0}};
+    });
+  }
+  console.log('OPPONENT_CHECKS',JSON.stringify(opponentChecks));
+
   const probes=await page.evaluate(async()=>{
     async function testUrl(url,limit=1){
       return await new Promise(resolve=>{
@@ -72,6 +88,12 @@ const vm=require('vm');
   if(ui.future!=='未来からやってきたみつき')failures.push('future character missing: '+ui.future);
   if(ui.micchan!=='みっちゃん')failures.push('micchan slot mismatch: '+ui.micchan);
   if(ui.bad.length)failures.push('broken images: '+ui.bad.join(','));
+  for(const target of ['しんじ','ぺんぺん']){
+    const c=opponentChecks[target];
+    if(!c||c.name!==target)failures.push(target+' opponent name mismatch: '+JSON.stringify(c));
+    if(!c?.img?.complete||c.img.w<1)failures.push(target+' opponent image broken: '+JSON.stringify(c));
+    if(c?.img?.alt!==target)failures.push(target+' opponent alt mismatch: '+JSON.stringify(c));
+  }
   if(!ui.coi)failures.push('crossOriginIsolated=false');
   if(/v2\.15\.(14|17|20)/.test(ui.badge))failures.push('legacy badge leaked: '+ui.badge);
   for(const k of ['blob','local'])if(probes[k].error||!probes[k].messages.length)failures.push(k+' worker failed: '+JSON.stringify(probes[k]));
@@ -80,5 +102,5 @@ const vm=require('vm');
   if(init&&init.ready&&(!best||(!best.move&&!best.resign&&!best.declareWin)))failures.push('bestmove failed: '+(bestError||JSON.stringify(best)));
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS v2.15.28 Firefox: 26 chars, images, COI runtime, readyok, bestmove');
+  console.log('PASS v2.15.28 Firefox: 26 chars, images, Shinji/Penpen opponent portraits, COI runtime, readyok, bestmove');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
