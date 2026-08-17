@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-08-17T23:23:19.643Z",
+  "pass": true,
+  "withTokens": 5,
+  "preferred": 0,
+  "rows": [
+    {
+      "who": "みつき",
+      "rating": 3000,
+      "openingTokens": [
+        "8c8d",
+        "4a3b",
+        "7a6b"
+      ],
+      "move": "2b8h+",
+      "openingBias": false,
+      "selectedRank": 1,
+      "cpLoss": 0,
+      "depth": 13,
+      "targetMs": 5200
+    },
+    {
+      "who": "みっちゃん",
+      "rating": 2850,
+      "openingTokens": [
+        "7a6b",
+        "8c8d"
+      ],
+      "move": "2b8h+",
+      "openingBias": false,
+      "selectedRank": 1,
+      "cpLoss": 0,
+      "depth": 10,
+      "targetMs": 4200
+    },
+    {
+      "who": "あき王",
+      "rating": 2700,
+      "openingTokens": [
+        "2b8h+",
+        "8c8d"
+      ],
+      "move": "2b8h+",
+      "openingBias": false,
+      "selectedRank": 1,
+      "cpLoss": 0,
+      "depth": 10,
+      "targetMs": 3400
+    },
+    {
+      "who": "おにまま",
+      "rating": 2600,
+      "openingTokens": [
+        "4a3b",
+        "6a5b"
+      ],
+      "move": "2b8h+",
+      "openingBias": false,
+      "selectedRank": 1,
+      "cpLoss": 0,
+      "depth": 10,
+      "targetMs": 2700
+    },
+    {
+      "who": "まま",
+      "rating": 2500,
+      "openingTokens": [
+        "4a3b"
+      ],
+      "move": "2b8h+",
+      "openingBias": false,
+      "selectedRank": 1,
+      "cpLoss": 0,
+      "depth": 10,
+      "targetMs": 2200
+    }
+  ],
+  "version": "2.15.29-tune3"
+}
