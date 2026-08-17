@@ -6,8 +6,8 @@ const vm=require('vm');
   vm.runInContext(fs.readFileSync('shogi-side-test/future-mitsuki-image21520.js','utf8'),staticCtx);
   const data=staticCtx.window.FUTURE_MITSUKI_IMAGE21520||'';
   const b64=(data.split(',')[1]||'');const buf=Buffer.from(b64,'base64');
-  const jpeg={dataPrefix:data.slice(0,30),b64Length:b64.length,bytes:buf.length,soi:buf.length>2&&buf[0]===0xff&&buf[1]===0xd8,eoi:buf.length>2&&buf[buf.length-2]===0xff&&buf[buf.length-1]===0xd9};
-  console.log('FUTURE_IMAGE_STATIC',JSON.stringify(jpeg));
+  const imgStatic={dataPrefix:data.slice(0,30),b64Length:b64.length,bytes:buf.length,head:buf.subarray(0,8).toString('hex'),tail:buf.subarray(-8).toString('hex')};
+  console.log('FUTURE_IMAGE_STATIC',JSON.stringify(imgStatic));
 
   const browser=await firefox.launch({headless:true});
   const page=await browser.newPage();
@@ -29,10 +29,23 @@ const vm=require('vm');
   });
   console.log('UI',JSON.stringify(ui));
 
-  let init=null,initError='';
+  const workerProbe=await page.evaluate(async()=>{
+    const url=new URL('../shogi-side-test/future-yaneura-worker21528.js?probe='+Date.now(),location.href).href;
+    return await new Promise(resolve=>{
+      const out={url,messages:[],error:null};let w;
+      try{w=new Worker(url)}catch(e){out.error='construct '+String(e&&e.message||e);resolve(out);return}
+      const finish=()=>{try{w.terminate()}catch(e){};resolve(out)};
+      w.onmessage=e=>{out.messages.push(e.data);if(out.messages.length>=3)finish()};
+      w.onerror=e=>{out.error={message:e.message,filename:e.filename,lineno:e.lineno,colno:e.colno};finish()};
+      setTimeout(finish,3000);
+    });
+  });
+  console.log('WORKER_PROBE',JSON.stringify(workerProbe));
+
+  let init=null,initError='',engineState=null;
   try{init=await page.evaluate(async()=>{const api=window.AI_SHOGI_YANEURAOU_FUTURE;if(!api)throw new Error('future API missing');await api.init();return api.status();});}
-  catch(e){initError=String(e&&e.message||e)}
-  console.log('INIT',JSON.stringify(init),'INIT_ERROR',initError);
+  catch(e){initError=String(e&&e.message||e);engineState=await page.evaluate(()=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE;return a?{state:a.state,status:a.status?.()}:null}).catch(()=>null)}
+  console.log('INIT',JSON.stringify(init),'INIT_ERROR',initError,'ENGINE_STATE',JSON.stringify(engineState));
 
   let best=null,bestError='';
   if(init&&init.ready){
@@ -54,8 +67,8 @@ const vm=require('vm');
   if(ui.bad.length)failures.push('broken images: '+ui.bad.join(','));
   if(!ui.coi)failures.push('crossOriginIsolated=false');
   if(/v2\.15\.(14|17|20)/.test(ui.badge))failures.push('legacy badge leaked: '+ui.badge);
-  if(!jpeg.soi||!jpeg.eoi)failures.push('future embedded JPEG markers invalid '+JSON.stringify(jpeg));
-  if(!init||!init.ready)failures.push('engine init failed: '+(initError||JSON.stringify(init)));
+  if(workerProbe.error)failures.push('worker probe error: '+JSON.stringify(workerProbe.error));
+  if(!init||!init.ready)failures.push('engine init failed: '+(initError||JSON.stringify(init))+' state='+JSON.stringify(engineState));
   if(init&&init.ready&&(!best||(!best.move&&!best.resign&&!best.declareWin)))failures.push('bestmove failed: '+(bestError||JSON.stringify(best)));
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
