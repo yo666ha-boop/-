@@ -1,0 +1,32 @@
+name: Fix Future Mitsuki worker scope
+on:
+  push:
+    paths:
+      - '.github/fix-future-worker-scope.trigger'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point Future Mitsuki at COI-scoped worker
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-side-test/future21520.js')
+          s=p.read_text(encoding='utf-8')
+          old="const WORKER_URL=SIDE_BASE+'future-yaneura-worker21528.js?v=21528w2';"
+          new="const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w4',location.href).href;"
+          if old not in s:
+              raise SystemExit('old WORKER_URL not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+          node --check shogi-side-test/future21520.js
+      - name: Commit worker-scope fix
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add shogi-side-test/future21520.js
+          git commit -m 'Use COI-scoped YaneuraOu worker for Future Mitsuki'
+          git push
