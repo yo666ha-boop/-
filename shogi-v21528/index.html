@@ -7,10 +7,9 @@
 <title>AI将棋先生 v2.15.28</title>
 <script src="./coi-serviceworker.js?v=21528g"></script>
 <script src="../shogi-side-test/future-mitsuki-image21520.js?v=21528g"></script>
-<script src="../shogi/micchan-image21528.js?v=21528k"></script>
-<link rel="stylesheet" href="../shogi/strong213.css?v=21528k">
+<link rel="stylesheet" href="../shogi/strong213.css?v=21528m">
 <style>
-/* v2.15.28k portrait repair: Future Mitsuki sizing is controlled by strong213.css */
+/* v2.15.28m portrait repair: Future Mitsuki sizing is controlled by strong213.css */
 #chars [data-future-mitsuki="1"] .futureEngineState{display:none!important}
 .oppPortrait img,.focusPortrait img,.chPic{display:block;width:100%;height:100%;object-fit:cover}
 #boot{position:fixed;inset:0;z-index:99999;background:#06100df2;color:#f0daa0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-weight:900}
@@ -99,7 +98,7 @@
   if(boot)boot.remove();
   stage('①成功: 既存'+Math.min(baseCount,25)+'人表示 / ②26人目を確認中…',false);
   const NAME_IMG={
-   'みっちゃん':window.MICCHAN_IMAGE21528||'../shogi/micchan2154.svg?v=21528k',
+   'みっちゃん':'../shogi/micchan21528.jpg?v=21528m',
    'しんじ':'../shogi-side-test/eva2158/shinji.webp?v=21528g','あやなみ':'../shogi-side-test/eva2158/ayanami.webp?v=21528g','あすか':'../shogi-side-test/eva2158/asuka.webp?v=21528g','まり':'../shogi-side-test/eva2158/mari.webp?v=21528g','ぺんぺん':'../shogi-side-test/eva2158/penpen.webp?v=21528g','げんどー':'../shogi-side-test/eva2158/gendo.webp?v=21528g','みさとさん':'../shogi-side-test/eva2158/misato.webp?v=21528g','カヲル':'../shogi-side-test/eva2158/kaworu.webp?v=21528g',
    'ケンシロウ':'../shogi-side-test/hokuto21511/kenshiro.webp?v=21528g','ジャギ':'../shogi-side-test/hokuto21511/jagi.webp?v=21528g','シン':'../shogi-side-test/hokuto21511/shin.webp?v=21528g','サウザー':'../shogi-side-test/hokuto21511/souther.webp?v=21528g','ラオウ':'../shogi-side-test/hokuto21511/raoh.webp?v=21528g'
   };
@@ -111,7 +110,7 @@
     else if(NAME_IMG[name]){img.onerror=null;const target=new URL(NAME_IMG[name],location.href).href;if(img.src!==target)img.src=target}
    });
    const op=(document.querySelector('#oppName')?.textContent||'').trim();
-   if(op.startsWith('みっちゃん')&&window.MICCHAN_IMAGE21528)document.querySelectorAll('#oppPortrait img,#foppPortrait img').forEach(i=>{i.onerror=null;i.src=window.MICCHAN_IMAGE21528});
+   if(op.startsWith('みっちゃん'))document.querySelectorAll('#oppPortrait img,#foppPortrait img').forEach(i=>{i.onerror=null;i.src=new URL('../shogi/micchan21528.jpg?v=21528m',location.href).href});
    if(op.startsWith('未来からやってきたみつき')&&window.FUTURE_MITSUKI_IMAGE21520)document.querySelectorAll('#oppPortrait img,#foppPortrait img').forEach(i=>{i.onerror=null;i.src=window.FUTURE_MITSUKI_IMAGE21520});
   }
   const findFuture=()=>[...document.querySelectorAll('#chars .ch')].find(c=>cardName(c)==='未来からやってきたみつき')||document.querySelector('[data-future-mitsuki="1"]');
@@ -120,7 +119,7 @@
   const ch=document.querySelectorAll('#chars .ch').length;
   const future=findFuture();
   const names=[...document.querySelectorAll('#chars .ch')].map(cardName);
-  if(ch!==26||!future){showDiag('①成功 / ②失敗: 現在'+ch+'人\n末尾: '+names.slice(-4).join(' / ')+(runtimeErrors.length?'\nJS: '+runtimeErrors.at(-1):''));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:2,characters:ch,names,runtimeErrors,build:'2.15.28k'};return}
+  if(ch!==26||!future){showDiag('①成功 / ②失敗: 現在'+ch+'人\n末尾: '+names.slice(-4).join(' / ')+(runtimeErrors.length?'\nJS: '+runtimeErrors.at(-1):''));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:2,characters:ch,names,runtimeErrors,build:'2.15.28m'};return}
   stage('①成功 / ②成功: 26人目「未来からやってきたみつき」追加済み / ③画像確認中…',false);
   await sleep(1800);fixImages();
   const imageList=[...document.querySelectorAll('#chars .ch img')];
@@ -131,8 +130,8 @@
   if(brokenNames.length)showDiag('①成功 / ②成功 / ③画像エラー '+brokenNames.length+'人: '+brokenNames.join('、'));
   else{showDiag('①成功 / ②成功 / ③成功: 26人画像OK\n次: 未来みつきを選択して④通常対局を確認');setTimeout(()=>{diag.style.display='none'},2500)}
   const keep=()=>fixImages();new MutationObserver(keep).observe(document.body,{childList:true,subtree:true,characterData:true});setInterval(keep,1200);
-  window.AI_SHOGI_WEB_AUDIT={ok:brokenNames.length===0,stage:brokenNames.length?3:4,characters:26,future:true,brokenImages:brokenNames,build:'2.15.28k',runtimeErrors,crossOriginIsolated:!!window.crossOriginIsolated};
- }catch(e){if(boot)boot.remove();showDiag('起動失敗: '+String(e.message||e));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:1,error:String(e.message||e),build:'2.15.28k'};console.error(e)}
+  window.AI_SHOGI_WEB_AUDIT={ok:brokenNames.length===0,stage:brokenNames.length?3:4,characters:26,future:true,brokenImages:brokenNames,build:'2.15.28m',runtimeErrors,crossOriginIsolated:!!window.crossOriginIsolated};
+ }catch(e){if(boot)boot.remove();showDiag('起動失敗: '+String(e.message||e));window.AI_SHOGI_WEB_AUDIT={ok:false,stage:1,error:String(e.message||e),build:'2.15.28m'};console.error(e)}
 })();
 </script>
 </body>
