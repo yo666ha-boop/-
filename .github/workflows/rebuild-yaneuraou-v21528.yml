@@ -1,0 +1,131 @@
+name: Rebuild YaneuraOu v2.15.28
+on:
+  push:
+    paths:
+      - '.github/workflows/rebuild-yaneuraou-v21528.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
+          path: YaneuraOu
+      - name: Patch official browser build for USI export
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -F 'EMSCRIPTEN_KEEPALIVE extern "C" int usi_command' YaneuraOu/source/usi.cpp
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu/source/Makefile')
+          s=p.read_text()
+          if '-s PTHREAD_POOL_SIZE=32' not in s:
+              raise SystemExit('pthread marker missing')
+          s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          marker="LDFLAGS += -s FILESYSTEM=1 -s EXIT_RUNTIME=0 -s \"EXPORTED_RUNTIME_METHODS=['FS','ccall']\""
+          export="LDFLAGS += -s \"EXPORTED_FUNCTIONS=['_main','_usi_command']\""
+          if marker not in s:
+              raise SystemExit('runtime export marker missing')
+          s=s.replace(marker,marker+'\n\t\t'+export,1)
+          p.write_text(s)
+          PY
+          grep -F "EXPORTED_FUNCTIONS=['_main','_usi_command']" YaneuraOu/source/Makefile
+          cp shogi-v21528/yaneuraou/nn.bin YaneuraOu/nn.bin
+          test $(stat -c%s YaneuraOu/nn.bin) -gt 10000000
+      - name: Build HalfKP noeval WASM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          docker pull emscripten/emsdk:3.1.43
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          grep -F '_usi_command' "$LIB/yaneuraou.halfkp.noeval.js"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
+          console.log('USI_EXPORTS',ex.filter(x=>/usi/i.test(x)));
+          if(!ex.includes('usi_command'))throw Error('usi_command missing from wasm exports');
+          NODE
+      - name: Install Firefox
+        shell: bash
+        run: |
+          mkdir -p /tmp/yane && cd /tmp/yane
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps firefox
+      - name: Firefox wrapper smoke - usiok readyok bestmove
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/yane/site
+          mkdir -p "$ROOT/yaneuraou"
+          LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
+          cp "$LIB"/yaneuraou.halfkp.noeval.js "$ROOT/yaneuraou/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js "$ROOT/yaneuraou/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.wasm "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/"
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
+          <script>
+          (async()=>{
+            const b=document.body,logs=[];const out=x=>{logs.push(x);console.log(x);b.textContent=logs.join('\n')};
+            const fail=e=>{b.dataset.result='error';out('FAIL '+String(e&&e.stack||e))};
+            try{
+              out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
+              if(!crossOriginIsolated)throw Error('not isolated');
+              const w=new Worker('./future-yaneura-worker21528.js?buildtest=1');
+              let seq=0,pending=new Map();
+              w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){out('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}}};
+              w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));
+              const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},120000)});
+              const init=await call('init');out('INIT '+JSON.stringify(init));
+              const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
+              const bm=await call('bestmove',{sfen,ms:500});out('BEST '+JSON.stringify(bm));
+              if(!bm.token)throw Error('bestmove token missing');
+              b.dataset.result='ok';out('PASS');w.terminate();
+            }catch(e){fail(e)}
+          })();
+          </script>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          cat > /tmp/yane/check.mjs <<'NODE'
+          import{firefox}from'playwright';
+          const b=await firefox.launch({headless:true}),p=await b.newPage();
+          p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
+          await p.goto('http://127.0.0.1:4173/',{waitUntil:'load'});
+          await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:150000});
+          const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent,coi:crossOriginIsolated}));console.log('FINAL',JSON.stringify(r));
+          await b.close();if(r.state!=='ok')process.exit(1);
+          NODE
+          node "$ROOT/server.cjs" >/tmp/yane/server.log 2>&1 & PID=$!;trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          cd /tmp/yane && node check.mjs
+      - name: Install verified runtime into v2.15.28
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
+          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
+          cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
+          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
+          git diff --cached --quiet || git commit -m 'fix: rebuild YaneuraOu WASM with usi_command export'
+          git push
