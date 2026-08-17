@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const ENGINE_JS_URL=BASE+JS+'?v=21528w6';
+const ENGINE_JS_URL=BASE+JS+'?v=21528w7';
 let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={};
 const stage=text=>self.postMessage({type:'stage',text});
 self.addEventListener('error',ev=>{try{self.postMessage({type:'fatal',text:'Worker内部エラー: '+String(ev.message||'unknown')+' @ '+String(ev.filename||'')+':'+String(ev.lineno||0)+':'+String(ev.colno||0)})}catch(e){}});
@@ -44,18 +44,19 @@ async function init(){
     if(!engine||!engine.FS)throw new Error('YaneuraOu FS not available');
     stage('⑤-2 Worker内 Wasm本体起動完了');
     stage('⑤-3 水匠5 64MB取得中');
-    const r=await fetch(BASE+EVAL+'?v=21528w6',{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
+    const r=await fetch(BASE+EVAL+'?v=21528w7',{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
     const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.byteLength<10000000)throw new Error('nn.bin too small '+bytes.byteLength);
     stage('⑤-3 水匠5 '+Math.round(bytes.byteLength/1024/1024)+'MB 読込完了');
     try{engine.FS.unlink('/'+EVAL)}catch(e){}
     engine.FS.writeFile('/'+EVAL,bytes);
     engine.addMessageListener(onLine);
     stage('⑤-4 usiok待ち');let p=waitLine(x=>x==='usiok',15000,'usiok');engine.postMessage('usi');await p;stage('⑤-4 usiok受信');
-    // Browser startup follows the upstream wasm wrapper: avoid callbacks that resize
-    // threads/hash before isready. Threads=2 is compiled as the engine default.
+    // Browser-stable YaneuraOu WASM accepts these options before isready.
+    // Match the engine thread count to the pre-created Emscripten pthread pool.
     engine.postMessage('setoption name EvalDir value .');
     engine.postMessage('setoption name EvalFile value '+EVAL);
     engine.postMessage('setoption name FV_SCALE value 24');
+    engine.postMessage('setoption name Threads value 2');
     stage('⑤-5 readyok待ち');p=waitLine(x=>x==='readyok',60000,'readyok');engine.postMessage('isready');await p;stage('⑤-5 readyok受信');
     engine.postMessage('setoption name USI_Ponder value false');
     engine.postMessage('usinewgame');ready=true;stage('⑤成功 やねうら王＋水匠5 接続済み');return engine;
