@@ -32,6 +32,14 @@ jobs:
           s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
           makefile.write_text(s)
 
+          engine_cpp=Path('YaneuraOu/source/engine.cpp')
+          es=engine_cpp.read_text()
+          marker='"Threads", Option(4, 1, MaxThreads, [this](const Option&) {'
+          if marker not in es:
+              raise SystemExit('default Threads marker missing')
+          es=es.replace(marker,'"Threads", Option(2, 1, MaxThreads, [this](const Option&) {',1)
+          engine_cpp.write_text(es)
+
           h=Path('YaneuraOu/source/usi.h')
           hs=h.read_text()
           marker='\tvoid loop();\n'
@@ -58,6 +66,7 @@ jobs:
           p.write_text(ys)
           PY
           grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu/source/Makefile
+          grep -F '"Threads", Option(2, 1, MaxThreads' YaneuraOu/source/engine.cpp
           grep -F 'bool wasm_command' YaneuraOu/source/usi.h
           grep -F 'extern "C" EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
           grep -F 'wasm_usi = std::make_unique<USIEngine>()' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
@@ -145,7 +154,7 @@ jobs:
           HTML
           cat > "$ROOT/server.cjs" <<'NODE'
           const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
-          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
           NODE
           cat > /tmp/yane/check.mjs <<'NODE'
           import{firefox}from'playwright';
@@ -193,7 +202,7 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
           cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
-          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'LIVE_WASM_USI_BRIDGE=1' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
+          printf '%s\n' 'YaneuraOu HalfKP noeval + Suisho5' 'PTHREAD_POOL_SIZE=2' 'DEFAULT_THREADS=2' 'LIVE_WASM_USI_BRIDGE=1' 'EXPORTED_FUNCTIONS=_main,_usi_command' 'Firefox: usiok / readyok / bestmove OK' > shogi-v21528/yaneuraou/build-info.txt
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
