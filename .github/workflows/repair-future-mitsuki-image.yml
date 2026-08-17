@@ -11,102 +11,92 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install image recovery tools
-        shell: bash
-        run: |
-          set -euxo pipefail
-          python3 -m pip install --user pillow
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libjpeg-turbo-progs imagemagick ffmpeg
+      - name: Install Pillow
+        run: python3 -m pip install --user pillow
 
-      - name: Decode and diagnose portrait JPEG
+      - name: Restore missing SOF0 marker and re-encode portrait
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
-          import re,base64
+          import re,base64,io
           from pathlib import Path
+          from PIL import Image
+
           p=Path('shogi-side-test/future-mitsuki-image21520.js')
           s=p.read_text(encoding='utf-8')
           m=re.search(r'window\.FUTURE_MITSUKI_IMAGE21520="data:image/[^;]+;base64,([A-Za-z0-9+/=]+)";',s)
           if not m: raise SystemExit('data URI not found')
           raw=base64.b64decode(m.group(1),validate=True)
-          Path('/tmp/future-source.jpg').write_bytes(raw)
           print('SOURCE_BYTES',len(raw),'HEAD',raw[:16].hex(),'TAIL',raw[-16:].hex())
 
-          # Parse JPEG marker chain up to entropy data. This tells us whether the
-          # corruption is in the header/table area or only in the scan payload.
-          i=0
-          if raw[:2] != b'\xff\xd8': raise SystemExit('missing SOI')
-          print('MARKER SOI @0')
-          i=2
-          names={0xE0:'APP0',0xE1:'APP1',0xDB:'DQT',0xC0:'SOF0',0xC1:'SOF1',0xC2:'SOF2',0xC4:'DHT',0xDA:'SOS',0xDD:'DRI',0xD9:'EOI',0xFE:'COM'}
-          while i < len(raw):
-              if raw[i] != 0xff:
-                  print('NONMARKER',i,hex(raw[i])); break
-              while i < len(raw) and raw[i] == 0xff: i += 1
-              if i >= len(raw): break
-              marker=raw[i]; i += 1
-              if marker == 0xD9:
-                  print('MARKER EOI @',i-2); break
-              if 0xD0 <= marker <= 0xD7 or marker == 0x01:
-                  print('MARKER',hex(marker),'@',i-2); continue
-              if i+2 > len(raw):
-                  print('TRUNCATED LENGTH',hex(marker)); break
-              ln=int.from_bytes(raw[i:i+2],'big')
-              print('MARKER',names.get(marker,hex(marker)),'@',i-2,'len',ln)
-              if ln < 2 or i+ln > len(raw):
-                  print('BAD LENGTH marker',hex(marker),'len',ln,'remaining',len(raw)-i); break
-              if marker in (0xC0,0xC1,0xC2) and ln >= 8:
-                  h=int.from_bytes(raw[i+3:i+5],'big'); w=int.from_bytes(raw[i+5:i+7],'big')
-                  print('SOF DIMENSIONS',w,h,'components',raw[i+7])
-              if marker == 0xDA:
-                  print('SOS payload starts',i+ln,'remaining',len(raw)-(i+ln)); break
-              i += ln
-          PY
-          file /tmp/future-source.jpg || true
-          identify -verbose /tmp/future-source.jpg > /tmp/identify.log 2>&1 || true
-          djpeg -verbose -outfile /tmp/djpeg.ppm /tmp/future-source.jpg > /tmp/djpeg.log 2>&1 || true
-          ffmpeg -y -v warning -err_detect ignore_err -i /tmp/future-source.jpg -frames:v 1 /tmp/ffmpeg.png > /tmp/ffmpeg.log 2>&1 || true
-          convert /tmp/future-source.jpg /tmp/convert.png > /tmp/convert.log 2>&1 || true
-          echo '--- identify ---'; tail -n 80 /tmp/identify.log || true
-          echo '--- djpeg ---'; tail -n 120 /tmp/djpeg.log || true
-          echo '--- ffmpeg ---'; tail -n 120 /tmp/ffmpeg.log || true
-          echo '--- convert ---'; tail -n 80 /tmp/convert.log || true
-          ls -lh /tmp/future-source.jpg /tmp/djpeg.ppm /tmp/ffmpeg.png /tmp/convert.png 2>/dev/null || true
+          # Diagnosis from run #2:
+          # DQT #2 ends at offset 158. The next 16 bytes are exactly a baseline
+          # SOF0 payload beginning with length byte 0x11, but the three bytes
+          # FF C0 00 are missing. The following marker is DHT at offset 174.
+          # Reinsert only those missing bytes so the original portrait pixels
+          # and compressed scan data remain untouched.
+          if len(raw) < 180:
+              raise SystemExit('source unexpectedly short')
+          print('AROUND_GAP_BEFORE',raw[148:184].hex())
+          if raw[158] != 0x11:
+              raise SystemExit(f'unexpected SOF payload start at 158: {raw[158]:02x}')
+          if raw[174:176] != b'\xff\xc4':
+              raise SystemExit('expected DHT marker not found at 174')
+          fixed=raw[:158]+b'\xff\xc0\x00'+raw[158:]
+          print('AROUND_GAP_AFTER ',fixed[148:187].hex())
 
-      - name: Select recovered image and re-encode as PNG
+          # Confirm the reconstructed SOF segment is internally consistent.
+          if fixed[158:162] != b'\xff\xc0\x00\x11':
+              raise SystemExit('SOF0 reconstruction failed')
+          sof=fixed[158:177]
+          precision=sof[4]
+          height=int.from_bytes(sof[5:7],'big')
+          width=int.from_bytes(sof[7:9],'big')
+          components=sof[9]
+          print('RECONSTRUCTED_SOF0','precision',precision,'width',width,'height',height,'components',components)
+          if not (width>=32 and height>=32 and components in (1,3)):
+              raise SystemExit('reconstructed SOF dimensions/components invalid')
+
+          im=Image.open(io.BytesIO(fixed))
+          im.load()
+          print('DECODE_OK',im.format,im.size,im.mode)
+          if im.size != (width,height):
+              raise SystemExit(f'decoded size mismatch {im.size} vs {(width,height)}')
+          if im.mode not in ('RGB','RGBA'):
+              im=im.convert('RGB')
+          elif im.mode=='RGBA':
+              bg=Image.new('RGB',im.size,'white'); bg.paste(im,mask=im.getchannel('A')); im=bg
+
+          out=io.BytesIO()
+          im.save(out,format='PNG',optimize=True)
+          png=out.getvalue()
+          if not png.startswith(b'\x89PNG\r\n\x1a\n'):
+              raise SystemExit('PNG encoding failed')
+          b64=base64.b64encode(png).decode('ascii')
+          p.write_text('window.FUTURE_MITSUKI_IMAGE21520="data:image/png;base64,'+b64+'";\n',encoding='utf-8')
+          Path('/tmp/future-recovered.png').write_bytes(png)
+          print('PNG_BYTES',len(png),'FINAL_SIZE',im.size)
+          PY
+
+      - name: Verify repaired JS payload
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
-          import io,base64
+          import re,base64,io
           from pathlib import Path
-          from PIL import Image,ImageFile
-          ImageFile.LOAD_TRUNCATED_IMAGES=True
-          candidates=['/tmp/ffmpeg.png','/tmp/convert.png','/tmp/djpeg.ppm','/tmp/future-source.jpg']
-          chosen=None; image=None
-          for fn in candidates:
-              p=Path(fn)
-              if not p.exists() or p.stat().st_size < 100: continue
-              try:
-                  im=Image.open(p); im.load()
-                  if im.width < 32 or im.height < 32: continue
-                  chosen=fn; image=im.convert('RGB'); break
-              except Exception as e:
-                  print('REJECT',fn,repr(e))
-          if image is None:
-              raise SystemExit('No decoder could recover a valid portrait')
-          print('RECOVERED_FROM',chosen,'SIZE',image.size)
-          out=io.BytesIO(); image.save(out,format='PNG',optimize=True)
-          data=out.getvalue()
-          b=base64.b64encode(data).decode('ascii')
-          Path('shogi-side-test/future-mitsuki-image21520.js').write_text(
-              'window.FUTURE_MITSUKI_IMAGE21520="data:image/png;base64,'+b+'";\n',encoding='utf-8')
-          print('PNG_BYTES',len(data))
+          from PIL import Image
+          s=Path('shogi-side-test/future-mitsuki-image21520.js').read_text()
+          m=re.search(r'data:image/png;base64,([A-Za-z0-9+/=]+)',s)
+          if not m: raise SystemExit('PNG data URI missing')
+          raw=base64.b64decode(m.group(1),validate=True)
+          im=Image.open(io.BytesIO(raw)); im.load()
+          print('VERIFY_OK',im.format,im.size,im.mode,len(raw))
+          if im.width<32 or im.height<32: raise SystemExit('repaired portrait too small')
           PY
 
-      - name: Commit repaired image
+      - name: Commit repaired portrait
         shell: bash
         run: |
           set -euxo pipefail
@@ -114,22 +104,14 @@ jobs:
           git config user.email github-actions@github.com
           git add shogi-side-test/future-mitsuki-image21520.js
           if git diff --cached --quiet; then echo 'No change'; exit 0; fi
-          git commit -m 'fix: recover Future Mitsuki portrait as valid PNG'
+          git commit -m 'fix: restore Future Mitsuki portrait JPEG header'
           git push
 
-      - name: Upload diagnostics
+      - name: Upload recovered portrait diagnostic
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: future-mitsuki-image-diagnostics
-          path: |
-            /tmp/identify.log
-            /tmp/djpeg.log
-            /tmp/ffmpeg.log
-            /tmp/convert.log
-            /tmp/future-source.jpg
-            /tmp/ffmpeg.png
-            /tmp/convert.png
-            /tmp/djpeg.ppm
+          name: future-mitsuki-recovered-portrait
+          path: /tmp/future-recovered.png
           if-no-files-found: ignore
           retention-days: 2
