@@ -1,0 +1,26 @@
+import { webkit } from 'playwright';
+const browser=await webkit.launch({headless:true});
+const page=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 26_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1'});
+page.on('console',m=>console.log('CONSOLE',m.type(),m.text()));
+page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
+page.on('requestfailed',r=>console.log('REQUESTFAILED',r.url(),r.failure()?.errorText||''));
+const url='https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528/?proof=webkit21528i';
+await page.goto(url,{waitUntil:'domcontentloaded',timeout:120000});
+await page.waitForFunction(()=>window.AI_SHOGI_YANEURAOU_FUTURE&&document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
+const env=await page.evaluate(()=>({coi:crossOriginIsolated,sab:typeof SharedArrayBuffer,ua:navigator.userAgent}));
+console.log('ENV',JSON.stringify(env));
+if(!env.coi||env.sab!=='function')throw new Error('WebKit is not cross-origin isolated');
+const out=await page.evaluate(async()=>{
+  const worker=new Worker('./future-yaneura-worker21528.js?proof=webkit21528i');
+  let seq=0;const pending=new Map();const stages=[];
+  worker.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(new Error(m.error||'worker error'))}}};
+  worker.onerror=e=>{stages.push('WORKER_ERROR '+String(e.message||'unknown'))};
+  const call=(type,data={})=>new Promise((resolve,reject)=>{const id='w'+(++seq);pending.set(id,{resolve,reject});worker.postMessage({type,id,...data});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(new Error(type+' timeout; stages='+stages.join(' | ')))}},150000)});
+  const init=await call('init');
+  const bm=await call('bestmove',{sfen:'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1',ms:1200});
+  worker.terminate();return{init,bm,stages};
+});
+console.log('RESULT',JSON.stringify(out));
+if(!out.bm?.token||out.bm.token==='resign')throw new Error('WebKit no usable bestmove');
+await browser.close();
+console.log('PASS WebKit Vercel COI + readyok + bestmove',out.bm.token);
