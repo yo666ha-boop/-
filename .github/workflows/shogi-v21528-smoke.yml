@@ -5,6 +5,7 @@ on:
       - 'shogi-v21528/**'
       - 'shogi-side-test/future21520.js'
       - 'shogi-side-test/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future-mitsuki-image21520.js'
       - 'shogi-side-test/final21513_rinimg.js'
       - '.github/scripts/shogi-v21528-smoke.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
