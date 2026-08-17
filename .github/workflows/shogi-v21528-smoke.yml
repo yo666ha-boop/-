@@ -7,7 +7,9 @@ on:
       - 'shogi-side-test/future-yaneura-worker21528.js'
       - 'shogi-side-test/future-mitsuki-image21520.js'
       - 'shogi-side-test/final21513_rinimg.js'
+      - 'shogi-side-test/top5-yaneura21529.js'
       - '.github/scripts/shogi-v21528-smoke.js'
+      - '.github/scripts/shogi-top5-yaneura-smoke.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
 jobs:
@@ -19,10 +21,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Syntax check Future Mitsuki scripts
+      - name: Syntax check Future Mitsuki and top-five scripts
         run: |
           node --check shogi-side-test/future21520.js
           node --check shogi-side-test/future-yaneura-worker21528.js
+          node --check shogi-side-test/top5-yaneura21529.js
           node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
@@ -36,6 +39,8 @@ jobs:
           sleep 2
       - name: Run v2.15.28 Firefox smoke
         run: node .github/scripts/shogi-v21528-smoke.js
+      - name: Run top-five shared YaneuraOu smoke
+        run: node .github/scripts/shogi-top5-yaneura-smoke.js
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
