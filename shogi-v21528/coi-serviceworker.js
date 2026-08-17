@@ -9,15 +9,25 @@ if(typeof window==='undefined'){
     if(r.cache==='only-if-cached'&&r.mode!=='same-origin')return;
     const req=(coepCredentialless&&r.mode==='no-cors')?new Request(r,{credentials:'omit'}):r;
     const isDocument=r.mode==='navigate'||r.destination==='document';
-    if(!isDocument){event.respondWith(fetch(req).catch(()=>fetch(r)));return;}
-    event.respondWith(fetch(req).then(res=>{
-      if(res.status===0)return res;
-      const h=new Headers(res.headers);
-      h.set('Cross-Origin-Embedder-Policy',coepCredentialless?'credentialless':'require-corp');
-      h.set('Cross-Origin-Opener-Policy','same-origin');
-      h.set('Cache-Control','no-store');
-      return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h});
-    }).catch(()=>fetch(r)));
+    const isWorker=r.destination==='worker'||r.destination==='sharedworker';
+    if(!isDocument&&!isWorker){event.respondWith(fetch(req).catch(()=>fetch(r)));return;}
+    event.respondWith((async()=>{
+      try{
+        const res=await fetch(req);
+        if(res.status===0)return res;
+        const h=new Headers(res.headers);
+        h.set('Cross-Origin-Embedder-Policy',coepCredentialless?'credentialless':'require-corp');
+        h.set('Cache-Control','no-store');
+        if(isDocument)h.set('Cross-Origin-Opener-Policy','same-origin');
+        if(isWorker){
+          const body=await res.arrayBuffer();
+          return new Response(body,{status:res.status,statusText:res.statusText,headers:h});
+        }
+        return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h});
+      }catch(e){
+        return fetch(r);
+      }
+    })());
   });
 }else{
   (()=>{
