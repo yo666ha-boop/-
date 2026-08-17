@@ -11,6 +11,7 @@ on:
       - '.github/scripts/shogi-v21528-smoke.js'
       - '.github/scripts/shogi-top5-yaneura-smoke.js'
       - '.github/scripts/shogi-top5-benchmark.js'
+      - '.github/scripts/shogi-top5-opening-benchmark.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
 permissions:
@@ -30,6 +31,7 @@ jobs:
           node --check shogi-side-test/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
           node --check .github/scripts/shogi-top5-benchmark.js
+          node --check .github/scripts/shogi-top5-opening-benchmark.js
           node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
@@ -57,20 +59,32 @@ jobs:
             printf '{"generatedAt":"%s","pass":false,"failures":["benchmark process exited %s before report generation"]}\n' "$(date -u +%FT%TZ)" "$code" > .github/benchmark-results/shogi-top5-latest.json
           fi
           exit $code
-      - name: Save benchmark result on benchmark branch
+      - name: Run top-five opening bias benchmark
+        id: opening_benchmark
+        continue-on-error: true
+        run: |
+          set +e
+          node .github/scripts/shogi-top5-opening-benchmark.js
+          code=$?
+          if [ $code -ne 0 ] && [ ! -f .github/benchmark-results/shogi-top5-opening-latest.json ]; then
+            mkdir -p .github/benchmark-results
+            printf '{"generatedAt":"%s","pass":false,"failures":["opening benchmark process exited %s before report generation"]}\n' "$(date -u +%FT%TZ)" "$code" > .github/benchmark-results/shogi-top5-opening-latest.json
+          fi
+          exit $code
+      - name: Save benchmark results on benchmark branch
         if: always() && github.ref == 'refs/heads/feature/shogi-top5-benchmark-21531-20260818'
         run: |
-          if [ -f .github/benchmark-results/shogi-top5-latest.json ]; then
+          if ls .github/benchmark-results/shogi-top5-*.json >/dev/null 2>&1; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add .github/benchmark-results/shogi-top5-latest.json
+            git add .github/benchmark-results/shogi-top5-*.json
             if ! git diff --cached --quiet; then
-              git commit -m 'bench: update top-five engine benchmark result [skip ci]'
+              git commit -m 'bench: update top-five engine benchmark results [skip ci]'
               git push
             fi
           fi
       - name: Fail if benchmark failed
-        if: steps.benchmark.outcome != 'success'
+        if: steps.benchmark.outcome != 'success' || steps.opening_benchmark.outcome != 'success'
         run: exit 1
       - name: Show server log on failure
         if: failure()
