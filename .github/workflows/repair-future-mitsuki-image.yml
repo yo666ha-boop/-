@@ -10,35 +10,126 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Pillow
-        run: python3 -m pip install --user pillow
-      - name: Decode, validate and re-encode Future Mitsuki image as PNG
+
+      - name: Install image recovery tools
+        shell: bash
         run: |
+          set -euxo pipefail
+          python3 -m pip install --user pillow
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libjpeg-turbo-progs imagemagick ffmpeg
+
+      - name: Decode and diagnose portrait JPEG
+        shell: bash
+        run: |
+          set -euxo pipefail
           python3 - <<'PY'
-          import re,base64,io
+          import re,base64
           from pathlib import Path
-          from PIL import Image, ImageFile
-          ImageFile.LOAD_TRUNCATED_IMAGES=True
           p=Path('shogi-side-test/future-mitsuki-image21520.js')
           s=p.read_text(encoding='utf-8')
           m=re.search(r'window\.FUTURE_MITSUKI_IMAGE21520="data:image/[^;]+;base64,([A-Za-z0-9+/=]+)";',s)
           if not m: raise SystemExit('data URI not found')
-          raw=base64.b64decode(m.group(1))
-          print('SOURCE_BYTES',len(raw),'HEAD',raw[:8].hex(),'TAIL',raw[-8:].hex())
-          im=Image.open(io.BytesIO(raw))
-          print('SOURCE_FORMAT',im.format,'SIZE',im.size,'MODE',im.mode)
-          im.load()
-          if im.mode not in ('RGB','RGBA'): im=im.convert('RGB')
-          out=io.BytesIO();im.save(out,format='PNG',optimize=True)
-          b=base64.b64encode(out.getvalue()).decode('ascii')
-          p.write_text('window.FUTURE_MITSUKI_IMAGE21520="data:image/png;base64,'+b+'";\n',encoding='utf-8')
-          print('PNG_BYTES',len(out.getvalue()),'SIZE',im.size)
+          raw=base64.b64decode(m.group(1),validate=True)
+          Path('/tmp/future-source.jpg').write_bytes(raw)
+          print('SOURCE_BYTES',len(raw),'HEAD',raw[:16].hex(),'TAIL',raw[-16:].hex())
+
+          # Parse JPEG marker chain up to entropy data. This tells us whether the
+          # corruption is in the header/table area or only in the scan payload.
+          i=0
+          if raw[:2] != b'\xff\xd8': raise SystemExit('missing SOI')
+          print('MARKER SOI @0')
+          i=2
+          names={0xE0:'APP0',0xE1:'APP1',0xDB:'DQT',0xC0:'SOF0',0xC1:'SOF1',0xC2:'SOF2',0xC4:'DHT',0xDA:'SOS',0xDD:'DRI',0xD9:'EOI',0xFE:'COM'}
+          while i < len(raw):
+              if raw[i] != 0xff:
+                  print('NONMARKER',i,hex(raw[i])); break
+              while i < len(raw) and raw[i] == 0xff: i += 1
+              if i >= len(raw): break
+              marker=raw[i]; i += 1
+              if marker == 0xD9:
+                  print('MARKER EOI @',i-2); break
+              if 0xD0 <= marker <= 0xD7 or marker == 0x01:
+                  print('MARKER',hex(marker),'@',i-2); continue
+              if i+2 > len(raw):
+                  print('TRUNCATED LENGTH',hex(marker)); break
+              ln=int.from_bytes(raw[i:i+2],'big')
+              print('MARKER',names.get(marker,hex(marker)),'@',i-2,'len',ln)
+              if ln < 2 or i+ln > len(raw):
+                  print('BAD LENGTH marker',hex(marker),'len',ln,'remaining',len(raw)-i); break
+              if marker in (0xC0,0xC1,0xC2) and ln >= 8:
+                  h=int.from_bytes(raw[i+3:i+5],'big'); w=int.from_bytes(raw[i+5:i+7],'big')
+                  print('SOF DIMENSIONS',w,h,'components',raw[i+7])
+              if marker == 0xDA:
+                  print('SOS payload starts',i+ln,'remaining',len(raw)-(i+ln)); break
+              i += ln
           PY
-      - name: Commit repaired image
+          file /tmp/future-source.jpg || true
+          identify -verbose /tmp/future-source.jpg > /tmp/identify.log 2>&1 || true
+          djpeg -verbose -outfile /tmp/djpeg.ppm /tmp/future-source.jpg > /tmp/djpeg.log 2>&1 || true
+          ffmpeg -y -v warning -err_detect ignore_err -i /tmp/future-source.jpg -frames:v 1 /tmp/ffmpeg.png > /tmp/ffmpeg.log 2>&1 || true
+          convert /tmp/future-source.jpg /tmp/convert.png > /tmp/convert.log 2>&1 || true
+          echo '--- identify ---'; tail -n 80 /tmp/identify.log || true
+          echo '--- djpeg ---'; tail -n 120 /tmp/djpeg.log || true
+          echo '--- ffmpeg ---'; tail -n 120 /tmp/ffmpeg.log || true
+          echo '--- convert ---'; tail -n 80 /tmp/convert.log || true
+          ls -lh /tmp/future-source.jpg /tmp/djpeg.ppm /tmp/ffmpeg.png /tmp/convert.png 2>/dev/null || true
+
+      - name: Select recovered image and re-encode as PNG
+        shell: bash
         run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import io,base64
+          from pathlib import Path
+          from PIL import Image,ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=True
+          candidates=['/tmp/ffmpeg.png','/tmp/convert.png','/tmp/djpeg.ppm','/tmp/future-source.jpg']
+          chosen=None; image=None
+          for fn in candidates:
+              p=Path(fn)
+              if not p.exists() or p.stat().st_size < 100: continue
+              try:
+                  im=Image.open(p); im.load()
+                  if im.width < 32 or im.height < 32: continue
+                  chosen=fn; image=im.convert('RGB'); break
+              except Exception as e:
+                  print('REJECT',fn,repr(e))
+          if image is None:
+              raise SystemExit('No decoder could recover a valid portrait')
+          print('RECOVERED_FROM',chosen,'SIZE',image.size)
+          out=io.BytesIO(); image.save(out,format='PNG',optimize=True)
+          data=out.getvalue()
+          b=base64.b64encode(data).decode('ascii')
+          Path('shogi-side-test/future-mitsuki-image21520.js').write_text(
+              'window.FUTURE_MITSUKI_IMAGE21520="data:image/png;base64,'+b+'";\n',encoding='utf-8')
+          print('PNG_BYTES',len(data))
+          PY
+
+      - name: Commit repaired image
+        shell: bash
+        run: |
+          set -euxo pipefail
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add shogi-side-test/future-mitsuki-image21520.js
           if git diff --cached --quiet; then echo 'No change'; exit 0; fi
-          git commit -m 'Re-encode Future Mitsuki portrait as valid PNG'
+          git commit -m 'fix: recover Future Mitsuki portrait as valid PNG'
           git push
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-mitsuki-image-diagnostics
+          path: |
+            /tmp/identify.log
+            /tmp/djpeg.log
+            /tmp/ffmpeg.log
+            /tmp/convert.log
+            /tmp/future-source.jpg
+            /tmp/ffmpeg.png
+            /tmp/convert.png
+            /tmp/djpeg.ppm
+          if-no-files-found: ignore
+          retention-days: 2
