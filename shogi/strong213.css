@@ -1,1 +1,11 @@
 @import url("./strong213-base21528.css?v=21528h");
+
+/* AI将棋先生 v2.15.28h: 未来みつきを既存25人のカード寸法へ合わせる */
+html body #chars [data-future-mitsuki="1"].ch{padding:4px 2px!important;overflow:hidden!important}
+html body #chars [data-future-mitsuki="1"] .chPic.chPic{width:calc(100% - 4px)!important;height:auto!important;aspect-ratio:.72!important;border-radius:50%!important;object-fit:cover!important;object-position:50% 42%!important;margin:0 auto 2px!important;border:1px solid #8a6c35!important;background:#f5ecd2!important}
+html body #chars [data-future-mitsuki="1"] .chStyle,
+html body #chars [data-future-mitsuki="1"] .futureEngineState{display:none!important}
+html body #chars [data-future-mitsuki="1"] .chName{font-size:9px!important;line-height:1.05!important;max-height:2.1em!important;overflow:hidden!important}
+html body #chars [data-future-mitsuki="1"] .chRating{font-size:8px!important;line-height:1.05!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+html body #oppPortrait img[alt="未来からやってきたみつき"] + .oppFixed,
+html body #foppPortrait img[alt="未来からやってきたみつき"] + .oppFixed{display:none!important}
