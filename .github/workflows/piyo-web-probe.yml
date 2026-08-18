@@ -1,0 +1,24 @@
+name: Piyo web UI probe
+on:
+  push:
+    branches:
+      - feature/shogi-future-mobile-max-20260818
+    paths:
+      - '.github/scripts/piyo-web-probe.js'
+      - '.github/workflows/piyo-web-probe.yml'
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Probe official Piyo Web controls
+        run: node .github/scripts/piyo-web-probe.js
