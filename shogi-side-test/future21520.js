@@ -1,12 +1,12 @@
-/* AI将棋先生 v2.15.28 - 26人目「未来からやってきたみつき」Worker安定版 / mobile-max1 */
+/* AI将棋先生 v2.15.28 - 26人目「未来からやってきたみつき」Worker安定版 / mobile-max2-openingdeep */
 (function installFutureMitsuki21528(){
   const VERSION='2.15.28';
-  const STRENGTH_TUNE='mobile-max1';
+  const STRENGTH_TUNE='mobile-max2-openingdeep';
   const FUTURE_INDEX=25;
   const FUTURE_NAME='未来からやってきたみつき';
   const FUTURE_RATING=3400;
   const SIDE_BASE=new URL('../shogi-side-test/',location.href).href;
-  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w10',location.href).href;
+  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w11',location.href).href;
 
   window.AI_SHOGI_FUNCTIONAL_AUDIT21520=window.AI_SHOGI_FUNCTIONAL_AUDIT21520||{future:true,version:VERSION};
 
@@ -89,11 +89,11 @@
   }
   async function initFutureEngine(){if(engineReady&&worker)return true;await callWorker('init',{},75000);engineReady=true;setEngineState('⑤成功 やねうら王＋水匠5 接続済み',true);return true}
   function futureBudget(s){
-    const ua=String(navigator.userAgent||''),ios=/iPhone|iPad|iPod/i.test(ua),fire=/Silk|KF[A-Z]{2,}|KFTT|KFAPWI|KFASWI|KFSUWI|KFMAWI/i.test(ua),android=/Android/i.test(ua),endgame=(s.log?.length||0)>=55;
-    if(ios)return endgame?11000:7000;
-    if(fire)return endgame?10000:6500;
-    if(android)return endgame?10000:6500;
-    return endgame?12000:8500;
+    const ua=String(navigator.userAgent||''),ios=/iPhone|iPad|iPod/i.test(ua),fire=/Silk|KF[A-Z]{2,}|KFTT|KFAPWI|KFASWI|KFSUWI|KFMAWI/i.test(ua),android=/Android/i.test(ua),ply=(s.log?.length||0),opening=ply<24,endgame=ply>=55;
+    if(ios)return opening?15000:(endgame?13000:9000);
+    if(fire)return opening?12000:(endgame?12000:8500);
+    if(android)return opening?12000:(endgame?12000:8500);
+    return opening?16000:(endgame?16000:11000);
   }
   async function futureBest(s,opts={}){
     const sfen=toSFEN(s),defaultMs=futureBudget(s);
