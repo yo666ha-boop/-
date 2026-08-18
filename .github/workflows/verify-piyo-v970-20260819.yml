@@ -1,0 +1,63 @@
+name: Verify Piyo Lv40 vs Future Mitsuki V9.70
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-piyo-v970-20260819.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  practical:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          mkdir -p /tmp/piyo-pw && cd /tmp/piyo-pw
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Inspect Piyo game setup
+        shell: bash
+        run: |
+          cat > /tmp/piyo-pw/inspect.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const br=await chromium.launch({headless:true});
+          const p=await br.newPage({viewport:{width:1280,height:1000}});
+          p.on('console',m=>console.log('BROWSER',m.type(),m.text()));
+          await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
+          await p.waitForFunction(()=>document.body.innerText.includes('対局開始はこちら'),{timeout:120000});
+          await p.waitForTimeout(3000);
+          const dump=async(label)=>{
+            const x=await p.evaluate(()=>[...document.querySelectorAll('input,select,button,textarea')].map((e,i)=>({i,tag:e.tagName,id:e.id,name:e.getAttribute('name'),type:e.getAttribute('type'),value:e.value,text:(e.textContent||'').trim().slice(0,120),title:e.getAttribute('title'),aria:e.getAttribute('aria-label'),display:getComputedStyle(e).display,vis:!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length),options:e.tagName==='SELECT'?[...e.options].map(o=>({v:o.value,t:o.textContent,sel:o.selected})):undefined})).filter(x=>x.vis));
+            console.log(label,JSON.stringify(x));
+          };
+          await dump('PIYO_HOME_CONTROLS');
+          const clicked=await p.evaluate(()=>{const els=[...document.querySelectorAll('input,button')];const e=els.find(x=>String(x.value||x.textContent||'').includes('対局開始'));if(e){e.click();return {id:e.id,value:e.value,text:e.textContent}}return null});
+          console.log('PIYO_START_CLICK',JSON.stringify(clicked));
+          await p.waitForFunction(()=>document.body.innerText.includes('対局設定'),{timeout:30000});
+          await p.waitForTimeout(500);
+          await dump('PIYO_SETUP_CONTROLS');
+          console.log('PIYO_SETUP_TEXT',JSON.stringify((await p.locator('body').innerText()).split('\n').filter(x=>x.trim()).slice(-120)));
+          await p.screenshot({path:'/tmp/piyo-setup.png',fullPage:true});
+          await br.close();
+          NODE
+          cd /tmp/piyo-pw
+          node inspect.mjs 2>&1 | tee /tmp/piyo-inspect.log
+      - name: Report discovery
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          {
+            echo '### Piyo practical verification discovery'
+            echo '```text'
+            grep -E '^(PIYO_START_CLICK|PIYO_SETUP_CONTROLS|PIYO_SETUP_TEXT)' /tmp/piyo-inspect.log | tail -20 || true
+            echo '```'
+          } >/tmp/piyo-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/piyo-report.md
