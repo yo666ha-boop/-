@@ -1,0 +1,147 @@
+name: Future Mitsuki V9.70 mobile focus
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/future-mitsuki-mobile-focus-pr.yml'
+  workflow_dispatch:
+concurrency:
+  group: future-mitsuki-mobile-focus-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  actions: read
+  contents: read
+jobs:
+  mobile-focus:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare current runtime, fixed V9.70 runtime, and candidate worker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/focus/site
+          mkdir -p "$ROOT/current" "$ROOT/new" "$ROOT/yaneuraou" /tmp/focus/art
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/current/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/nn.bin"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/nn.bin"
+          gh run download 32147280548 -n yaneuraou-v970-evalfile-fixed -D /tmp/focus/art
+          JS=$(find /tmp/focus/art -name 'yaneuraou.halfkp.noeval.js' | head -1)
+          test -n "$JS"
+          LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/new/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
+          git fetch --depth=1 origin future-mitsuki-v970-browser-fix
+          git show FETCH_HEAD:shogi-v21528/future-yaneura-worker21528.js > "$ROOT/future-worker.js"
+          grep -F "FIRE_SILK" "$ROOT/future-worker.js"
+          grep -F "const ENGINE_HASH_MB=MOBILE_WEBKIT?32:FIRE_SILK?48:128" "$ROOT/future-worker.js"
+          sha256sum "$ROOT"/current/* "$ROOT"/new/* "$ROOT"/yaneuraou/nn.bin | tee /tmp/focus/runtime-sha.txt
+
+      - name: Create focused test host
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/focus/site
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body>Future Mitsuki mobile focus host</body>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          cat > "$ROOT/driver.js" <<'JS'
+          'use strict';
+          const kind=new URL(self.location.href).searchParams.get('kind')||'new';
+          const BASE=new URL('./'+kind+'/',self.location.href).href;
+          let engine=null,ready=false,waiters=[],lastInfo={};
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          function onLine(raw){const s=String(raw||'').trim();if(s.startsWith('info ')){const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1],line:s};}for(const w of waiters.slice())if(w.pred(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}}
+          function waitLine(pred,ms,label){return new Promise((r,j)=>{const w={pred,r,j,t:setTimeout(()=>{waiters=waiters.filter(x=>x!==w);j(Error(label+' timeout'))},ms)};waiters.push(w)})}
+          async function direct(command,timeout=20000){const start=Date.now();let backoff=1,rc=NaN;while(true){rc=Number(engine.ccall('usi_command','number',['string'],[String(command)]));if(rc===0)return;if(Date.now()-start>=timeout)throw Error('direct USI timeout rc='+rc+' command='+command);await sleep(backoff);backoff=Math.min(64,backoff*2)}}
+          async function send(command,timeout=20000){if(kind==='new'&&typeof engine.ccall==='function')return direct(command,timeout);engine.postMessage(command)}
+          async function init(){if(ready)return;importScripts(BASE+'yaneuraou.halfkp.noeval.js?focus=1');const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});if(!engine||!engine.FS||typeof engine.addMessageListener!=='function')throw Error('engine bridge missing '+kind);if(kind==='new'&&typeof engine.ccall!=='function')throw Error('V9.70 ccall missing');engine.addMessageListener(onLine);const b=new Uint8Array(await(await fetch(new URL('./nn.bin',self.location.href),{cache:'no-store'})).arrayBuffer());try{engine.FS.unlink('/nn.bin')}catch{}engine.FS.writeFile('/nn.bin',b);let p=waitLine(x=>x==='usiok',30000,'usiok');await send('usi',30000);await p;for(const c of['setoption name EvalDir value .','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])await send(c);p=waitLine(x=>x==='readyok',90000,'readyok');await send('isready',90000);await p;await send('setoption name USI_Ponder value false');await send('usinewgame');ready=true}
+          async function search(moves,ms){await init();lastInfo={};await send('position startpos'+(moves?' moves '+moves:''));const p=waitLine(x=>x.startsWith('bestmove '),Math.max(90000,ms+30000),'bestmove');await send('go movetime '+ms,30000);const s=await p;return{move:(s.split(/\s+/)[1]||''),ms,...lastInfo}}
+          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search'){self.postMessage({id:m.id,ok:true,kind,...await search(String(m.moves||''),Number(m.ms)||4500)});return}}catch(err){self.postMessage({id:m.id,ok:false,kind,error:String(err&&err.stack||err)})}};
+          JS
+          node "$ROOT/server.cjs" >/tmp/focus/server.log 2>&1 & echo $! >/tmp/focus/server.pid
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+
+      - name: Install Playwright browsers once
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/focus/pw && cd /tmp/focus/pw
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium >/dev/null
+
+      - name: iPhone WebKit candidate proof
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /tmp/focus/pw
+          cat > iphone.mjs <<'NODE'
+          import{webkit,devices}from'playwright';
+          const b=await webkit.launch({headless:true}),p=await b.newPage({...devices['iPhone 15']});
+          p.on('console',m=>console.log('IPHONE',m.type(),m.text()));
+          await p.goto('http://127.0.0.1:4173/');
+          const r=await p.evaluate(async()=>{const w=new Worker('./future-worker.js?iphone=1'),P=new Map();let n=0;w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){console.log('STAGE '+m.text);return}if(m.type==='result'){const q=P.get(m.id);if(!q)return;P.delete(m.id);m.ok?q.r(m):q.j(Error(m.error||'worker error'))}};const call=(type,payload={})=>new Promise((r,j)=>{const id='i'+(++n),t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},180000);P.set(id,{r:x=>{clearTimeout(t);r(x)},j:x=>{clearTimeout(t);j(x)}});w.postMessage({type,id,...payload})});try{const init=await call('init');const s='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';const bm=await call('bestmove',{sfen:s,ms:4500,multiPV:1});return{init,bm}}finally{w.terminate()}});
+          console.log('IPHONE_RESULT',JSON.stringify(r));await b.close();
+          if(!r.init.mobileWebKit||r.init.fireSilk||r.init.threads!==1||r.init.hashMB!==32)process.exit(2);
+          if(!r.bm.token||r.bm.token==='resign'||r.bm.info.threads!==1||r.bm.info.hashMB!==32)process.exit(3);
+          NODE
+          node iphone.mjs 2>&1 | tee /tmp/focus/iphone.log
+
+      - name: Fire Silk candidate proof
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /tmp/focus/pw
+          cat > fire.mjs <<'NODE'
+          import{chromium}from'playwright';
+          const ua='Mozilla/5.0 (Linux; Android 9; KFKAWI Build/PS7314.1745N) AppleWebKit/537.36 (KHTML, like Gecko) Silk/130.4.1 like Chrome/130.0.0.0 Safari/537.36';
+          const b=await chromium.launch({headless:true}),c=await b.newContext({userAgent:ua,viewport:{width:1280,height:800}}),p=await c.newPage();p.on('console',m=>console.log('FIRE',m.type(),m.text()));await p.goto('http://127.0.0.1:4173/');
+          const r=await p.evaluate(async()=>{const w=new Worker('./future-worker.js?fire=1'),P=new Map();let n=0;w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){console.log('STAGE '+m.text);return}if(m.type==='result'){const q=P.get(m.id);if(!q)return;P.delete(m.id);m.ok?q.r(m):q.j(Error(m.error||'worker error'))}};const call=(type,payload={})=>new Promise((r,j)=>{const id='f'+(++n),t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},180000);P.set(id,{r:x=>{clearTimeout(t);r(x)},j:x=>{clearTimeout(t);j(x)}});w.postMessage({type,id,...payload})});try{const init=await call('init');const s='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';const a=await call('bestmove',{sfen:s,ms:1500,multiPV:1}),b=await call('bestmove',{sfen:s,ms:4500,multiPV:1}),d=await call('bestmove',{sfen:s,ms:4500,multiPV:1});return{init,moves:[a,b,d]}}finally{w.terminate()}});
+          console.log('FIRE_RESULT',JSON.stringify(r));await b.close();
+          if(!r.init.fireSilk||!r.init.mobileSafe||r.init.mobileWebKit||r.init.threads!==1||r.init.hashMB!==48)process.exit(2);
+          if(r.moves.some(x=>!x.token||x.token==='resign'||x.info.threads!==1||x.info.hashMB!==48||!x.info.fireSilk))process.exit(3);
+          NODE
+          node fire.mjs 2>&1 | tee /tmp/focus/fire.log
+
+      - name: Sequential 28-36 ply strength proof at 4.5s and 6.5s
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /tmp/focus/pw
+          cat > strength.mjs <<'NODE'
+          import{chromium}from'playwright';
+          const b=await chromium.launch({headless:true}),p=await b.newPage();await p.goto('http://127.0.0.1:4173/');
+          async function phase(kind,requests){return await p.evaluate(async({kind,requests})=>{const w=new Worker('./driver.js?kind='+kind+'&r='+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q)return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'engine error'))};const call=(moves,ms)=>new Promise((r,j)=>{const id='x'+(++n),t=setTimeout(()=>{P.delete(id);j(Error(kind+' timeout'))},180000);P.set(id,{r,j,t});w.postMessage({type:'search',id,moves,ms})});const out=[];try{for(const q of requests)out.push(await call(q.moves,q.ms));return out}finally{w.terminate()}},{kind,requests})}
+          let moves='';const snaps=[];
+          for(let ply=1;ply<=36;ply++){const [r]=await phase('new',[{moves,ms:300}]);if(!r.move||['resign','win','none'].includes(r.move))throw Error('seed stopped '+ply+' '+r.move);moves+=(moves?' ':'')+r.move;if([28,32,34,36].includes(ply))snaps.push({ply,moves})}
+          const ref=await phase('new',snaps.map(s=>({moves:s.moves,ms:12000})));
+          const cur=await phase('current',snaps.map(s=>({moves:s.moves,ms:4500})));
+          const n45=await phase('new',snaps.map(s=>({moves:s.moves,ms:4500})));
+          const n65=await phase('new',snaps.map(s=>({moves:s.moves,ms:6500})));
+          const rows=snaps.map((s,i)=>({ply:s.ply,ref:ref[i],current45:cur[i],v970_45:n45[i],v970_65:n65[i],currentMatch:cur[i].move===ref[i].move,v970_45Match:n45[i].move===ref[i].move,v970_65Match:n65[i].move===ref[i].move}));
+          const count=k=>rows.filter(r=>r[k]).length;const summary={positions:rows.length,currentMatch:count('currentMatch'),v970_45Match:count('v970_45Match'),v970_65Match:count('v970_65Match'),rows};
+          console.log('STRENGTH_SUMMARY',JSON.stringify(summary));for(const r of rows)console.log('STRENGTH_ROW',JSON.stringify(r));await b.close();
+          NODE
+          node strength.mjs 2>&1 | tee /tmp/focus/strength.log
+          grep -F 'STRENGTH_SUMMARY ' /tmp/focus/strength.log
+
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-mitsuki-mobile-focus
+          path: |
+            /tmp/focus/iphone.log
+            /tmp/focus/fire.log
+            /tmp/focus/strength.log
+            /tmp/focus/runtime-sha.txt
+            /tmp/focus/server.log
+          if-no-files-found: ignore
+          retention-days: 3
