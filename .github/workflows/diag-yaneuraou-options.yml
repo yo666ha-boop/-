@@ -3,9 +3,11 @@ on:
   push:
     paths:
       - '.github/workflows/diag-yaneuraou-options.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
   pull_request:
     paths:
       - '.github/workflows/diag-yaneuraou-options.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
   workflow_dispatch:
 jobs:
   diag:
@@ -97,25 +99,6 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
           cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
           cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/worker.js"
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('/tmp/yane/site/worker.js')
-          s=p.read_text()
-          cmds=[
-            ('EvalDir',"engine.postMessage('setoption name EvalDir value .');"),
-            ('EvalFile',"engine.postMessage('setoption name EvalFile value '+EVAL);"),
-            ('FV_SCALE',"engine.postMessage('setoption name FV_SCALE value 24');"),
-            ('USI_Hash',"engine.postMessage('setoption name USI_Hash value '+ENGINE_HASH_MB);"),
-            ('Threads',"engine.postMessage('setoption name Threads value '+ENGINE_THREADS);"),
-            ('MultiPV',"engine.postMessage('setoption name MultiPV value 1');"),
-            ('USI_Ponder',"engine.postMessage('setoption name USI_Ponder value false');"),
-          ]
-          for label,needle in cmds:
-              if needle not in s:
-                  raise SystemExit('missing worker command '+label)
-              s=s.replace(needle,"stage('DBG "+label+" BEFORE');"+needle+"stage('DBG "+label+" AFTER');",1)
-          p.write_text(s)
-          PY
           cat > "$ROOT/index.html" <<'HTML'
           <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
           <script>
@@ -126,7 +109,7 @@ jobs:
             try{
               out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
               if(!crossOriginIsolated||typeof SharedArrayBuffer!=='function') throw Error('cross-origin isolation unavailable');
-              const w=new Worker('./worker.js?diag=v970');
+              const w=new Worker('./worker.js?diag=v970d1');
               let seq=0,pending=new Map();
               w.onmessage=e=>{const m=e.data||{}; if(m.type==='stage'){out('STAGE '+m.text);return} if(m.type==='fatal'){fail(Error(m.text));return} if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}}};
               w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));
