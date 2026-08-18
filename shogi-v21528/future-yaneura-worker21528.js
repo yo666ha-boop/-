@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528v970d1';
+const BUILD='21528v970d2';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const ENGINE_THREADS=MOBILE_WEBKIT?1:2;
@@ -68,6 +68,8 @@ async function init(){
     stage('⑤-2 Worker内 Wasm本体起動中');
     engine=await factory({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:ENGINE_JS_URL});
     if(!engine||!engine.FS)throw new Error('YaneuraOu FS not available');
+    if(typeof engine.ccall!=='function')throw new Error('YaneuraOu ccall unavailable');
+    if(typeof engine.addMessageListener!=='function')throw new Error('YaneuraOu addMessageListener unavailable');
     stage('⑤-2 Worker内 Wasm本体起動完了');
     stage('⑤-3 水匠5 64MB取得中');
     const r=await fetch(BASE+EVAL+'?v='+BUILD,{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
@@ -78,12 +80,12 @@ async function init(){
     engine.addMessageListener(onLine);
     stage('⑤-4 V9.70 direct USI bridge確認');
     let p=waitLine(x=>x==='usiok',15000,'usiok');await sendUSI('usi');await p;stage('⑤-4 usiok受信');
-    await sendUSI('setoption name EvalDir value .');
-    await sendUSI('setoption name EvalFile value '+EVAL);
-    await sendUSI('setoption name FV_SCALE value 24');
-    await sendUSI('setoption name USI_Hash value '+ENGINE_HASH_MB);
-    await sendUSI('setoption name Threads value '+ENGINE_THREADS);
-    await sendUSI('setoption name MultiPV value 1');
+    stage('⑤-4a EvalDir設定開始');await sendUSI('setoption name EvalDir value .');stage('⑤-4a EvalDir設定完了');
+    stage('⑤-4b EvalFile設定開始');await sendUSI('setoption name EvalFile value '+EVAL);stage('⑤-4b EvalFile設定完了');
+    stage('⑤-4c FV_SCALE設定開始');await sendUSI('setoption name FV_SCALE value 24');stage('⑤-4c FV_SCALE設定完了');
+    stage('⑤-4d USI_Hash設定開始 '+ENGINE_HASH_MB+'MB');await sendUSI('setoption name USI_Hash value '+ENGINE_HASH_MB);stage('⑤-4d USI_Hash設定完了');
+    stage('⑤-4e Threads設定開始 '+ENGINE_THREADS);await sendUSI('setoption name Threads value '+ENGINE_THREADS);stage('⑤-4e Threads設定完了');
+    stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');
     stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+'MB'+(MOBILE_WEBKIT?' / iPhone省メモリ':''));
     stage('⑤-5 readyok待ち');p=waitLine(x=>x==='readyok',60000,'readyok');await sendUSI('isready',60000);await p;stage('⑤-5 readyok受信');
     await sendUSI('setoption name USI_Ponder value false');
