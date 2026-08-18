@@ -10,8 +10,11 @@ on:
       - 'shogi-side-test/top5-yaneura21529.js'
       - '.github/scripts/shogi-v21528-smoke.js'
       - '.github/scripts/shogi-top5-yaneura-smoke.js'
+      - '.github/scripts/shogi-top5-deep-verify.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -26,6 +29,7 @@ jobs:
           node --check shogi-side-test/future21520.js
           node --check shogi-side-test/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
+          node --check .github/scripts/shogi-top5-deep-verify.js
           node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
@@ -41,6 +45,25 @@ jobs:
         run: node .github/scripts/shogi-v21528-smoke.js
       - name: Run top-five shared YaneuraOu smoke
         run: node .github/scripts/shogi-top5-yaneura-smoke.js
+      - name: Run deep top-five verification
+        id: deepverify
+        continue-on-error: true
+        run: node .github/scripts/shogi-top5-deep-verify.js
+      - name: Save deep verification result on verification branch
+        if: always() && github.ref == 'refs/heads/feature/shogi-top5-deepverify-21532-20260818'
+        run: |
+          if [ -f .github/benchmark-results/shogi-top5-deep-verify-latest.json ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .github/benchmark-results/shogi-top5-deep-verify-latest.json
+            if ! git diff --cached --quiet; then
+              git commit -m 'bench: update deep top-five verification [skip ci]'
+              git push
+            fi
+          fi
+      - name: Fail if deep verification failed
+        if: steps.deepverify.outcome != 'success'
+        run: exit 1
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
