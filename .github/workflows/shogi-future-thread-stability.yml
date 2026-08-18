@@ -56,7 +56,7 @@ jobs:
       - name: Compare iPhone one-thread vs two-thread search stability
         shell: bash
         run: |
-          cat > /tmp/threadprobe.mjs <<'NODE'
+          cat > threadprobe.mjs <<'NODE'
           import {webkit,devices} from 'playwright';
           const START='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
           const PLY44='l2g1gsnl/5k3/p1n1pp1pp/3p2p2/9/6P2/P2PP+l1PP/3G2R2/2+r1BKSNL b Nbg2s5p 45';
@@ -84,7 +84,7 @@ jobs:
           if([...one.start,...one.ply44,...two.start,...two.ply44].some(r=>!r.move||r.move==='resign'||!r.nodes))throw Error('missing search result');
           await browser.close();
           NODE
-          node /tmp/threadprobe.mjs 2>&1 | tee /tmp/thread-stability.log
+          node threadprobe.mjs 2>&1 | tee /tmp/thread-stability.log
       - name: Upload thread stability log
         if: always()
         uses: actions/upload-artifact@v4
