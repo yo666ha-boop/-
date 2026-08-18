@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528w10-mobilemax1';
+const BUILD='21528w12-ios1stable';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const IOS_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const FIRE_SILK=/Silk|KF[A-Z]{2,}|KFTT|KFAPWI|KFASWI|KFSUWI|KFMAWI/i.test(UA);
@@ -19,8 +19,8 @@ const ANDROID=/Android/i.test(UA);
 const MOBILE_DEVICE=IOS_WEBKIT||FIRE_SILK||ANDROID;
 const HW=Math.max(1,Number(self.navigator&&self.navigator.hardwareConcurrency)||1);
 const DM=Number(self.navigator&&self.navigator.deviceMemory)||0;
-const ENGINE_THREADS=IOS_WEBKIT?(HW>=4?2:1):(FIRE_SILK?(HW>=4?2:1):(ANDROID?(HW>=4?2:1):2));
-const ENGINE_HASH_MB=IOS_WEBKIT?(ENGINE_THREADS>=2?64:48):(FIRE_SILK?(DM&&DM<=3?48:64):(ANDROID?(DM&&DM>=6?96:64):128));
+const ENGINE_THREADS=IOS_WEBKIT?1:(FIRE_SILK?(HW>=4?2:1):(ANDROID?(HW>=4?2:1):2));
+const ENGINE_HASH_MB=IOS_WEBKIT?64:(FIRE_SILK?(DM&&DM<=3?48:64):(ANDROID?(DM&&DM>=6?96:64):128));
 const DEVICE_CLASS=IOS_WEBKIT?'ios-webkit':FIRE_SILK?'fire-silk':ANDROID?'android':'desktop';
 const ENGINE_JS_URL=BASE+JS+'?v='+BUILD;
 const TOP5_MPV_BY_MS=new Map([
