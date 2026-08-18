@@ -1,0 +1,118 @@
+name: Verify V9.70 WASM EvalFile fix
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/diag-v970-evalfile-fix.yml'
+      - '.github/workflows/diag-yaneuraou-v970-threadfix.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu
+      - name: Reuse proven V9.70 thread lifecycle patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          yml=Path('.github/workflows/diag-yaneuraou-v970-threadfix.yml').read_text()
+          key="python3 - <<'PY'"
+          if key not in yml:
+              raise SystemExit('threadfix python block not found')
+          block=yml.split(key,1)[1]
+          end='\n          PY'
+          if end not in block:
+              raise SystemExit('threadfix python terminator not found')
+          block=block.split(end,1)[0]
+          script=textwrap.dedent(block.lstrip('\n'))
+          Path('/tmp/v970-threadfix.py').write_text(script)
+          PY
+          python3 /tmp/v970-threadfix.py
+          grep -F 'wasmNativeStarted' YaneuraOu/source/thread.cpp
+          grep -F 'all_threads_started' YaneuraOu/source/thread.cpp
+      - name: Restore missing EvalFile option for WASM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu/source/eval/nnue/evaluate_nnue.cpp')
+          s=p.read_text()
+          needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
+          repl=needle+'''#if defined(__EMSCRIPTEN__)\n    // V9.70 regression fix: load_eval() reads Options["EvalFile"] on WASM,\n    // so the option must exist before isready.\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n'''
+          if needle not in s:
+              raise SystemExit('EvalDir option block not found')
+          if 'Options.add("EvalFile"' in s:
+              raise SystemExit('EvalFile unexpectedly already exists')
+          p.write_text(s.replace(needle,repl,1))
+          PY
+          grep -n -A4 -B3 'Options.add("EvalFile"' YaneuraOu/source/eval/nnue/evaluate_nnue.cpp
+          grep -n -A5 -B3 'Options\["EvalFile"\]' YaneuraOu/source/eval/nnue/evaluate_nnue.cpp
+      - name: Build exact V9.70 WASM with fixes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          docker pull emscripten/emsdk:3.1.43
+          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src/source emscripten/emsdk:3.1.43 \
+            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160'
+      - name: Verify bridge and runtime files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          node - <<'NODE'
+          const fs=require('fs'),p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);if(!ex.includes('usi_command'))throw Error('usi_command missing');console.log('usi_command export OK');
+          NODE
+      - name: Firefox real Suisho5 usiok readyok bestmove
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/v970eval/site; mkdir -p "$ROOT/yaneuraou"
+          LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/worker.js"
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body data-result="running">start</body><script>
+          (async()=>{const b=document.body,L=[],say=x=>{L.push(x);console.log(x);b.textContent=L.join('\n')},fail=e=>{b.dataset.result='error';say('FAIL '+String(e&&e.message||e));say('STACK '+String(e&&e.stack||''))};try{say('COI='+crossOriginIsolated);if(!crossOriginIsolated)throw Error('COI false');const w=new Worker('./worker.js?evalfix=v970');let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){say('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=P.get(m.id);if(!p)return;P.delete(m.id);if(m.ok)p.r(m);else{say('WORKER_ERROR '+String(m.error));p.j(Error(m.error||'worker error'))}}};w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));const call=(type,payload={})=>new Promise((r,j)=>{const id='e'+(++n);P.set(id,{r,j});w.postMessage({type,id,...payload});setTimeout(()=>{if(P.has(id)){P.delete(id);j(Error(type+' timeout'))}},150000)});await call('init');say('INIT OK');const sfens=['lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1','lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL b - 3'];for(const sfen of sfens){const bm=await call('bestmove',{sfen,ms:1000,multiPV:1});say('BEST '+sfen+' => '+JSON.stringify(bm));if(!bm.token||bm.token==='resign')throw Error('bad bestmove')}b.dataset.result='ok';say('PASS V9.70 EvalFile + threads + Suisho5');w.terminate()}catch(e){fail(e)}})();
+          </script>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          mkdir -p /tmp/v970eval/pw && cd /tmp/v970eval/pw
+          npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps firefox >/dev/null
+          cat > check.mjs <<'NODE'
+          import{firefox}from'playwright';const b=await firefox.launch({headless:true}),p=await b.newPage();p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));await p.goto('http://127.0.0.1:4173/');await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:180000});const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));console.log('FINAL',JSON.stringify(r));await b.close();if(r.state!=='ok')process.exit(1);
+          NODE
+          node "$ROOT/server.cjs" >/tmp/v970eval/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          node check.mjs 2>&1 | tee /tmp/v970eval/diag.log
+      - name: Upload fixed runtime and proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaneuraou-v970-evalfile-fixed
+          path: |
+            /tmp/v970eval/diag.log
+            /tmp/v970eval/server.log
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm
+          if-no-files-found: ignore
+          retention-days: 2
