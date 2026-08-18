@@ -1,4 +1,5 @@
 name: Future fast latest-loss diagnostic
+# isolated push-only diagnostic branch: no PR fan-out
 on:
   push:
     branches:
