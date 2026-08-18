@@ -1,0 +1,35 @@
+name: Shogi iPhone WebKit proxy verify
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/**'
+      - '.github/scripts/shogi-mobile-webkit-verify.js'
+      - '.github/workflows/shogi-mobile-webkit-verify.yml'
+  workflow_dispatch:
+jobs:
+  mobile-webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check mobile verification
+        run: node --check .github/scripts/shogi-mobile-webkit-verify.js
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-mobile-server.log 2>&1 &
+          echo $! > /tmp/shogi-mobile-server.pid
+          sleep 2
+      - name: Run iPhone WebKit proxy verification
+        run: node .github/scripts/shogi-mobile-webkit-verify.js
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/shogi-mobile-server.log || true
