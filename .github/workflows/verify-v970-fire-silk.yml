@@ -1,0 +1,75 @@
+name: Verify V9.70 Future on Fire Silk
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verify-v970-fire-silk.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  fire:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare fixed V9.70 runtime and Future worker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/fire/site; mkdir -p "$ROOT/yaneuraou" /tmp/fire/art
+          gh run download 32147280548 -n yaneuraou-v970-evalfile-fixed -D /tmp/fire/art
+          JS=$(find /tmp/fire/art -name 'yaneuraou.halfkp.noeval.js' | head -1); test -n "$JS"; LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/worker.js"
+      - name: Fire Silk tablet profile proof
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/fire/site
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body data-result="running">start</body><script>
+          (async()=>{const b=document.body,L=[],say=x=>{L.push(x);console.log(x);b.textContent=L.join('\n')},fail=e=>{b.dataset.result='error';say('FAIL '+String(e&&e.stack||e))};try{
+            say('UA '+navigator.userAgent);say('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);if(!crossOriginIsolated)throw Error('COI false');
+            const w=new Worker('./worker.js?fire=v970');let n=0,P=new Map();
+            w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){say('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=P.get(m.id);if(!p)return;P.delete(m.id);m.ok?p.r(m):p.j(Error(m.error||'worker error'))}};
+            w.onerror=e=>fail(Error(e.message));
+            const call=(type,payload={})=>new Promise((r,j)=>{const id='f'+(++n);P.set(id,{r,j});w.postMessage({type,id,...payload});setTimeout(()=>{if(P.has(id)){P.delete(id);j(Error(type+' timeout'))}},180000)});
+            const init=await call('init');say('INIT '+JSON.stringify(init));
+            if(!init.fireSilk||!init.mobileSafe||init.mobileWebKit||init.threads!==1||init.hashMB!==48)throw Error('wrong Fire profile '+JSON.stringify(init));
+            const s='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
+            const times=[1500,4500,4500];
+            for(let i=0;i<times.length;i++){const bm=await call('bestmove',{sfen:s,ms:times[i],multiPV:1});say('BEST'+i+' '+JSON.stringify(bm));if(!bm.token||bm.token==='resign')throw Error('bad bestmove '+i);if(bm.info.threads!==1||bm.info.hashMB!==48||!bm.info.fireSilk)throw Error('wrong runtime info '+i)}
+            b.dataset.result='ok';say('PASS Fire Silk V9.70 Threads=1 Hash=48 repeated=3');w.terminate();
+          }catch(e){fail(e)}})();
+          </script>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          mkdir -p /tmp/fire/pw && cd /tmp/fire/pw
+          npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps chromium >/dev/null
+          cat > check.mjs <<'NODE'
+          import{chromium}from'playwright';
+          const ua='Mozilla/5.0 (Linux; Android 9; KFKAWI Build/PS7314.1745N) AppleWebKit/537.36 (KHTML, like Gecko) Silk/130.4.1 like Chrome/130.0.0.0 Safari/537.36';
+          const browser=await chromium.launch({headless:true});const context=await browser.newContext({userAgent:ua,viewport:{width:1280,height:800}});const p=await context.newPage();
+          p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
+          await p.goto('http://127.0.0.1:4173/');await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:240000});const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));console.log('FINAL',JSON.stringify(r));await browser.close();if(r.state!=='ok')process.exit(1);
+          NODE
+          node "$ROOT/server.cjs" >/tmp/fire/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          node check.mjs 2>&1 | tee /tmp/fire/fire.log
+      - name: Upload Fire proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v970-fire-silk-proof
+          path: |
+            /tmp/fire/fire.log
+            /tmp/fire/server.log
+          if-no-files-found: ignore
+          retention-days: 2
