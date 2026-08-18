@@ -1,0 +1,215 @@
+name: Diagnose YaneuraOu V9.70 WASM thread fix
+on:
+  push:
+    paths:
+      - '.github/workflows/diag-yaneuraou-v970-threadfix.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  pull_request:
+    paths:
+      - '.github/workflows/diag-yaneuraou-v970-threadfix.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu
+
+      - name: Patch V9.70 WASM thread lifecycle and USI bridge
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Keep the browser build small enough for iPhone-class devices while
+          # still allowing the desktop diagnostic to request two search threads.
+          makefile = Path('YaneuraOu/source/Makefile')
+          s = makefile.read_text()
+          s = s.replace('-s PTHREAD_POOL_SIZE=32', '-s PTHREAD_POOL_SIZE=2', 1)
+          if 'PTHREAD_POOL_SIZE=2' not in s:
+              raise SystemExit('pthread pool patch failed')
+          makefile.write_text(s)
+
+          # Expose the existing USI parser to the Emscripten bridge.
+          header = Path('YaneuraOu/source/usi.h')
+          s = header.read_text()
+          marker = '\tvoid loop();\n'
+          bridge = '''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
+          if marker not in s:
+              raise SystemExit('USIEngine marker missing')
+          header.write_text(s.replace(marker, bridge, 1))
+
+          # V9.70 refactored Thread and Worker into separate objects.  The native
+          # constructor queues Worker construction onto the new thread and waits.
+          # That wait is intentionally skipped on Emscripten, but V9.70 also
+          # skipped Worker construction itself.  Restore non-blocking readiness:
+          # construct Worker synchronously, let the pthread enter idle_loop, and
+          # do not let USI proceed until BOTH halves are ready.
+          th = Path('YaneuraOu/source/thread.h')
+          s = th.read_text()
+          worker_marker = '\tLargePagePtr<Search::Worker> worker;\n'
+          worker_extra = '''\tLargePagePtr<Search::Worker> worker;\n\n#if defined(__EMSCRIPTEN__)\n\tstd::atomic_bool wasmNativeStarted{false};\n\tstd::atomic_bool wasmWorkerReady{false};\n#endif\n'''
+          if worker_marker not in s:
+              raise SystemExit('thread worker marker missing')
+          s = s.replace(worker_marker, worker_extra, 1)
+          pool_marker = '\tsize_t num_threads() const;\n'
+          pool_extra = '''\tsize_t num_threads() const;\n\n\t// Browser USI must retry until pthreads are parked and Workers exist.\n\tbool all_threads_started() const;\n'''
+          if pool_marker not in s:
+              raise SystemExit('thread pool marker missing')
+          th.write_text(s.replace(pool_marker, pool_extra, 1))
+
+          tc = Path('YaneuraOu/source/thread.cpp')
+          s = tc.read_text()
+
+          em_marker = '''    // 参考：https://github.com/lichess-org/stockfish.wasm/blob/a022fa1405458d1bc1ba22fe813bace961859102/src/thread.cpp#L38\n#endif\n}\n'''
+          em_repl = '''    // 参考：https://github.com/lichess-org/stockfish.wasm/blob/a022fa1405458d1bc1ba22fe813bace961859102/src/thread.cpp#L38\n\n#if !STOCKFISH\n    // V9.70 regression fix for wasm: the refactor skipped this Worker creation.\n    // Do the allocation on the module worker without waiting for the pthread.\n    this->numaAccessToken = binder();\n    this->worker = std::move(worker_factory(\n        sharedState, {n, numaN, totalNumaCount, this->numaAccessToken}));\n    wasmWorkerReady.store(true, std::memory_order_release);\n#endif\n#endif\n}\n'''
+          if em_marker not in s:
+              raise SystemExit('emscripten constructor marker missing')
+          s = s.replace(em_marker, em_repl, 1)
+
+          idle_marker = '''        searching = false;\n        cv.notify_one();  // Wake up anyone waiting for search finished\n'''
+          idle_repl = '''        searching = false;\n#if defined(__EMSCRIPTEN__)\n        wasmNativeStarted.store(true, std::memory_order_release);\n#endif\n        cv.notify_one();  // Wake up anyone waiting for search finished\n'''
+          if idle_marker not in s:
+              raise SystemExit('idle loop marker missing')
+          s = s.replace(idle_marker, idle_repl, 1)
+
+          set_start = ''') {\n\n    /*  📓\n'''
+          set_repl = ''') {\n\n#if defined(__EMSCRIPTEN__)\n    // Same thread count must not destroy/recreate pthreads in a browser.\n    if (threads.size() == requested_threads)\n        return;\n#endif\n\n    /*  📓\n'''
+          if set_start not in s:
+              raise SystemExit('ThreadPool::set start marker missing')
+          s = s.replace(set_start, set_repl, 1)
+
+          destroy = '''    if (threads.size() > 0)  // destroy any existing thread(s)\n    {\n        main_thread()->wait_for_search_finished();\n\n        // 📝 これは、vector::clear()を呼び出してスレッドを解体している。\n        threads.clear();\n\n        boundThreadToNumaNode.clear();\n    }\n'''
+          destroy_repl = '''    if (threads.size() > 0)  // destroy any existing thread(s)\n    {\n#if !defined(__EMSCRIPTEN__)\n        main_thread()->wait_for_search_finished();\n        threads.clear();\n        boundThreadToNumaNode.clear();\n#else\n        // Old working wasm lifecycle: keep existing pthreads when growing and\n        // only remove surplus already-running threads when shrinking.\n        while (threads.size() > requested_threads)\n            threads.pop_back();\n        if (threads.empty())\n            boundThreadToNumaNode.clear();\n#endif\n    }\n'''
+          if destroy not in s:
+              raise SystemExit('thread destroy marker missing')
+          s = s.replace(destroy, destroy_repl, 1)
+
+          clear_marker = '''        // 生成したスレッドに対してThread::clear_worker()を呼び出す。\n        // 🤔 std::make_unique<Thread>()でもWorker::clear()が呼び出されるので\n        //     起動時には二重にclearしてしまうが、仕方がないか…。\n        clear();\n'''
+          clear_repl = '''        // Never block the Emscripten module worker while pthread startup is\n        // still being serviced by the browser.  wasm_pre.js will retry USI.\n#if defined(__EMSCRIPTEN__)\n        if (!all_threads_started())\n            return;\n#endif\n\n        // 生成したスレッドに対してThread::clear_worker()を呼び出す。\n        clear();\n'''
+          if clear_marker not in s:
+              raise SystemExit('thread clear marker missing')
+          s = s.replace(clear_marker, clear_repl, 1)
+
+          num_marker = 'size_t ThreadPool::num_threads() const { return threads.size(); }\n'
+          num_repl = '''size_t ThreadPool::num_threads() const { return threads.size(); }\n\nbool ThreadPool::all_threads_started() const {\n#if defined(__EMSCRIPTEN__)\n    for (const auto& th : threads)\n        if (!th->wasmNativeStarted.load(std::memory_order_acquire)\n            || !th->wasmWorkerReady.load(std::memory_order_acquire))\n            return false;\n#endif\n    return true;\n}\n'''
+          if num_marker not in s:
+              raise SystemExit('num_threads marker missing')
+          tc.write_text(s.replace(num_marker, num_repl, 1))
+
+          # Do not touch TT/NNUE replication until the browser pthreads are parked.
+          eng = Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
+          s = eng.read_text()
+          resize_marker = '''    threads.set(numaContext.get_numa_config(), {options, threads, tt, sharedHists /*, networks*/ },\n                updateContext , options["Threads"], worker_factory);\n\n\t// 置換表の割り当て\n'''
+          resize_repl = '''    threads.set(numaContext.get_numa_config(), {options, threads, tt, sharedHists /*, networks*/ },\n                updateContext , options["Threads"], worker_factory);\n\n#if defined(__EMSCRIPTEN__)\n    if (!threads.all_threads_started())\n        return;\n#endif\n\n\t// 置換表の割り当て\n'''
+          if resize_marker not in s:
+              raise SystemExit('resize marker missing')
+          s = s.replace(resize_marker, resize_repl, 1)
+
+          # Add a lazy Emscripten USI bridge.  Crucially, return nonzero while
+          # native pthread startup is incomplete so wasm_pre/direct JS retries.
+          marker = 'using namespace YaneuraOu;\nnamespace {'
+          live = '''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\n\nstatic void ensure_wasm_usi() {\n    if (wasm_usi) return;\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n}\n\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd) return 1;\n    ensure_wasm_usi();\n    if (!wasm_usi || !wasm_engine) return 2;\n    if (!wasm_engine->get_threads().all_threads_started()) return 1;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
+          if marker not in s:
+              raise SystemExit('engine marker missing')
+          s = s.replace(marker, live, 1)
+
+          pat = re.compile(r'void engine_main\(\) \{.*?\n\}', re.S)
+          rep = '''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    ensure_wasm_usi();\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
+          if len(pat.findall(s)) != 1:
+              raise SystemExit('engine_main match failure')
+          eng.write_text(pat.sub(rep, s, count=1))
+          PY
+
+          grep -F 'wasmNativeStarted' YaneuraOu/source/thread.cpp
+          grep -F 'wasmWorkerReady' YaneuraOu/source/thread.cpp
+          grep -F 'all_threads_started' YaneuraOu/source/thread.cpp
+          grep -F 'EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
+
+      - name: Build exact V9.70 WASM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          docker pull emscripten/emsdk:3.1.43
+          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
+          docker run --rm \
+            -v "${{ github.workspace }}/YaneuraOu:/src" \
+            -w /src/source \
+            emscripten/emsdk:3.1.43 \
+            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160'
+
+      - name: Verify WASM bridge export
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
+          if(!ex.includes('usi_command')) throw new Error('usi_command missing');
+          console.log('usi_command export OK');
+          NODE
+
+      - name: Firefox usiok readyok bestmove smoke
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/yane/site
+          mkdir -p "$ROOT/yaneuraou"
+          LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/worker.js"
+
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body data-result="running">starting</body><script>
+          (async()=>{const b=document.body,L=[],out=x=>{L.push(x);console.log(x);b.textContent=L.join('\n')},fail=e=>{b.dataset.result='error';out('FAIL '+String(e&&e.stack||e))};try{
+          out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);if(!crossOriginIsolated)throw Error('no COI');
+          const w=new Worker('./worker.js?threadfix=v970');let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){out('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=P.get(m.id);if(p){P.delete(m.id);m.ok?p.r(m):p.j(Error(m.error||'worker result error'))}}};w.onerror=e=>fail(Error('worker '+e.message));
+          const call=(type,payload={})=>new Promise((r,j)=>{const id='t'+(++n);P.set(id,{r,j});w.postMessage({type,id,...payload});setTimeout(()=>{if(P.has(id)){P.delete(id);j(Error(type+' timeout'))}},150000)});
+          await call('init');out('INIT OK');const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';const bm=await call('bestmove',{sfen,ms:1200,multiPV:1});out('BEST '+JSON.stringify(bm));if(!bm.token||bm.token==='resign')throw Error('no bestmove');b.dataset.result='ok';out('PASS usiok readyok bestmove '+bm.token);w.terminate();}catch(e){fail(e)}})();
+          </script>
+          HTML
+
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+
+          cd /tmp/yane
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps firefox >/dev/null
+          cat > check.mjs <<'NODE'
+          import{firefox}from'playwright';const b=await firefox.launch({headless:true}),p=await b.newPage();p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));await p.goto('http://127.0.0.1:4173/');await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:180000});const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));console.log('FINAL',JSON.stringify(r));await b.close();if(r.state!=='ok')process.exit(1);
+          NODE
+          node "$ROOT/server.cjs" >/tmp/yane/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break || sleep .2; done
+          node check.mjs 2>&1 | tee /tmp/yane/diag-threadfix.log
+
+      - name: Upload diagnostic and V9.70 runtime
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaneuraou-v970-threadfix
+          path: |
+            /tmp/yane/diag-threadfix.log
+            /tmp/yane/server.log
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js
+            YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm
+          if-no-files-found: ignore
+          retention-days: 2
