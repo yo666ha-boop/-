@@ -5,7 +5,7 @@
   const FUTURE_NAME='未来からやってきたみつき';
   const FUTURE_RATING=3400;
   const SIDE_BASE=new URL('../shogi-side-test/',location.href).href;
-  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w9',location.href).href;
+  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528v970d4',location.href).href;
 
   window.AI_SHOGI_FUNCTIONAL_AUDIT21520=window.AI_SHOGI_FUNCTIONAL_AUDIT21520||{future:true,version:VERSION};
 
@@ -22,7 +22,7 @@
   };
 
   C[FUTURE_INDEX]=[FUTURE_NAME,FUTURE_RATING,'7g7f'];
-  CHAR_META[FUTURE_INDEX]={style:'未来型・超深読み',feature:'やねうら王 HalfKP＋水匠5 / Web Worker本格USIエンジン'};
+  CHAR_META[FUTURE_INDEX]={style:'未来型・超深読み',feature:'やねうら王 V9.70 HalfKP＋水匠5 / Web Worker本格USIエンジン'};
   STYLE[FUTURE_INDEX]={...(STYLE[0]||{atk:1,def:1,pos:1,end:1}),atk:1.16,def:1.18,pos:1.20,end:1.24};
   TEMP_DIALOGUES[FUTURE_INDEX-5]=FUTURE_DIALOGUE;
   if(stats&&Array.isArray(stats.chars)){while(stats.chars.length<C.length)stats.chars.push({w:0,l:0,d:0});try{saveStats()}catch(e){}}
@@ -37,13 +37,13 @@
     document.querySelectorAll('[data-future-mitsuki="1"] img,#chars img[alt="'+FUTURE_NAME+'"],#oppPortrait img[alt="'+FUTURE_NAME+'"],#foppPortrait img[alt="'+FUTURE_NAME+'"]').forEach(img=>{if(img.src!==src){img.onerror=null;img.src=src}});
   }
 
-  const rankTextBase=rankText;rankText=function(i){return i===FUTURE_INDEX?'未来・やねうら王':rankTextBase(i)};
-  const portraitHTMLBase=portraitHTML;portraitHTML=function(i,c){if(i===FUTURE_INDEX)return '<img alt="'+FUTURE_NAME+'" src="'+futureImage()+'" style="box-shadow:inset 0 0 0 3px #75e7ff,0 0 18px #4fd8ff88"><span class="oppFixed" style="background:#07526a;color:#d9fbff">FUTURE・やねうら王</span>';return portraitHTMLBase(i,c)};
+  const rankTextBase=rankText;rankText=function(i){return i===FUTURE_INDEX?'未来・やねうら王V9.70':rankTextBase(i)};
+  const portraitHTMLBase=portraitHTML;portraitHTML=function(i,c){if(i===FUTURE_INDEX)return '<img alt="'+FUTURE_NAME+'" src="'+futureImage()+'" style="box-shadow:inset 0 0 0 3px #75e7ff,0 0 18px #4fd8ff88"><span class="oppFixed" style="background:#07526a;color:#d9fbff">FUTURE・V9.70</span>';return portraitHTMLBase(i,c)};
 
   function addFutureCard(){
     const box=document.getElementById('chars');if(!box||box.querySelector('[data-future-mitsuki="1"]'))return;
     const b=document.createElement('button');b.className='ch';b.dataset.futureMitsuki='1';b.style.cssText='border-color:#39caef;box-shadow:0 0 0 1px #39caef55,0 0 18px #39caef33';
-    b.innerHTML='<img class="chPic" alt="'+FUTURE_NAME+'" src="'+futureImage()+'"><span class="chFixed" style="background:#07526a;color:#d9fbff">未来</span><div class="chName">'+FUTURE_NAME+'</div><div class="chRating">R'+FUTURE_RATING+'・やねうら王</div><div class="chStyle">未来型・超深読み</div><div class="futureEngineState" style="font-size:10px;color:#72dff6;margin-top:4px">ENGINE：未起動</div>';
+    b.innerHTML='<img class="chPic" alt="'+FUTURE_NAME+'" src="'+futureImage()+'"><span class="chFixed" style="background:#07526a;color:#d9fbff">未来</span><div class="chName">'+FUTURE_NAME+'</div><div class="chRating">R'+FUTURE_RATING+'・V9.70</div><div class="chStyle">未来型・超深読み</div><div class="futureEngineState" style="font-size:10px;color:#72dff6;margin-top:4px">ENGINE：未起動</div>';
     b.onclick=()=>{ci=FUTURE_INDEX;lastSpeech='';speechMood='start';newGame();ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}})};box.appendChild(b);
   }
   addFutureCard();ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}});
@@ -86,7 +86,7 @@
       pending.set(id,{resolve,reject,timer});w.postMessage({type,id,...data});
     });
   }
-  async function initFutureEngine(){if(engineReady&&worker)return true;await callWorker('init',{},75000);engineReady=true;setEngineState('⑤成功 やねうら王＋水匠5 接続済み',true);return true}
+  async function initFutureEngine(){if(engineReady&&worker)return true;await callWorker('init',{},75000);engineReady=true;setEngineState('⑤成功 V9.70＋水匠5 接続済み',true);return true}
   async function futureBest(s,opts={}){
     const sfen=toSFEN(s),mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent),endgame=(s.log?.length||0)>=55,defaultMs=mobile?(endgame?7000:4500):(endgame?10000:7000);
     const requested=Number(opts&&opts.ms),ms=Number.isFinite(requested)&&requested>=250?Math.max(250,Math.min(20000,Math.round(requested))):defaultMs;
@@ -99,7 +99,7 @@
   aiMove=function(){
     if(ci!==FUTURE_INDEX)return aiMoveBase();
     if(st.t!=G||thinking||gameCounted)return;if(finishIfEnded())return;
-    thinking=true;showSpeech('think',true);setStatus(FUTURE_NAME+'がやねうら王で未来を読んでいます…');
+    thinking=true;showSpeech('think',true);setStatus(FUTURE_NAME+'がやねうら王V9.70で未来を読んでいます…');
     const startKey=posKey(st),startCi=ci,startState=clone(st),started=performance.now();
     (async()=>{
       let res=null,usedFallback=false;
@@ -109,7 +109,7 @@
       if(res.resign){thinking=false;const delta=recordResult(1);setStatus(FUTURE_NAME+'が投了しました。あなたの勝ちです。');setResult('win','未来みつき投了・勝ち　R '+(delta>=0?'+':'')+delta);speechMood='loss';lastSpeech='';render();renderOpponent(true);refreshFutureImages();return}
       if(res.declareWin){thinking=false;const delta=recordResult(0);setStatus(FUTURE_NAME+'の入玉宣言勝ちです。');setResult('loss','未来みつき宣言勝ち・負け　R '+(delta>=0?'+':'')+delta);speechMood='win';lastSpeech='';render();renderOpponent(true);refreshFutureImages();return}
       if(res.move)push(res.move,'△');thinking=false;speechMood='auto';lastSpeech='';render();renderOpponent(true);refreshFutureImages();if(finishIfEnded())return;
-      const x=lastAIInfo||{};const engineLabel=x.fallback?'内蔵MAX退避（'+String(x.error||engineError||'原因不明').slice(0,80)+'）':'やねうら王＋水匠5';setStatus('あなたの手番です。'+engineLabel+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
+      const x=lastAIInfo||{};const engineLabel=x.fallback?'内蔵MAX退避（'+String(x.error||engineError||'原因不明').slice(0,80)+'）':'やねうら王V9.70＋水匠5';setStatus('あなたの手番です。'+engineLabel+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
     })();
   };
 
@@ -119,6 +119,6 @@
 
   window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine,toSFEN,bestMove:futureBest,status:()=>({ready:engineReady,error:engineError,crossOriginIsolated:globalThis.crossOriginIsolated,worker:!!worker})};
   window.AI_SHOGI_FUTURE_AUDIT21520={version:VERSION,characters:C.length,card:!!document.querySelector('[data-future-mitsuki="1"]'),sfenOK:toSFEN(initial()).startsWith('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -'),crossOriginIsolated:globalThis.crossOriginIsolated,workerURL:WORKER_URL};
-  const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.28 26キャラ・未来みつき Worker版';
+  const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.28 26キャラ・未来みつき V9.70';
   render();renderStats();renderOpponent(false);refreshFutureImages();
 })();
