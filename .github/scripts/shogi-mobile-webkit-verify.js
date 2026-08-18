@@ -63,6 +63,10 @@ const { webkit, devices } = require('playwright');
       soakState=applyMove(soakState,r.move);
     }
 
+    const endState=initialState();endState.log=Array(55).fill('endgame-probe');
+    const futureEnd=await shared.bestMove(endState);
+    const mamaEnd=await top.bestMove(endState,4);
+
     return{
       ua:navigator.userAgent,
       coi:crossOriginIsolated,
@@ -71,6 +75,8 @@ const { webkit, devices } = require('playwright');
       mobileEndgameMs:top.indices.map(i=>top.profileMs({log:Array(55).fill('x')},i)),
       future:{move:!!future?.move,ms:future?.info?.ms,threads:future?.info?.threads,hashMB:future?.info?.hashMB,mobileWebKit:future?.info?.mobileWebKit,engine:future?.info?.engine,depth:future?.info?.depth,nodes:future?.info?.nodes},
       mama:{move:!!mama?.move,ms:mama?.info?.ms,threads:mama?.info?.threads,hashMB:mama?.info?.hashMB,mobileWebKit:mama?.info?.mobileWebKit,engine:mama?.info?.engine,selectedRank:mama?.info?.selectedRank,cpLoss:mama?.info?.cpLoss},
+      futureEnd:{move:!!futureEnd?.move,ms:futureEnd?.info?.ms,threads:futureEnd?.info?.threads,hashMB:futureEnd?.info?.hashMB,mobileWebKit:futureEnd?.info?.mobileWebKit,engine:futureEnd?.info?.engine,depth:futureEnd?.info?.depth,nodes:futureEnd?.info?.nodes},
+      mamaEnd:{move:!!mamaEnd?.move,ms:mamaEnd?.info?.ms,threads:mamaEnd?.info?.threads,hashMB:mamaEnd?.info?.hashMB,mobileWebKit:mamaEnd?.info?.mobileWebKit,engine:mamaEnd?.info?.engine,selectedRank:mamaEnd?.info?.selectedRank,cpLoss:mamaEnd?.info?.cpLoss},
       soak,
       soakPly:soakState.log.length
     };
@@ -88,6 +94,9 @@ const { webkit, devices } = require('playwright');
   if(audit.mama.ms!==1500)failures.push('Mama mobile ms '+audit.mama.ms);
   if(audit.mama.threads!==1||audit.mama.hashMB!==32||audit.mama.mobileWebKit!==true)failures.push('Mama mobile worker config '+JSON.stringify(audit.mama));
   if(!/YaneuraOu/.test(audit.future.engine||'')||!/YaneuraOu/.test(audit.mama.engine||''))failures.push('engine marker missing');
+  if(!audit.futureEnd.move||audit.futureEnd.ms!==7000)failures.push('Future mobile endgame '+JSON.stringify(audit.futureEnd));
+  if(!audit.mamaEnd.move||audit.mamaEnd.ms!==2500)failures.push('Mama mobile endgame '+JSON.stringify(audit.mamaEnd));
+  for(const r of [audit.futureEnd,audit.mamaEnd])if(r.threads!==1||r.hashMB!==32||r.mobileWebKit!==true||!/YaneuraOu/.test(r.engine||'')||!(r.nodes>0))failures.push('endgame worker config '+JSON.stringify(r));
   if(audit.soakPly!==8||!Array.isArray(audit.soak)||audit.soak.length!==8)failures.push('soak length '+audit.soakPly+'/'+audit.soak?.length);
   for(const r of audit.soak||[]){
     if(!r.move)failures.push('soak '+r.name+' no move');
@@ -99,5 +108,5 @@ const { webkit, devices } = require('playwright');
   }
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS iPhone WebKit proxy: COI + Threads1/Hash32 + mobile budgets + 8-ply shared-worker soak');
+  console.log('PASS iPhone WebKit proxy: COI + Threads1/Hash32 + normal/endgame budgets + 8-ply shared-worker soak');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
