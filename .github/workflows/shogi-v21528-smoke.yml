@@ -11,6 +11,7 @@ on:
       - 'shogi-side-test/next5-yaneura-prep21533.js'
       - '.github/scripts/shogi-v21528-smoke.js'
       - '.github/scripts/shogi-top5-yaneura-smoke.js'
+      - '.github/scripts/shogi-next5-suisho-prep-smoke.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
 jobs:
@@ -29,6 +30,7 @@ jobs:
           node --check shogi-v21528/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
           node --check shogi-side-test/next5-yaneura-prep21533.js
+          node --check .github/scripts/shogi-next5-suisho-prep-smoke.js
           node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
@@ -44,6 +46,8 @@ jobs:
         run: node .github/scripts/shogi-v21528-smoke.js
       - name: Run top-five shared YaneuraOu smoke
         run: node .github/scripts/shogi-top5-yaneura-smoke.js
+      - name: Probe next-five Suisho5 bridge without enabling live override
+        run: node .github/scripts/shogi-next5-suisho-prep-smoke.js
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
