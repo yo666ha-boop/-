@@ -1,0 +1,83 @@
+name: Shogi Future ply44 MultiPV diagnostic
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/shogi-future-ply44-multipv.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  multipv:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Prepare COI test site
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/ply44/site
+          mkdir -p "$ROOT/yaneuraou"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,''),x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4182,'127.0.0.1');
+          NODE
+          node "$ROOT/server.cjs" >/tmp/ply44-server.log 2>&1 &
+          sleep 2
+      - name: Read top candidates twice at 20 seconds
+        shell: bash
+        run: |
+          cat > ply44-multipv.mjs <<'NODE'
+          import {webkit,devices} from 'playwright';
+          const SFEN='l2g1gsnl/5k3/p1n1pp1pp/3p2p2/9/6P2/P2PP+l1PP/3G2R2/2+r1BKSNL b Nbg2s5p 45';
+          const browser=await webkit.launch({headless:true});
+          const ctx=await browser.newContext({...devices['iPhone 13']});
+          const page=await ctx.newPage();
+          await page.goto('http://127.0.0.1:4182/future-yaneura-worker21528.js',{waitUntil:'load'}).catch(()=>{});
+          const out=await page.evaluate(async(SFEN)=>{
+            const w=new Worker('http://127.0.0.1:4182/future-yaneura-worker21528.js?diag='+Date.now());
+            let seq=0;const pending=new Map();
+            w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker error'))}};
+            const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id='q'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(type+' timeout'))},timeout)});
+            const init=await call('init');
+            const runs=[];
+            for(let i=0;i<2;i++){
+              const r=await call('bestmove',{sfen:SFEN,ms:20000,multiPV:3},160000);
+              runs.push({best:r.token,depth:r.info?.depth||0,nodes:r.info?.nodes||0,threads:r.info?.threads,hashMB:r.info?.hashMB,candidates:(r.candidates||[]).map(c=>({rank:c.rank,move:c.token,cp:c.cp??null,mate:c.mate??null,depth:c.depth||0,nodes:c.nodes||0}))});
+            }
+            w.terminate();return{init,runs};
+          },SFEN);
+          console.log('PLY44_MULTIPV',JSON.stringify(out));
+          for(const [i,r] of out.runs.entries()){
+            if(!r.best||r.best==='resign'||!r.nodes)throw Error('run '+i+' missing bestmove');
+            if(r.threads!==1||r.hashMB!==64)throw Error('expected iPhone 1T/64, got '+r.threads+'T/'+r.hashMB+'MB');
+            if(r.candidates.length<2)throw Error('run '+i+' missing MultiPV candidates');
+            const cps=r.candidates.filter(c=>Number.isFinite(c.cp));
+            if(cps.length>=2)console.log('CP_GAPS run='+i, cps.slice(1).map(c=>({move:c.move,gap:cps[0].cp-c.cp})));
+          }
+          await browser.close();
+          NODE
+          node ply44-multipv.mjs 2>&1 | tee /tmp/ply44-multipv.log
+      - name: Upload diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-ply44-multipv
+          path: |
+            /tmp/ply44-multipv.log
+            /tmp/ply44-server.log
+          retention-days: 2
