@@ -1,0 +1,40 @@
+name: Shogi current R6-R10 Suisho5 probe
+on:
+  push:
+    branches:
+      - 'work/shogi-next5-correct-20260818'
+    paths:
+      - 'shogi-side-test/next5-yaneura-prep21533.js'
+      - '.github/scripts/shogi-next5-current-characters-smoke.js'
+      - '.github/workflows/shogi-next5-current-characters.yml'
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check current R6-R10 probe
+        run: |
+          node --check shogi-side-test/next5-yaneura-prep21533.js
+          node --check .github/scripts/shogi-next5-current-characters-smoke.js
+          node --check shogi-v21528/future-yaneura-worker21528.js
+          node --check shogi-side-test/top5-yaneura21529.js
+      - name: Install Playwright Firefox
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps firefox
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-server.log 2>&1 &
+          echo $! > /tmp/shogi-server.pid
+          sleep 2
+      - name: Verify current R6-R10 and probe Suisho5
+        run: node .github/scripts/shogi-next5-current-characters-smoke.js
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/shogi-server.log || true
