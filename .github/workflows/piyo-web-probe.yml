@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/scripts/piyo-web-probe.js'
       - '.github/workflows/piyo-web-probe.yml'
+  pull_request:
+    paths:
+      - '.github/scripts/piyo-web-probe.js'
+      - '.github/workflows/piyo-web-probe.yml'
   workflow_dispatch:
 jobs:
   probe:
