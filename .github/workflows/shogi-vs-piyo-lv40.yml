@@ -1,0 +1,43 @@
+name: Shogi Future Mitsuki vs Piyo Lv40
+on:
+  push:
+    branches:
+      - feature/shogi-future-mobile-max-20260818
+    paths:
+      - '.github/scripts/shogi-vs-piyo-lv40.js'
+      - '.github/workflows/shogi-vs-piyo-lv40.yml'
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/future21520.js'
+  pull_request:
+    paths:
+      - '.github/scripts/shogi-vs-piyo-lv40.js'
+      - '.github/workflows/shogi-vs-piyo-lv40.yml'
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/future21520.js'
+  workflow_dispatch:
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check match harness
+        run: node --check .github/scripts/shogi-vs-piyo-lv40.js
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit chromium
+      - name: Start Future Mitsuki app server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-vs-piyo-server.log 2>&1 &
+          echo $! > /tmp/shogi-vs-piyo-server.pid
+          sleep 2
+      - name: Run one full match against Piyo Lv40
+        run: node .github/scripts/shogi-vs-piyo-lv40.js
+      - name: Show local server log on failure
+        if: failure()
+        run: cat /tmp/shogi-vs-piyo-server.log || true
