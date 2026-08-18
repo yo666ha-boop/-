@@ -12,6 +12,12 @@ on:
       - '.github/scripts/shogi-top5-yaneura-smoke.js'
       - '.github/scripts/shogi-top5-deep-verify.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
+  pull_request:
+    paths:
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/**'
+      - '.github/scripts/shogi-*.js'
+      - '.github/workflows/shogi-v21528-smoke.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -49,6 +55,13 @@ jobs:
         id: deepverify
         continue-on-error: true
         run: node .github/scripts/shogi-top5-deep-verify.js
+      - name: Upload deep verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shogi-top5-deep-verify
+          path: .github/benchmark-results/shogi-top5-deep-verify-latest.json
+          if-no-files-found: ignore
       - name: Save deep verification result on verification branch
         if: always() && github.ref == 'refs/heads/feature/shogi-top5-deepverify-21532-20260818'
         run: |
