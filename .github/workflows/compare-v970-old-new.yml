@@ -1,0 +1,103 @@
+name: Compare old WASM vs fixed V9.70
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/compare-v970-old-new.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare old and fixed V9.70 runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/compare/site
+          mkdir -p "$ROOT/old" "$ROOT/new" /tmp/compare/art
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/old/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/nn.bin"
+          gh run download 32147280548 -n yaneuraou-v970-evalfile-fixed -D /tmp/compare/art
+          JS=$(find /tmp/compare/art -name 'yaneuraou.halfkp.noeval.js' | head -1); test -n "$JS"; LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/new/"
+          sha256sum "$ROOT"/old/* "$ROOT"/new/* | tee /tmp/compare/runtime-sha.txt
+      - name: Create generic browser engine driver
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/compare/site
+          cat > "$ROOT/driver.js" <<'JS'
+          'use strict';
+          const kind=new URL(self.location.href).searchParams.get('kind')||'old';
+          const BASE=new URL('./'+kind+'/',self.location.href).href;
+          let engine=null,ready=false,waiters=[],lastInfo={};
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          function line(raw){const s=String(raw||'').trim();if(s.startsWith('info ')){const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1],line:s};}for(const w of waiters.slice())if(w.pred(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}}
+          function wait(pred,ms,label){return new Promise((r,j)=>{const w={pred,r,j,t:setTimeout(()=>{waiters=waiters.filter(x=>x!==w);j(Error(label+' timeout'))},ms)};waiters.push(w)})}
+          async function init(){if(ready)return;importScripts(BASE+'yaneuraou.halfkp.noeval.js?cmp=1');const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});engine.addMessageListener(line);const b=new Uint8Array(await (await fetch(new URL('./nn.bin',self.location.href),{cache:'no-store'})).arrayBuffer());try{engine.FS.unlink('/nn.bin')}catch{}engine.FS.writeFile('/nn.bin',b);let p=wait(x=>x==='usiok',30000,'usiok');engine.postMessage('usi');await p;engine.postMessage('setoption name EvalDir value .');engine.postMessage('setoption name EvalFile value nn.bin');engine.postMessage('setoption name FV_SCALE value 24');engine.postMessage('setoption name USI_Hash value 32');engine.postMessage('setoption name Threads value 1');engine.postMessage('setoption name MultiPV value 1');p=wait(x=>x==='readyok',90000,'readyok');engine.postMessage('isready');await p;engine.postMessage('setoption name USI_Ponder value false');engine.postMessage('usinewgame');ready=true;}
+          async function search(moves,nodes){await init();lastInfo={};engine.postMessage('position startpos'+(moves?' moves '+moves:''));const p=wait(x=>x.startsWith('bestmove '),90000,'bestmove');engine.postMessage('go nodes '+nodes);const s=await p;return{move:(s.split(/\s+/)[1]||''),...lastInfo}}
+          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search'){const out=await search(String(m.moves||''),Number(m.nodes)||50000);self.postMessage({id:m.id,ok:true,kind,...out})}}catch(err){self.postMessage({id:m.id,ok:false,kind,error:String(err&&err.stack||err)})}};
+          JS
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body>comparison host</body>
+          HTML
+      - name: Firefox 10-position quality comparison
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/compare/pw && cd /tmp/compare/pw
+          npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps firefox >/dev/null
+          cat > compare.mjs <<'NODE'
+          import{firefox}from'playwright';
+          const positions=[
+            '',
+            '7g7f 3c3d',
+            '7g7f 3c3d 2g2f 8c8d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d 9g9f 1c1d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d 9g9f 1c1d 1g1f 9c9d',
+            '7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d 9g9f 1c1d 1g1f 9c9d 2f2e 8d8e'
+          ];
+          const b=await firefox.launch({headless:true}),p=await b.newPage();p.on('console',m=>console.log('PAGE',m.text()));await p.goto('http://127.0.0.1:4173/');
+          const call=async(kind,moves,nodes,tag)=>await p.evaluate(({kind,moves,nodes,tag})=>new Promise((resolve,reject)=>{const w=new Worker('./driver.js?kind='+kind+'&tag='+encodeURIComponent(tag));const id='x';const to=setTimeout(()=>{w.terminate();reject(Error('timeout '+kind+' '+tag))},120000);w.onmessage=e=>{if(e.data&&e.data.id===id){clearTimeout(to);w.terminate();e.data.ok?resolve(e.data):reject(Error(e.data.error))}};w.onerror=e=>{clearTimeout(to);w.terminate();reject(Error(e.message))};w.postMessage({type:'search',id,moves,nodes})}),{kind,moves,nodes,tag});
+          const R=[];let oldMatch=0,newMatch=0;
+          for(let i=0;i<positions.length;i++){
+            const moves=positions[i];
+            const ref=await call('new',moves,180000,'ref'+i);
+            const old=await call('old',moves,50000,'old'+i);
+            const neu=await call('new',moves,50000,'new'+i);
+            if(old.move===ref.move)oldMatch++;if(neu.move===ref.move)newMatch++;
+            const row={i,moves,ref,old,new:neu,oldMatch:old.move===ref.move,newMatch:neu.move===ref.move};R.push(row);console.log('ROW',JSON.stringify(row));
+          }
+          const summary={positions:R.length,oldMatch,newMatch,oldRate:oldMatch/R.length,newRate:newMatch/R.length,rows:R};console.log('SUMMARY',JSON.stringify(summary));await b.close();
+          require?.noop;
+          NODE
+          # Remove the harmless CommonJS-only sentinel before ESM execution.
+          sed -i '/require?.noop/d' compare.mjs
+          node /tmp/compare/site/server.cjs >/tmp/compare/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          node compare.mjs 2>&1 | tee /tmp/compare/result.log
+          grep -F 'SUMMARY ' /tmp/compare/result.log
+      - name: Upload comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v970-old-new-10pos
+          path: |
+            /tmp/compare/result.log
+            /tmp/compare/runtime-sha.txt
+            /tmp/compare/server.log
+          if-no-files-found: ignore
+          retention-days: 2
