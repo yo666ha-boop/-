@@ -53,17 +53,6 @@ jobs:
         run: node .github/scripts/shogi-v21528-smoke.js
       - name: Run top-five shared YaneuraOu smoke
         run: node .github/scripts/shogi-top5-yaneura-smoke.js
-      - name: Run deep top-five verification
-        id: deepverify
-        continue-on-error: true
-        run: node .github/scripts/shogi-top5-deep-verify.js
-      - name: Upload deep verification report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: shogi-top5-deep-verify
-          path: .github/benchmark-results/shogi-top5-deep-verify-latest.json
-          if-no-files-found: ignore
       - name: Run targeted opening verification
         id: openingverify
         continue-on-error: true
@@ -74,6 +63,17 @@ jobs:
         with:
           name: shogi-top5-opening-verify
           path: .github/benchmark-results/shogi-top5-opening-verify-latest.json
+          if-no-files-found: ignore
+      - name: Run deep top-five verification
+        id: deepverify
+        continue-on-error: true
+        run: node .github/scripts/shogi-top5-deep-verify.js
+      - name: Upload deep verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shogi-top5-deep-verify
+          path: .github/benchmark-results/shogi-top5-deep-verify-latest.json
           if-no-files-found: ignore
       - name: Save deep verification result on verification branch
         if: always() && github.ref == 'refs/heads/feature/shogi-top5-deepverify-21532-20260818'
