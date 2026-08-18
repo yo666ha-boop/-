@@ -8,6 +8,12 @@ on:
       - 'shogi-side-test/future21520.js'
       - '.github/scripts/shogi-future-mobile-strength-verify.js'
       - '.github/workflows/shogi-future-mobile-strength.yml'
+  pull_request:
+    paths:
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future21520.js'
+      - '.github/scripts/shogi-future-mobile-strength-verify.js'
+      - '.github/workflows/shogi-future-mobile-strength.yml'
   workflow_dispatch:
 jobs:
   future-mobile-strength:
