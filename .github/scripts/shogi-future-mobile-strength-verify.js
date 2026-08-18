@@ -80,9 +80,8 @@ async function fireAudit(){
     if(!(r.future.nodes>r.mitsu.nodes*1.5))failures.push(r.name+' node lead too small '+r.future.nodes+'/'+r.mitsu.nodes);
     if(r.future.depth<r.mitsu.depth-1)failures.push(r.name+' Future depth '+r.future.depth+' < Mitsuki '+r.mitsu.depth);
     if(r.future.deviceClass!=='ios-webkit')failures.push(r.name+' deviceClass='+r.future.deviceClass);
-    if(r.future.hardwareConcurrency>=4&&r.future.threads!==2)failures.push(r.name+' expected 2 threads at HW '+r.future.hardwareConcurrency);
-    if(r.future.hardwareConcurrency<4&&r.future.threads!==1)failures.push(r.name+' expected 1 thread at HW '+r.future.hardwareConcurrency);
-    if(r.future.hashMB<48)failures.push(r.name+' hashMB='+r.future.hashMB);
+    if(r.future.threads!==1)failures.push(r.name+' expected stable iPhone Threads=1, got '+r.future.threads);
+    if(r.future.hashMB!==64)failures.push(r.name+' expected stable iPhone Hash=64MB, got '+r.future.hashMB);
     if(r.future.move===r.ref.move)futureAgree++;
     if(r.mitsu.move===r.ref.move)mitsuAgree++;
   }
@@ -99,5 +98,5 @@ async function fireAudit(){
   if(![1,2].includes(fire.threads)||fire.hashMB<48||fire.hashMB>64)failures.push('Fire worker ceiling '+JSON.stringify(fire));
   console.log('MOBILE_STRENGTH_SUMMARY',JSON.stringify({futureAgree,mitsuAgree,requiredFutureAgree:2,iphoneRows:iphone.rows.map(r=>({name:r.name,ply:r.ply,nodeRatio:Number((r.future.nodes/Math.max(1,r.mitsu.nodes)).toFixed(2)),futureDepth:r.future.depth,mitsuDepth:r.mitsu.depth,futureMove:r.future.move,mitsuMove:r.mitsu.move,refMove:r.ref.move})),fire:{ms:fire.ms,threads:fire.threads,hashMB:fire.hashMB,depth:fire.depth,nodes:fire.nodes}}));
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS Future Mitsuki strongest acceptance: mobile budgets + node lead + >=2/3 20s-reference agreement');
+  console.log('PASS Future Mitsuki strongest acceptance: stable iPhone 1-thread/64MB + mobile budgets + node lead + >=2/3 20s-reference agreement');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
