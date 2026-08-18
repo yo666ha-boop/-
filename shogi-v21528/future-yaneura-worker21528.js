@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528v970d2';
+const BUILD='21528v970d3';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const ENGINE_THREADS=MOBILE_WEBKIT?1:2;
@@ -29,6 +29,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 self.addEventListener('error',ev=>{try{self.postMessage({type:'fatal',text:'Worker内部エラー: '+String(ev.message||'unknown')+' @ '+String(ev.filename||'')+':'+String(ev.lineno||0)+':'+String(ev.colno||0)})}catch(e){}});
 function onLine(raw){
   const line=String(raw||'').trim();
+  if(line.startsWith('info string WASMDBG '))stage('DBG '+line.slice('info string WASMDBG '.length));
   if(line.startsWith('info ')){
     const d=/\bdepth\s+(\d+)/.exec(line),n=/\bnodes\s+(\d+)/.exec(line),cp=/\bscore\s+cp\s+(-?\d+)/.exec(line),mate=/\bscore\s+mate\s+(-?\d+)/.exec(line),mp=/\bmultipv\s+(\d+)/.exec(line),pv=/\bpv\s+([^\s]+)/.exec(line);
     const rank=mp?Math.max(1,+mp[1]):1;
@@ -118,6 +119,6 @@ self.onmessage=async ev=>{
     }
     if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}
     if(m.type==='newgame'){try{if(engine){await sendUSI('stop');await sendUSI('setoption name MultiPV value 1');await sendUSI('usinewgame')}}catch(e){};return}
-  }catch(e){self.postMessage({type:'result',id,ok:false,error:String(e&&e.message||e),mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
+  }catch(e){const msg=String(e&&e.message||e);stage('⑤失敗 '+msg);self.postMessage({type:'result',id,ok:false,error:msg,mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
 };
 self.postMessage({type:'stage',text:'⑤-W0 Worker待受開始'});
