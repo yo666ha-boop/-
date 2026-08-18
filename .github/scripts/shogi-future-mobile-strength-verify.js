@@ -87,13 +87,17 @@ async function fireAudit(){
     if(r.mitsu.move===r.ref.move)mitsuAgree++;
   }
   if(futureAgree<mitsuAgree)failures.push('20s-reference agreement Future '+futureAgree+' < Mitsuki '+mitsuAgree);
+  // Strongest-character acceptance is stricter than merely beating the R3000 profile.
+  // With three representative iPhone positions, Future must agree with its own 20s
+  // reference on at least two. 1/3 is diagnostic evidence of unstable strength, not PASS.
+  if(futureAgree<2)failures.push('Future strongest acceptance requires >=2/3 20s-reference agreement, got '+futureAgree+'/3');
   if(!fire.coi)failures.push('Fire crossOriginIsolated=false');
   if(fire.tune!=='mobile-max2-openingdeep')failures.push('Fire tune='+fire.tune);
   if(fire.budgetOpening!==12000||fire.budgetMid!==8500||fire.budgetLate!==12000)failures.push('Fire budgets '+fire.budgetOpening+'/'+fire.budgetMid+'/'+fire.budgetLate);
   if(!fire.move||!(fire.nodes>0))failures.push('Fire no search result');
   if(fire.deviceClass!=='fire-silk'||fire.fireSilk!==true)failures.push('Fire detection '+JSON.stringify(fire));
   if(![1,2].includes(fire.threads)||fire.hashMB<48||fire.hashMB>64)failures.push('Fire worker ceiling '+JSON.stringify(fire));
-  console.log('MOBILE_STRENGTH_SUMMARY',JSON.stringify({futureAgree,mitsuAgree,iphoneRows:iphone.rows.map(r=>({name:r.name,ply:r.ply,nodeRatio:Number((r.future.nodes/Math.max(1,r.mitsu.nodes)).toFixed(2)),futureDepth:r.future.depth,mitsuDepth:r.mitsu.depth,futureMove:r.future.move,mitsuMove:r.mitsu.move,refMove:r.ref.move})),fire:{ms:fire.ms,threads:fire.threads,hashMB:fire.hashMB,depth:fire.depth,nodes:fire.nodes}}));
+  console.log('MOBILE_STRENGTH_SUMMARY',JSON.stringify({futureAgree,mitsuAgree,requiredFutureAgree:2,iphoneRows:iphone.rows.map(r=>({name:r.name,ply:r.ply,nodeRatio:Number((r.future.nodes/Math.max(1,r.mitsu.nodes)).toFixed(2)),futureDepth:r.future.depth,mitsuDepth:r.mitsu.depth,futureMove:r.future.move,mitsuMove:r.mitsu.move,refMove:r.ref.move})),fire:{ms:fire.ms,threads:fire.threads,hashMB:fire.hashMB,depth:fire.depth,nodes:fire.nodes}}));
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS Future Mitsuki mobile-max2-openingdeep: opening/mid/end budgets + node lead + 20s-reference agreement');
+  console.log('PASS Future Mitsuki strongest acceptance: mobile budgets + node lead + >=2/3 20s-reference agreement');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
