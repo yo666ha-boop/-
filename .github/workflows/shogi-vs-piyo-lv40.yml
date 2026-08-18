@@ -18,7 +18,7 @@ on:
 jobs:
   match:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,8 +36,28 @@ jobs:
           python3 -m http.server 8000 > /tmp/shogi-vs-piyo-server.log 2>&1 &
           echo $! > /tmp/shogi-vs-piyo-server.pid
           sleep 2
-      - name: Run one full match against Piyo Lv40
-        run: node .github/scripts/shogi-vs-piyo-lv40.js
+      - name: Run real match against Piyo Lv40
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/shogi-vs-piyo-lv40.js /tmp/shogi-vs-piyo-full.js
+          sed -i 's/const MAX_PLIES=12;/const MAX_PLIES=120;/' /tmp/shogi-vs-piyo-full.js
+          grep -F 'const MAX_PLIES=120;' /tmp/shogi-vs-piyo-full.js
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/shogi-vs-piyo-full.js 2>&1 | tee /tmp/shogi-vs-piyo-full.log
+          if grep -F '"result":"incomplete"' /tmp/shogi-vs-piyo-full.log; then
+            echo 'FAIL: reached 120-ply cap without a real result'
+            exit 1
+          fi
+          grep -F 'PIYO_OPENING_PROBE_RESULT' /tmp/shogi-vs-piyo-full.log
+          echo 'PASS: Piyo Lv40 match reached a real terminal result before 120 plies'
+      - name: Upload match log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-vs-piyo-lv40-full-match
+          path: /tmp/shogi-vs-piyo-full.log
+          if-no-files-found: warn
+          retention-days: 2
       - name: Show local server log on failure
         if: failure()
         run: cat /tmp/shogi-vs-piyo-server.log || true
