@@ -1,5 +1,5 @@
 name: Shogi Future opening safety vs Piyo Lv40
-# diagnostic PR trigger: opening-safety only
+# diagnostic PR synchronize trigger: opening-safety only
 on:
   pull_request:
     paths:
