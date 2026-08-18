@@ -1,0 +1,69 @@
+name: Probe V9.70 runtime matrix PR
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/diag-v970-runtime-matrix-pr.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reuse exact V9.70 runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/probe/art /tmp/probe/site/yaneuraou
+          gh run download 32145291639 -n yaneuraou-v970-threadfix -D /tmp/probe/art
+          JS=$(find /tmp/probe/art -name 'yaneuraou.halfkp.noeval.js' | head -1)
+          test -n "$JS"
+          LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} /tmp/probe/site/yaneuraou/
+          cp shogi-v21528/yaneuraou/nn.bin /tmp/probe/site/yaneuraou/
+      - name: Make 3 worker variants
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/probe/site
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/t2h128.js"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/t2h32.js"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/t1h32.js"
+          sed -i 's/ENGINE_HASH_MB=MOBILE_WEBKIT?32:128/ENGINE_HASH_MB=MOBILE_WEBKIT?32:32/' "$ROOT/t2h32.js" "$ROOT/t1h32.js"
+          sed -i 's/ENGINE_THREADS=MOBILE_WEBKIT?1:2/ENGINE_THREADS=MOBILE_WEBKIT?1:1/' "$ROOT/t1h32.js"
+      - name: Firefox matrix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/probe/site
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body data-result="running">start</body><script>
+          (async()=>{const b=document.body,L=[],say=x=>{L.push(x);console.log(x);b.textContent=L.join('\n')};const f=new URL(location.href).searchParams.get('w');const fail=e=>{b.dataset.result='error';say('FAIL '+String(e&&e.message||e));say('STACK '+String(e&&e.stack||''))};try{say('CASE '+f+' COI='+crossOriginIsolated);if(!crossOriginIsolated)throw Error('COI false');const w=new Worker('./'+f+'?matrix=2');let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){say('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=P.get(m.id);if(!p)return;P.delete(m.id);if(m.ok)p.r(m);else{say('WORKER_RESULT_ERROR '+String(m.error));p.j(Error(m.error||'worker error'))}}};w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));const call=(type,payload={})=>new Promise((r,j)=>{const id='x'+(++n);P.set(id,{r,j});w.postMessage({type,id,...payload});setTimeout(()=>{if(P.has(id)){P.delete(id);j(Error(type+' timeout'))}},120000)});const init=await call('init');say('INIT '+JSON.stringify(init));const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';const bm=await call('bestmove',{sfen,ms:800,multiPV:1});say('BEST '+JSON.stringify(bm));if(!bm.token||bm.token==='resign')throw Error('bad bestmove');b.dataset.result='ok';say('PASS '+f+' '+bm.token);w.terminate()}catch(e){fail(e)}})();
+          </script>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const [k,v] of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          mkdir -p /tmp/probe/pw && cd /tmp/probe/pw
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps firefox >/dev/null
+          cat > check.mjs <<'NODE'
+          import{firefox}from'playwright';const cases=['t2h128.js','t2h32.js','t1h32.js'],R=[];for(const c of cases){const b=await firefox.launch({headless:true}),p=await b.newPage();p.on('console',m=>console.log(c,'CONSOLE',m.type(),m.text()));p.on('pageerror',e=>console.log(c,'PAGEERROR',e.stack||e));try{await p.goto('http://127.0.0.1:4173/?w='+c);await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:150000});const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));console.log('CASE_RESULT',c,JSON.stringify(r));R.push({c,...r})}catch(e){console.log('CASE_THROW',c,e.stack||e);R.push({c,state:'throw',text:String(e)})}await b.close()}console.log('MATRIX_RESULT',JSON.stringify(R));if(!R.some(x=>x.state==='ok'))process.exit(1);
+          NODE
+          node "$ROOT/server.cjs" >/tmp/probe/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          node check.mjs 2>&1 | tee /tmp/probe/matrix.log
+      - name: Upload matrix log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v970-runtime-matrix-pr
+          path: |
+            /tmp/probe/matrix.log
+            /tmp/probe/server.log
+          if-no-files-found: ignore
+          retention-days: 2
