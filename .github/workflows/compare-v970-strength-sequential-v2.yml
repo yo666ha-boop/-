@@ -1,0 +1,84 @@
+name: Sequential V9.70 strength proof v2
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/compare-v970-strength-sequential-v2.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  strength:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/strength2/site
+          mkdir -p "$ROOT/old" "$ROOT/new" /tmp/strength2/art
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/old/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/nn.bin"
+          gh run download 32147280548 -n yaneuraou-v970-evalfile-fixed -D /tmp/strength2/art
+          JS=$(find /tmp/strength2/art -name 'yaneuraou.halfkp.noeval.js' | head -1); test -n "$JS"; LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/new/"
+          sha256sum "$ROOT"/old/* "$ROOT"/new/* | tee /tmp/strength2/runtime-sha.txt
+      - name: Create engine driver and server
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/strength2/site
+          cat > "$ROOT/driver.js" <<'JS'
+          'use strict';
+          const kind=new URL(self.location.href).searchParams.get('kind')||'new';
+          const BASE=new URL('./'+kind+'/',self.location.href).href;
+          let engine=null,ready=false,waiters=[],lastInfo={};
+          function onLine(raw){const s=String(raw||'').trim();if(s.startsWith('info ')){const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1]};}for(const w of waiters.slice())if(w.pred(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}}
+          function waitLine(pred,ms,label){return new Promise((r,j)=>{const w={pred,r,j,t:setTimeout(()=>{waiters=waiters.filter(x=>x!==w);j(Error(label+' timeout'))},ms)};waiters.push(w)})}
+          async function init(){if(ready)return;importScripts(BASE+'yaneuraou.halfkp.noeval.js?seq2=1');const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});engine.addMessageListener(onLine);const b=new Uint8Array(await (await fetch(new URL('./nn.bin',self.location.href),{cache:'no-store'})).arrayBuffer());try{engine.FS.unlink('/nn.bin')}catch{}engine.FS.writeFile('/nn.bin',b);let p=waitLine(x=>x==='usiok',30000,'usiok');engine.postMessage('usi');await p;for(const c of['setoption name EvalDir value .','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])engine.postMessage(c);p=waitLine(x=>x==='readyok',90000,'readyok');engine.postMessage('isready');await p;engine.postMessage('setoption name USI_Ponder value false');engine.postMessage('usinewgame');ready=true;}
+          async function search(moves,nodes){await init();lastInfo={};engine.postMessage('position startpos'+(moves?' moves '+moves:''));const p=waitLine(x=>x.startsWith('bestmove '),90000,'bestmove');engine.postMessage('go nodes '+nodes);const s=await p;return{move:(s.split(/\s+/)[1]||''),...lastInfo}}
+          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search'){self.postMessage({id:m.id,ok:true,kind,...await search(String(m.moves||''),Number(m.nodes)||50000)});return}if(m.type==='shutdown'){try{engine&&engine.terminate&&engine.terminate()}catch{}self.postMessage({id:m.id,ok:true,kind,shutdown:true});close();}}catch(err){self.postMessage({id:m.id,ok:false,kind,error:String(err&&err.stack||err)})}};
+          JS
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><body>strength v2</body>' > "$ROOT/index.html"
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+      - name: Firefox sequential strength proof
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/strength2/pw && cd /tmp/strength2/pw
+          npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps firefox >/dev/null
+          cat > strength.mjs <<'NODE'
+          import{firefox}from'playwright';
+          const openings=['','7g7f 3c3d','7g7f 3c3d 2g2f 8c8d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d 9g9f 1c1d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d 9g9f 1c1d 1g1f 9c9d','7g7f 3c3d 2g2f 8c8d 6g6f 4c4d 5g5f 5c5d 4g4f 6c6d 3g3f 7c7d 9g9f 1c1d 1g1f 9c9d 2f2e 8d8e'];
+          const browser=await firefox.launch({headless:true}),page=await browser.newPage();await page.goto('http://127.0.0.1:4173/');
+          async function phase(kind,fn,payload){return await page.evaluate(async({kind,code,payload})=>{const run=(0,eval)('('+code+')');function rpc(){const w=new Worker('./driver.js?kind='+kind+'&r='+Math.random());let seq=0,p=new Map();w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q)return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'engine error'))};const call=(moves,nodes)=>new Promise((r,j)=>{const id=++seq,t=setTimeout(()=>{p.delete(id);j(Error(kind+' timeout'))},120000);p.set(id,{r,j,t});w.postMessage({type:'search',id,moves,nodes})});return{call,close:()=>new Promise(r=>{const id=++seq,t=setTimeout(()=>{w.terminate();r()},3000);p.set(id,{r:()=>{clearTimeout(t);w.terminate();r()},j:()=>{clearTimeout(t);w.terminate();r()},t});w.postMessage({type:'shutdown',id})})}}const x=rpc();try{return await run(x,payload)}finally{await x.close()}},{kind,code:fn.toString(),payload})}
+          const ref=await phase('new',async(x,data)=>{const openingRefs=[];for(const m of data.openings)openingRefs.push(await x.call(m,180000));const moves=[],snaps=[];for(let ply=1;ply<=36;ply++){const r=await x.call(moves.join(' '),70000);if(!r.move||['resign','win','none'].includes(r.move))throw Error('selfplay stopped '+ply+' '+r.move);moves.push(r.move);if([20,24,28,32,36].includes(ply))snaps.push({ply,moves:moves.join(' ')})}const midRefs=[];for(const s of snaps)midRefs.push({...s,ref:await x.call(s.moves,250000)});return{openingRefs,midRefs}},{openings});
+          const payload={openings,midRefs:ref.midRefs};
+          const old=await phase('old',async(x,data)=>{const opening=[];for(const m of data.openings)opening.push(await x.call(m,50000));const mid=[];for(const s of data.midRefs)mid.push(await x.call(s.moves,60000));return{opening,mid}},payload);
+          const neu=await phase('new',async(x,data)=>{const opening=[];for(const m of data.openings)opening.push(await x.call(m,50000));const mid=[];for(const s of data.midRefs)mid.push(await x.call(s.moves,60000));return{opening,mid}},payload);
+          const openingRows=openings.map((moves,i)=>({i,moves,ref:ref.openingRefs[i],old:old.opening[i],new:neu.opening[i],oldMatch:old.opening[i].move===ref.openingRefs[i].move,newMatch:neu.opening[i].move===ref.openingRefs[i].move}));
+          const midRows=ref.midRefs.map((s,i)=>({ply:s.ply,moves:s.moves,ref:s.ref,old:old.mid[i],new:neu.mid[i],oldMatch:old.mid[i].move===s.ref.move,newMatch:neu.mid[i].move===s.ref.move}));
+          const count=(rows,k)=>rows.filter(r=>r[k]).length;const summary={opening:{n:openingRows.length,oldMatch:count(openingRows,'oldMatch'),newMatch:count(openingRows,'newMatch')},midgame:{n:midRows.length,oldMatch:count(midRows,'oldMatch'),newMatch:count(midRows,'newMatch')},openingRows,midRows};
+          console.log('STRENGTH_SUMMARY',JSON.stringify(summary));for(const r of openingRows)console.log('OPENING_ROW',JSON.stringify(r));for(const r of midRows)console.log('MIDGAME_ROW',JSON.stringify(r));await browser.close();
+          NODE
+          node /tmp/strength2/site/server.cjs >/tmp/strength2/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          node strength.mjs 2>&1 | tee /tmp/strength2/result.log
+          grep -F 'STRENGTH_SUMMARY ' /tmp/strength2/result.log
+      - name: Upload proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v970-strength-sequential-v2
+          path: |
+            /tmp/strength2/result.log
+            /tmp/strength2/runtime-sha.txt
+            /tmp/strength2/server.log
+          if-no-files-found: ignore
+          retention-days: 2
