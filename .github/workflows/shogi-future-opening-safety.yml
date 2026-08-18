@@ -1,4 +1,5 @@
 name: Shogi Future opening safety vs Piyo Lv40
+# second PR synchronize: workflow already exists, trigger real diagnostic run
 on:
   pull_request:
     paths:
