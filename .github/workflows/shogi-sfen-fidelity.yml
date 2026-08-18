@@ -1,0 +1,56 @@
+name: Shogi SFEN fidelity
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/shogi-sfen-fidelity.js'
+      - '.github/workflows/shogi-sfen-fidelity.yml'
+      - 'shogi-side-test/future21520.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fidelity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build independent SFEN references
+        shell: bash
+        run: |
+          python3 -m pip install --user python-shogi
+          python3 - <<'PY'
+          import json, shogi
+          moves='''7g7f 8c8d 2h3h 8d8e 7f7e 8e8f 7e7d 8f8g+ 8h5e 8b8e 5e4f 7a6b 4i5h 3c3d 5i4i 2b9i+ 7d7c+ 6b7c 8i7g 8g7g P*7d 7c6d 6i7h 5a4b 7d7c+ 8a7c 7h7g 9i7g 7i6h 8e8i+ P*7i 7g6h 5h6h 8i7i B*5i L*4d 4f6d 6c6d S*5h N*3e 3g3f 3e4g 5h4g 4d4g+ N*5e S*4f 5e4c+ 4b4c 6h5h 4g5h 3h5h G*4g P*4d 4c5d 5h4h S*5h 4h5h 4g5h'''.split()
+          check={0,1,2,8,12,16,24,34,44,58}
+          b=shogi.Board(); out={'0':b.sfen()}
+          for i,u in enumerate(moves,1):
+              m=shogi.Move.from_usi(u)
+              if not b.is_legal(m):
+                  raise SystemExit(f'illegal reference move at ply {i}: {u}\n{b}\nSFEN {b.sfen()}')
+              b.push(m)
+              if i in check: out[str(i)]=b.sfen()
+          open('/tmp/python_sfens.json','w').write(json.dumps(out,ensure_ascii=False,indent=2))
+          print('PYTHON_SHOGI_SFENS',json.dumps(out,ensure_ascii=False))
+          PY
+      - name: Install Chromium
+        shell: bash
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start app server
+        shell: bash
+        run: |
+          python3 -m http.server 8000 >/tmp/sfen-server.log 2>&1 &
+          echo $! >/tmp/sfen-server.pid
+          sleep 2
+      - name: Compare app toSFEN with independent reference
+        env:
+          SFEN_EXPECTED: /tmp/python_sfens.json
+        run: node .github/scripts/shogi-sfen-fidelity.js
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/sfen-server.log || true
