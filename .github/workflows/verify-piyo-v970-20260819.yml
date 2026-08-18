@@ -21,71 +21,97 @@ jobs:
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit >/dev/null
-      - name: Start exact Piyo Lv40 and exchange first move
+      - name: Run 60-ply practical match and audit midgame
         shell: bash
         run: |
-          cat > /tmp/piyo-pw/inspect.mjs <<'NODE'
+          cat > /tmp/piyo-pw/match.mjs <<'NODE'
           import { chromium, webkit } from 'playwright';
+          import fs from 'fs';
+          const MAX_PLIES=60;
+          const INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const ranks='abcdefghi';
+          function movesToSfen(moves){
+            const board=new Map(),hands={b:{},w:{}};let ri=0;
+            for(const row of INIT.split('/')){let file=9,prom=false;for(const ch of row){if(ch==='+'){prom=true;continue}if(/\d/.test(ch)){file-=Number(ch);continue}const side=ch===ch.toUpperCase()?'b':'w',base=ch.toUpperCase();board.set(String(file)+ranks[ri],{side,base,prom});prom=false;file--}ri++}
+            let turn='b';
+            for(const m of moves){
+              if(/^[PLNSGBR]\*[1-9][a-i]$/.test(m)){
+                const base=m[0],dst=m.slice(2);hands[turn][base]=(hands[turn][base]||0)-1;board.set(dst,{side:turn,base,prom:false});
+              }else{
+                const src=m.slice(0,2),dst=m.slice(2,4),promote=m.endsWith('+'),pc=board.get(src);if(!pc)throw Error('SFEN apply missing '+src+' move '+m+' after '+moves.slice(0,moves.indexOf(m)).join(' '));
+                const cap=board.get(dst);if(cap)hands[turn][cap.base]=(hands[turn][cap.base]||0)+1;
+                board.delete(src);board.set(dst,{side:turn,base:pc.base,prom:pc.prom||promote});
+              }
+              turn=turn==='b'?'w':'b';
+            }
+            const rows=[];for(let r=0;r<9;r++){let out='',empty=0;for(let file=9;file>=1;file--){const pc=board.get(String(file)+ranks[r]);if(!pc){empty++;continue}if(empty){out+=empty;empty=0}let c=pc.side==='b'?pc.base:pc.base.toLowerCase();out+=(pc.prom?'+':'')+c}if(empty)out+=empty;rows.push(out)}
+            let hand='';for(const side of['b','w'])for(const base of['R','B','G','S','N','L','P']){const n=hands[side][base]||0;if(n>0)hand+=(n>1?String(n):'')+(side==='b'?base:base.toLowerCase())}if(!hand)hand='-';
+            return rows.join('/')+' '+turn+' '+hand+' '+(moves.length+1);
+          }
           const piyoBr=await chromium.launch({headless:true});
           const p=await piyoBr.newPage({viewport:{width:1280,height:1000}});
           await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
-          await p.waitForSelector('#btnNewGame',{timeout:120000});
-          await p.waitForTimeout(2500);
-          await p.click('#btnNewGame');
+          await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(2500);await p.click('#btnNewGame');
           await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0,{timeout:30000});
-          await p.check('#dialogGameGameTypeSente0');
-          await p.check('#dialogGameGameTypeGote1');
-          const lv40=await p.evaluate(()=>{const s=document.querySelector('#selectLevelGote');const o=[...s.options].find(o=>/^\s*Lv40\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return {v:o.value,t:o.textContent}});
-          console.log('PIYO_LV40_SELECTED',JSON.stringify(lv40));
-          if(!lv40||!/R2610/.test(lv40.t))throw Error('exact Lv40 Piyo Emperor not selected');
-          await p.uncheck('#chkFurigoma').catch(()=>{});
-          await p.uncheck('#chkRandomBook').catch(()=>{});
-          await p.click('#btnDialogGameStart');
-          await p.waitForTimeout(1200);
-          const board=await p.evaluate(()=>{const img=document.querySelector('img[alt="盤"]');if(!img)return null;const r=img.getBoundingClientRect();return{rect:{x:r.x,y:r.y,w:r.width,h:r.height}}});
-          if(!board||board.rect.w<100)throw Error('Piyo board not found');
+          await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote1');
+          const lv40=await p.evaluate(()=>{const s=document.querySelector('#selectLevelGote'),o=[...s.options].find(o=>/^\s*Lv40\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return {v:o.value,t:o.textContent}});
+          if(!lv40||!/R2610/.test(lv40.t))throw Error('Lv40 Piyo Emperor selection failed '+JSON.stringify(lv40));console.log('MATCH_PIYO',JSON.stringify(lv40));
+          await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});await p.click('#btnDialogGameStart');await p.waitForTimeout(1000);
+          const board=await p.evaluate(()=>{const r=document.querySelector('#board_img').getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height}});
+          const square=s=>{const file=Number(s[0]),rank=s.charCodeAt(1)-97;return{x:board.x+((9-file)+0.5)*board.w/9,y:board.y+(rank+0.5)*board.h/9}};
+          async function piyoExport(format=2){
+            await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(120);await p.locator('#menuKifu').click();await p.waitForTimeout(120);await p.check('#dialogKifType'+format);await p.waitForTimeout(80);const text=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');await p.waitForTimeout(80);return text;
+          }
+          async function readMoves(){const text=await piyoExport(2);const m=/^position startpos(?: moves\s+(.+))?$/s.exec(text.trim());if(!m)throw Error('bad Piyo SFEN export '+text);return m[1]?m[1].trim().split(/\s+/):[]}
+          async function clickMove(usi,prevCount){
+            if(/^[PLNSGBR]\*[1-9][a-i]$/.test(usi)){
+              const jp={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'}[usi[0]],dst=usi.slice(2);const pt=await p.evaluate(({jp,board})=>{const a=[...document.querySelectorAll('img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt,x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height,vis:!!(r.width&&r.height)}}).filter(x=>x.vis&&x.alt===jp&&(x.x<board.x||x.x>board.x+board.w||x.y<board.y||x.y>board.y+board.h)).sort((a,b)=>b.y-a.y);return a[0]||null},{jp,board});if(!pt)throw Error('drop hand piece not found '+usi);await p.mouse.click(pt.x,pt.y);await p.waitForTimeout(100);const d=square(dst);await p.mouse.click(d.x,d.y);
+            }else{
+              const a=square(usi.slice(0,2)),b=square(usi.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(100);await p.mouse.click(b.x,b.y);await p.waitForTimeout(180);
+              const now=await p.locator('#select_kifu option').count();if(now===prevCount){const id=usi.endsWith('+')?'#btnDialogNari1':'#btnDialogNari2';await p.locator(id).click({timeout:700}).catch(()=>{})}
+            }
+          }
 
-          const futureBr=await webkit.launch({headless:true});
-          const f=await futureBr.newPage({viewport:{width:1180,height:900},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});
-          await f.goto('https://yo666ha-boop.github.io/-/shogi-v21528/?piyo='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-          await f.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT?.characters===26,{timeout:120000});
-          if(!await f.evaluate(()=>crossOriginIsolated))throw Error('Future public app COI false');
-          const first=await f.evaluate(async()=>{
-            const w=new Worker('./future-yaneura-worker21528.js?v=21528v970d4');let n=0,P=new Map();
-            w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q)return;if(m.type==='result'){P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker error'))}};
-            const call=(type,payload={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},150000);P.set(id,{r,j,t});w.postMessage({type,id,...payload})});
-            await call('init');const r=await call('bestmove',{sfen:'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1',ms:4500,multiPV:1});w.terminate();return r;
-          });
-          console.log('FUTURE_FIRST',JSON.stringify(first));
-          const usi=String(first.token||'');if(!/^[1-9][a-i][1-9][a-i]\+?$/.test(usi))throw Error('unexpected first '+usi);
-          const sq=s=>{const file=Number(s[0]),rank=s.charCodeAt(1)-97;return{x:board.rect.x+((9-file)+0.5)*board.rect.w/9,y:board.rect.y+(rank+0.5)*board.rect.h/9}};
-          const a=sq(usi.slice(0,2)),b=sq(usi.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(120);await p.mouse.click(b.x,b.y);
-          if(usi.endsWith('+')){await p.waitForTimeout(150);if(await p.locator('#btnDialogNari1').isVisible())await p.click('#btnDialogNari1');}
-          await p.waitForFunction(()=>document.querySelector('#select_kifu')?.options.length>=3,{timeout:120000});
-          await p.waitForTimeout(400);
-          const kif=await p.evaluate(()=>[...document.querySelector('#select_kifu').options].map(o=>({v:o.value,t:o.textContent,sel:o.selected})));
-          console.log('PIYO_AFTER_FIRST_EXCHANGE',JSON.stringify(kif));
-
-          const menu=p.locator('img[alt="メニュー"]').first();await menu.click();await p.waitForTimeout(250);
-          const item=p.getByText('棋譜を表示',{exact:true});console.log('PIYO_KIF_MENU_COUNT',await item.count());
-          if(await item.count()){await item.click();await p.waitForTimeout(300);await p.check('#dialogKifType2');await p.waitForTimeout(300);const txt=await p.evaluate(()=>({
-            ids:[...document.querySelectorAll('[id]')].filter(e=>/kif/i.test(e.id)&&!!e.offsetParent).map(e=>({id:e.id,tag:e.tagName,value:'value'in e?String(e.value).slice(0,200):'',text:(e.textContent||'').trim().slice(0,500)})),
-            body:document.body.innerText.split('\n').filter(x=>x.trim()).slice(-100)
-          }));console.log('PIYO_SFEN_DIALOG',JSON.stringify(txt));}
-          await futureBr.close();await piyoBr.close();
+          const futureBr=await webkit.launch({headless:true});const f=await futureBr.newPage({viewport:{width:1180,height:900},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});
+          await f.goto('https://yo666ha-boop.github.io/-/shogi-v21528/?practical='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await f.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT?.characters===26,{timeout:120000});if(!await f.evaluate(()=>crossOriginIsolated))throw Error('Future public COI false');
+          const profile=await f.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=21528v970d4');let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker error'))};const call=(type,payload={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},180000);P.set(id,{r,j,t});w.postMessage({type,id,...payload})});window.__fmWorker=w;window.__fmCall=call;return await call('init')});
+          console.log('MATCH_FUTURE_PROFILE',JSON.stringify(profile));if(profile.threads!==1||profile.hashMB!==32||!profile.mobileWebKit)throw Error('not iPhone profile '+JSON.stringify(profile));
+          const search=(sfen,ms=4500,pv=1)=>f.evaluate(({sfen,ms,pv})=>window.__fmCall('bestmove',{sfen,ms,multiPV:pv}),{sfen,ms,pv});
+          let moves=[],ended=false,result='ongoing';const decisions=[];
+          while(moves.length<MAX_PLIES&&!ended){
+            if(moves.length%2!==0)throw Error('expected Future/sente turn at '+moves.length);
+            const sfen=movesToSfen(moves),ply=moves.length+1,r=await search(sfen,4500,1),usi=String(r.token||'');
+            console.log('MATCH_FUTURE_MOVE',JSON.stringify({ply,usi,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,sfen}));decisions.push({ply,sfen,token:usi,info:r.info||{}});
+            if(usi==='resign'||usi==='win'){ended=true;result='Future '+usi;break}if(!(/^[1-9][a-i][1-9][a-i]\+?$/.test(usi)||/^[PLNSGBR]\*[1-9][a-i]$/.test(usi)))throw Error('bad Future move '+usi);
+            const before=await p.locator('#select_kifu option').count();await clickMove(usi,before);
+            await p.waitForFunction(prev=>document.querySelector('#select_kifu')?.options.length>prev,before,{timeout:30000});
+            const start=Date.now();let count=await p.locator('#select_kifu option').count(),last='';
+            while(Date.now()-start<120000){const opts=await p.locator('#select_kifu option').allTextContents();count=opts.length;last=(opts.at(-1)||'').trim();if(count>=before+2||/投了|詰み|反則|千日手|持将棋|中断/.test(last))break;await p.waitForTimeout(350)}
+            const nm=await readMoves();const opts=await p.locator('#select_kifu option').allTextContents();last=(opts.at(-1)||'').trim();
+            if(nm.length<moves.length+1)throw Error('Piyo move list did not advance '+nm.length+' from '+moves.length);moves=nm;
+            console.log('MATCH_PIYO_REPLY',JSON.stringify({plies:moves.length,last,moves:moves.slice(-4)}));
+            if(/投了|詰み|反則|千日手|持将棋|中断/.test(last)||moves.length%2===1){ended=true;result=last||'game ended after Future move';break}
+          }
+          const finalSfen=movesToSfen(moves);let finalEval=null;if(moves.length%2===0)finalEval=await search(finalSfen,12000,4);
+          const targets=decisions.filter(d=>d.ply>=21&&d.ply<=57&&((d.ply-21)%4===0));const audit=[];
+          for(const d of targets){const ref=await search(d.sfen,12000,4),cs=ref.candidates||[],best=cs.find(x=>x.rank===1)||cs[0],chosen=cs.find(x=>x.token===d.token);let loss=null;if(best&&chosen&&Number.isFinite(best.cp)&&Number.isFinite(chosen.cp))loss=Math.max(0,best.cp-chosen.cp);audit.push({ply:d.ply,chosen:d.token,quickCp:d.info?.cp,refBest:best?.token,refBestCp:best?.cp,chosenRank:chosen?.rank??null,chosenRefCp:chosen?.cp??null,lossCp:loss,refDepth:best?.depth,refNodes:best?.nodes});console.log('MATCH_AUDIT',JSON.stringify(audit.at(-1)))}
+          const known=audit.map(x=>x.lossCp).filter(Number.isFinite),summary={piyo:lv40.t.trim(),futureProfile:{threads:profile.threads,hashMB:profile.hashMB,mobileWebKit:profile.mobileWebKit},plies:moves.length,result,finalSfen,finalEval:finalEval?{token:finalEval.token,cp:finalEval.info?.cp,mate:finalEval.info?.mate,depth:finalEval.info?.depth,nodes:finalEval.info?.nodes}:null,auditPositions:audit.length,refMatches:audit.filter(x=>x.chosen===x.refBest).length,outsideTop4:audit.filter(x=>x.chosenRank==null).length,maxKnownLossCp:known.length?Math.max(...known):null,audit,lastMoves:moves.slice(-12)};
+          console.log('MATCH_SUMMARY',JSON.stringify(summary));fs.writeFileSync('/tmp/piyo-match-summary.json',JSON.stringify(summary,null,2));fs.writeFileSync('/tmp/piyo-match-position.txt','position startpos'+(moves.length?' moves '+moves.join(' '):'')+'\n');
+          await f.evaluate(()=>window.__fmWorker?.terminate());await futureBr.close();await piyoBr.close();
           NODE
           cd /tmp/piyo-pw
-          node inspect.mjs 2>&1 | tee /tmp/piyo-inspect.log
-      - name: Report discovery
+          node match.mjs 2>&1 | tee /tmp/piyo-match.log
+          grep -F 'MATCH_SUMMARY ' /tmp/piyo-match.log
+      - name: Report practical match
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           {
-            echo '### Piyo Lv40 first exchange'
+            echo '### Future Mitsuki V9.70 vs Piyo Lv40 practical match'
             echo '```text'
-            grep -E '^(PIYO_LV40_SELECTED|FUTURE_FIRST|PIYO_AFTER_FIRST_EXCHANGE|PIYO_KIF_MENU_COUNT|PIYO_SFEN_DIALOG)' /tmp/piyo-inspect.log | tail -30 || true
+            if [ -f /tmp/piyo-match.log ]; then grep -E '^(MATCH_PIYO|MATCH_FUTURE_PROFILE|MATCH_FUTURE_MOVE|MATCH_PIYO_REPLY|MATCH_AUDIT|MATCH_SUMMARY)' /tmp/piyo-match.log | tail -100; else echo 'match log missing'; fi
             echo '```'
           } >/tmp/piyo-report.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/piyo-report.md
