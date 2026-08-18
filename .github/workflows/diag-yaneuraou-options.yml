@@ -1,6 +1,9 @@
-name: Diagnose YaneuraOu browser options
+name: Diagnose YaneuraOu V9.70 browser
 on:
   push:
+    paths:
+      - '.github/workflows/diag-yaneuraou-options.yml'
+  pull_request:
     paths:
       - '.github/workflows/diag-yaneuraou-options.yml'
   workflow_dispatch:
@@ -15,7 +18,8 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
-      - name: Patch current YaneuraOu for live WebAssembly USI
+
+      - name: Patch V9.70-era YaneuraOu for live WebAssembly USI
         shell: bash
         run: |
           set -euxo pipefail
@@ -25,36 +29,65 @@ jobs:
 
           m=Path('YaneuraOu/source/Makefile')
           s=m.read_text().replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          if 'PTHREAD_POOL_SIZE=2' not in s:
+              raise SystemExit('pthread pool patch failed')
           m.write_text(s)
 
           h=Path('YaneuraOu/source/usi.h')
           s=h.read_text()
           marker='\tvoid loop();\n'
           bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
-          if marker not in s: raise SystemExit('USIEngine marker missing')
+          if marker not in s:
+              raise SystemExit('USIEngine marker missing')
           h.write_text(s.replace(marker,bridge,1))
 
           p=Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
           s=p.read_text()
           marker='using namespace YaneuraOu;\nnamespace {'
           live='''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd || !wasm_usi) return 1;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
-          if marker not in s: raise SystemExit('engine marker missing')
+          if marker not in s:
+              raise SystemExit('engine marker missing')
           s=s.replace(marker,live,1)
           pat=re.compile(r'void engine_main\(\) \{.*?\n\}',re.S)
           rep='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
-          if len(pat.findall(s)) != 1: raise SystemExit('engine_main match failure')
+          if len(pat.findall(s)) != 1:
+              raise SystemExit('engine_main match failure')
           p.write_text(pat.sub(rep,s,count=1))
           PY
-          cp shogi-v21528/yaneuraou/nn.bin YaneuraOu/nn.bin
-      - name: Build WASM
+          grep -F 'EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
+          grep -F 'wasm_command' YaneuraOu/source/usi.h
+          grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu/source/Makefile
+
+      - name: Build WASM without redundant EXPORTED_FUNCTIONS override
         shell: bash
         run: |
           set -euxo pipefail
           docker pull emscripten/emsdk:3.1.43
           mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
-          docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src/source emscripten/emsdk:3.1.43 \
-            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160 EXTRA_LDFLAGS="-sEXPORTED_FUNCTIONS=_main,_usi_command"'
-      - name: Firefox option-by-option smoke
+          docker run --rm \
+            -v "${{ github.workspace }}/YaneuraOu:/src" \
+            -w /src/source \
+            emscripten/emsdk:3.1.43 \
+            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160'
+
+      - name: Verify WASM exports and JS runtime bridge
+        shell: bash
+        run: |
+          set -euxo pipefail
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          grep -F 'ccall' "$LIB/yaneuraou.halfkp.noeval.js"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
+          console.log('WASM_EXPORTS',ex);
+          if(!ex.includes('usi_command')) throw new Error('usi_command missing from wasm exports');
+          NODE
+
+      - name: Firefox usiok readyok bestmove smoke
         shell: bash
         run: |
           set -euxo pipefail
@@ -66,36 +99,44 @@ jobs:
           cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/worker.js"
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('/tmp/yane/site/worker.js'); s=p.read_text()
+          p=Path('/tmp/yane/site/worker.js')
+          s=p.read_text()
           cmds=[
-            ('EvalDir',"setoption name EvalDir value ."),
-            ('EvalFile',"setoption name EvalFile value nn.bin"),
-            ('FV_SCALE',"setoption name FV_SCALE value 24"),
-            ('Threads',"setoption name Threads value 2"),
-            ('USI_Hash',"setoption name USI_Hash value 96"),
-            ('USI_Ponder',"setoption name USI_Ponder value false"),
-            ('BookFile',"setoption name BookFile value no_book"),
+            ('EvalDir',"engine.postMessage('setoption name EvalDir value .');"),
+            ('EvalFile',"engine.postMessage('setoption name EvalFile value '+EVAL);"),
+            ('FV_SCALE',"engine.postMessage('setoption name FV_SCALE value 24');"),
+            ('USI_Hash',"engine.postMessage('setoption name USI_Hash value '+ENGINE_HASH_MB);"),
+            ('Threads',"engine.postMessage('setoption name Threads value '+ENGINE_THREADS);"),
+            ('MultiPV',"engine.postMessage('setoption name MultiPV value 1');"),
+            ('USI_Ponder',"engine.postMessage('setoption name USI_Ponder value false');"),
           ]
-          for label,cmd in cmds:
-              needle=f"engine.postMessage('{cmd}');"
-              repl=f"stage('DBG {label} BEFORE');{needle}stage('DBG {label} AFTER');"
-              if needle not in s: raise SystemExit('missing '+label)
-              s=s.replace(needle,repl,1)
+          for label,needle in cmds:
+              if needle not in s:
+                  raise SystemExit('missing worker command '+label)
+              s=s.replace(needle,"stage('DBG "+label+" BEFORE');"+needle+"stage('DBG "+label+" AFTER');",1)
           p.write_text(s)
           PY
           cat > "$ROOT/index.html" <<'HTML'
           <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
           <script>
           (async()=>{
-            const b=document.body,logs=[]; const out=x=>{logs.push(x);console.log(x);b.textContent=logs.join('\n')};
+            const b=document.body,logs=[];
+            const out=x=>{logs.push(x);console.log(x);b.textContent=logs.join('\n')};
             const fail=e=>{b.dataset.result='error';out('FAIL '+String(e&&e.stack||e))};
             try{
               out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
-              const w=new Worker('./worker.js?diag=1'); let seq=0,pending=new Map();
+              if(!crossOriginIsolated||typeof SharedArrayBuffer!=='function') throw Error('cross-origin isolation unavailable');
+              const w=new Worker('./worker.js?diag=v970');
+              let seq=0,pending=new Map();
               w.onmessage=e=>{const m=e.data||{}; if(m.type==='stage'){out('STAGE '+m.text);return} if(m.type==='fatal'){fail(Error(m.text));return} if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}}};
               w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));
-              const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},120000)});
-              await call('init'); out('INIT OK'); b.dataset.result='ok'; w.terminate();
+              const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},150000)});
+              await call('init'); out('INIT OK');
+              const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
+              const bm=await call('bestmove',{sfen,ms:1200,multiPV:1});
+              out('BEST '+JSON.stringify(bm));
+              if(!bm.token||bm.token==='resign') throw Error('no usable bestmove');
+              b.dataset.result='ok'; out('PASS usiok readyok bestmove '+bm.token); w.terminate();
             }catch(e){fail(e)}
           })();
           </script>
@@ -111,18 +152,27 @@ jobs:
           cat > check.mjs <<'NODE'
           import{firefox}from'playwright';
           const b=await firefox.launch({headless:true}),p=await b.newPage();
-          p.on('console',m=>console.log('CONSOLE',m.type(),m.text())); p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
-          await p.goto('http://127.0.0.1:4173/'); await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:150000});
-          console.log('FINAL',await p.evaluate(()=>document.body.textContent)); await b.close();
+          p.on('console',m=>console.log('CONSOLE',m.type(),m.text()));
+          p.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
+          p.on('requestfailed',r=>console.log('REQUESTFAILED',r.url(),r.failure()?.errorText||''));
+          await p.goto('http://127.0.0.1:4173/');
+          await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:180000});
+          const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));
+          console.log('FINAL',JSON.stringify(r));
+          await b.close();
+          if(r.state!=='ok') process.exit(1);
           NODE
           node "$ROOT/server.cjs" >/tmp/yane/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
           for i in $(seq 1 50); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break || sleep .2; done
           node check.mjs 2>&1 | tee /tmp/yane/diag.log
+
       - name: Upload diagnostic
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: yaneuraou-option-diag
-          path: /tmp/yane/diag.log
+          name: yaneuraou-v970-browser-diag
+          path: |
+            /tmp/yane/diag.log
+            /tmp/yane/server.log
           if-no-files-found: ignore
           retention-days: 2
