@@ -22,7 +22,7 @@ jobs:
         run: |
           npm init -y
           npm install playwright@1.55.0
-          npx playwright install --with-deps firefox
+          npx playwright install firefox
       - name: Start static server
         run: |
           python3 -m http.server 8000 > /tmp/shogi-sequence-server.log 2>&1 &
