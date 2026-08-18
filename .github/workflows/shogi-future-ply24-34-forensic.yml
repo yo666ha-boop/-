@@ -1,0 +1,46 @@
+name: Shogi Future ply24-34 forensic
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/shogi-future-ply24-34-forensic.js'
+      - '.github/workflows/shogi-future-ply24-34-forensic.yml'
+      - 'shogi-v21528/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  forensic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax check
+        run: node --check .github/scripts/shogi-future-ply24-34-forensic.js
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Start COI app server
+        shell: bash
+        run: |
+          cat > /tmp/shogi-coi-server.cjs <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=process.cwd(),m={'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(8000,'127.0.0.1');
+          NODE
+          node /tmp/shogi-coi-server.cjs >/tmp/forensic-server.log 2>&1 &
+          sleep 2
+      - name: Score actual Future moves from ply24 through ply34
+        run: node .github/scripts/shogi-future-ply24-34-forensic.js 2>&1 | tee /tmp/ply24-34-forensic.log
+      - name: Upload forensic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-ply24-34-forensic
+          path: |
+            /tmp/ply24-34-forensic.log
+            /tmp/forensic-server.log
+          retention-days: 2
