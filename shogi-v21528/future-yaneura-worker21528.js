@@ -1,4 +1,4 @@
-/* v2.15.28 Future Mitsuki - dedicated YaneuraOu worker */
+/* v2.15.28 Future Mitsuki - dedicated YaneuraOu worker / mobile-max1 */
 'use strict';
 self.postMessage({type:'stage',text:'⑤-W0 Workerファイル実行開始'});
 let BASE='';
@@ -11,11 +11,17 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528w8';
+const BUILD='21528w10-mobilemax1';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
-const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
-const ENGINE_THREADS=MOBILE_WEBKIT?1:2;
-const ENGINE_HASH_MB=MOBILE_WEBKIT?32:128;
+const IOS_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
+const FIRE_SILK=/Silk|KF[A-Z]{2,}|KFTT|KFAPWI|KFASWI|KFSUWI|KFMAWI/i.test(UA);
+const ANDROID=/Android/i.test(UA);
+const MOBILE_DEVICE=IOS_WEBKIT||FIRE_SILK||ANDROID;
+const HW=Math.max(1,Number(self.navigator&&self.navigator.hardwareConcurrency)||1);
+const DM=Number(self.navigator&&self.navigator.deviceMemory)||0;
+const ENGINE_THREADS=IOS_WEBKIT?(HW>=4?2:1):(FIRE_SILK?(HW>=4?2:1):(ANDROID?(HW>=4?2:1):2));
+const ENGINE_HASH_MB=IOS_WEBKIT?(ENGINE_THREADS>=2?64:48):(FIRE_SILK?(DM&&DM<=3?48:64):(ANDROID?(DM&&DM>=6?96:64):128));
+const DEVICE_CLASS=IOS_WEBKIT?'ios-webkit':FIRE_SILK?'fire-silk':ANDROID?'android':'desktop';
 const ENGINE_JS_URL=BASE+JS+'?v='+BUILD;
 const TOP5_MPV_BY_MS=new Map([
   [4200,3],[6200,3],[2800,3],[4300,3],
@@ -68,7 +74,7 @@ async function init(){
     engine.postMessage('setoption name USI_Hash value '+ENGINE_HASH_MB);
     engine.postMessage('setoption name Threads value '+ENGINE_THREADS);
     engine.postMessage('setoption name MultiPV value 1');
-    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+'MB'+(MOBILE_WEBKIT?' / iPhone省メモリ':''));
+    stage('⑤-4 設定 '+DEVICE_CLASS+' / Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+'MB / HW='+HW);
     stage('⑤-5 readyok待ち');p=waitLine(x=>x==='readyok',60000,'readyok');engine.postMessage('isready');await p;stage('⑤-5 readyok受信');
     engine.postMessage('setoption name USI_Ponder value false');
     engine.postMessage('usinewgame');ready=true;stage('⑤成功 やねうら王＋水匠5 接続済み');return engine;
@@ -77,7 +83,7 @@ async function init(){
 }
 async function bestmove(sfen,ms,multiPV=1){
   const e=await init();
-  const mp=Math.max(1,Math.min(MOBILE_WEBKIT?3:4,Math.round(Number(multiPV)||1)));
+  const mp=Math.max(1,Math.min(MOBILE_DEVICE?3:4,Math.round(Number(multiPV)||1)));
   latestInfo={};latestMultiPV={};
   e.postMessage('setoption name MultiPV value '+mp);
   e.postMessage('position sfen '+sfen);stage('⑥ 思考中 bestmove待ち');
@@ -86,12 +92,12 @@ async function bestmove(sfen,ms,multiPV=1){
   const candidates=Object.keys(latestMultiPV).map(Number).sort((a,b)=>a-b).map(k=>latestMultiPV[k]).filter(x=>x&&x.token);
   if(!candidates.some(x=>x.rank===1)&&token)candidates.unshift({rank:1,token,...latestInfo});
   e.postMessage('setoption name MultiPV value 1');
-  return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}};
+  return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:IOS_WEBKIT,fireSilk:FIRE_SILK,deviceClass:DEVICE_CLASS,hardwareConcurrency:HW,deviceMemory:DM}};
 }
 self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
   try{
-    if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init',mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});return}
+    if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init',mobileWebKit:IOS_WEBKIT,fireSilk:FIRE_SILK,deviceClass:DEVICE_CLASS,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,hardwareConcurrency:HW,deviceMemory:DM});return}
     if(m.type==='bestmove'){
       const ms=Number(m.ms)||6000;
       const inferred=m.multiPV==null?TOP5_MPV_BY_MS.get(ms):Number(m.multiPV);
@@ -100,6 +106,6 @@ self.onmessage=async ev=>{
     }
     if(m.type==='stop'){try{engine?.postMessage('stop')}catch(e){};return}
     if(m.type==='newgame'){try{engine?.postMessage('stop');engine?.postMessage('setoption name MultiPV value 1');engine?.postMessage('usinewgame')}catch(e){};return}
-  }catch(e){self.postMessage({type:'result',id,ok:false,error:String(e&&e.message||e),mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
+  }catch(e){self.postMessage({type:'result',id,ok:false,error:String(e&&e.message||e),mobileWebKit:IOS_WEBKIT,fireSilk:FIRE_SILK,deviceClass:DEVICE_CLASS,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,hardwareConcurrency:HW,deviceMemory:DM});}
 };
 self.postMessage({type:'stage',text:'⑤-W0 Worker待受開始'});
