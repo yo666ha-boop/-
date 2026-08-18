@@ -7,8 +7,13 @@ const stressCase=process.env.STRESS_CASE||'7g-middle';
     '7g-middle':{seed:'7g7f',move:{f:56,to:47,prom:false,drop:null},targetPly:20,phase:'middle'},
     '2g-middle':{seed:'2g2f',move:{f:61,to:52,prom:false,drop:null},targetPly:20,phase:'middle'},
     '5g-middle':{seed:'5g5f',move:{f:58,to:49,prom:false,drop:null},targetPly:20,phase:'middle'},
+    '4g-middle':{seed:'4g4f',move:{f:59,to:50,prom:false,drop:null},targetPly:20,phase:'middle'},
+    '7g-deepmiddle':{seed:'7g7f',move:{f:56,to:47,prom:false,drop:null},targetPly:36,phase:'deepmiddle'},
+    '2g-deepmiddle':{seed:'2g2f',move:{f:61,to:52,prom:false,drop:null},targetPly:36,phase:'deepmiddle'},
     '7g-late':{seed:'7g7f',move:{f:56,to:47,prom:false,drop:null},targetPly:56,phase:'late'},
-    '2g-late':{seed:'2g2f',move:{f:61,to:52,prom:false,drop:null},targetPly:56,phase:'late'}
+    '2g-late':{seed:'2g2f',move:{f:61,to:52,prom:false,drop:null},targetPly:56,phase:'late'},
+    '5g-late':{seed:'5g5f',move:{f:58,to:49,prom:false,drop:null},targetPly:56,phase:'late'},
+    '4g-late':{seed:'4g4f',move:{f:59,to:50,prom:false,drop:null},targetPly:56,phase:'late'}
   };
   const spec=cases[stressCase];if(!spec)throw new Error('unknown STRESS_CASE '+stressCase);
   const browser=await firefox.launch({headless:true});
@@ -39,7 +44,7 @@ const stressCase=process.env.STRESS_CASE||'7g-middle';
   if(!result.coi)failures.push('crossOriginIsolated=false');if(!/YaneuraOu/.test(result.engine||''))failures.push('top engine='+result.engine);if(JSON.stringify(rs.map(r=>r.who))!==JSON.stringify(expected))failures.push('character order mismatch');
   for(let i=1;i<rs.length;i++)if(!(rs[i-1].targetMs>rs[i].targetMs))failures.push('budget order '+rs[i-1].who+' <= '+rs[i].who);
   for(const r of rs){if(!r.selected)failures.push(r.who+' no selected move');if(!/YaneuraOu/.test(r.engine||''))failures.push(r.who+' engine='+r.engine);if(r.nodes<=0)failures.push(r.who+' nodes='+r.nodes);if(r.who!=='未来みつき'){if(r.cpLoss>r.maxLoss)failures.push(r.who+' cpLoss '+r.cpLoss+' > '+r.maxLoss);if(r.selectedRank>r.multiPV)failures.push(r.who+' rank '+r.selectedRank+' > mpv '+r.multiPV);if(r.referenceLoss!=null&&r.referenceLoss>180)failures.push(r.who+' referenceLoss '+r.referenceLoss);else if(r.referenceLoss!=null&&r.referenceLoss>90)warnings.push(r.who+' referenceLoss '+r.referenceLoss)}}
-  const summary={uniqueMoves:new Set(rs.map(r=>r.selected)).size,nonBest:rs.slice(1).filter(r=>r.selected!==r.engineBest).length,notSeenByLongRef:rs.slice(1).filter(r=>!r.referenceSeen).map(r=>r.who),moves:Object.fromEntries(rs.map(r=>[r.who,r.selected])),maxCpLoss:Object.fromEntries(rs.slice(1).map(r=>[r.who,r.cpLoss])),nodes:Object.fromEntries(rs.map(r=>[r.who,r.nodes]))};
+  const summary={uniqueMoves:new Set(rs.map(r=>r.selected)).size,nonBest:rs.slice(1).filter(r=>r.selected!==r.engineBest).length,notSeenByLongRef:rs.slice(1).filter(r=>!r.referenceSeen).map(r=>r.who),moves:Object.fromEntries(rs.map(r=>[r.who,r.selected])),maxCpLoss:Object.fromEntries(rs.slice(1).map(r=>[r.who,r.cpLoss])),referenceLoss:Object.fromEntries(rs.slice(1).map(r=>[r.who,r.referenceLoss])),nodes:Object.fromEntries(rs.map(r=>[r.who,r.nodes]))};
   const out={generatedAt:new Date().toISOString(),case:stressCase,pass:failures.length===0,failures,warnings,version:result.version,engine:result.engine,coi:result.coi,seed:result.seed,phase:result.phase,ply:result.ply,summary,rows:rs};
   fs.mkdirSync('.github/benchmark-results',{recursive:true});const outPath='.github/benchmark-results/shogi-top5-position-stress-'+stressCase+'.json';fs.writeFileSync(outPath,JSON.stringify(out,null,2)+'\n');console.log('POSITION_STRESS_CASE',JSON.stringify({case:stressCase,pass:out.pass,failures,warnings,summary}));await browser.close();if(failures.length)throw new Error(failures.join(' | '));console.log('PASS position stress '+stressCase);
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
