@@ -1,4 +1,4 @@
-/* AI将棋先生 v2.15.31 tune4: 上位5人を初手から共通やねうら王＋水匠5で思考＋強さを守る棋風バイアス + 対局セーブ */
+/* AI将棋先生 v2.15.32 tune5: 上位5人を初手から共通やねうら王＋水匠5で思考＋安定型の評価損失を40cp以内に強化 + 対局セーブ */
 (function installTop5Yaneura21529(){
   if(window.AI_SHOGI_YANEURAOU_TOP5)return;
   const TOP5=[0,1,2,3,4];
@@ -15,7 +15,7 @@
     1:{label:'R2850・攻め重視',personality:'aggressive',multiPV:3,maxLoss:35,openingBonus:40,desktop:{normal:4200,endgame:6200},mobile:{normal:2800,endgame:4300}},
     2:{label:'R2700・本格万能',personality:'balanced',multiPV:3,maxLoss:28,openingBonus:33,desktop:{normal:3400,endgame:5100},mobile:{normal:2300,endgame:3600}},
     3:{label:'R2600・受け重視',personality:'defensive',multiPV:3,maxLoss:45,openingBonus:50,desktop:{normal:2700,endgame:4100},mobile:{normal:1850,endgame:3000}},
-    4:{label:'R2500・安定重視',personality:'stable',multiPV:3,maxLoss:65,openingBonus:70,desktop:{normal:2200,endgame:3500},mobile:{normal:1500,endgame:2500}}
+    4:{label:'R2500・安定重視',personality:'stable',multiPV:3,maxLoss:40,openingBonus:70,desktop:{normal:2200,endgame:3500},mobile:{normal:1500,endgame:2500}}
   };
 
   for(const i of TOP5){
@@ -153,7 +153,7 @@
 
   window.AI_SHOGI_GAME_SAVE={version:'2.15.30',key:GAME_SAVE_KEY,save:()=>saveGame21530(false),saveSilent:()=>saveGame21530(true),load:()=>loadGame21530(),hasSave:()=>!!savedGame(),snapshot:()=>makeGameSave()};
   window.AI_SHOGI_YANEURAOU_TOP5={
-    version:'2.15.31-tune4',openingMode:'engine-from-move-1',legacyOpeningBypass:false,indices:TOP5.slice(),names:NAMES.slice(),ratings:RATINGS.slice(),profiles:JSON.parse(JSON.stringify(PROFILES)),sharedWorker:true,engine:'YaneuraOu HalfKP + Suisho5',
+    version:'2.15.32-tune5',openingMode:'engine-from-move-1',legacyOpeningBypass:false,indices:TOP5.slice(),names:NAMES.slice(),ratings:RATINGS.slice(),profiles:JSON.parse(JSON.stringify(PROFILES)),sharedWorker:true,engine:'YaneuraOu HalfKP + Suisho5',
     enabled:i=>TOP5_SET.has(Number(i)),profileMs:(s,i)=>profileMs(s,Number(i)),status:()=>shared.status(),init:()=>shared.init(),bestMove:(s,i=0)=>profiledBest(s,Number(i)),selectProfileMove:(s,res,i)=>selectProfileMove(s,res,Number(i)),openingTokens:(s,i)=>[...openingTokens(s,Number(i))]
   };
   try{render();renderStats();renderOpponent(false);updateSaveButtons()}catch(e){}
