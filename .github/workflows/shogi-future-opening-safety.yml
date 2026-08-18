@@ -1,6 +1,8 @@
 name: Shogi Future opening safety vs Piyo Lv40
 on:
-  pull_request:
+  push:
+    branches:
+      - 'diag/future-opening-safety-20260818'
     paths:
       - '.github/workflows/shogi-future-opening-safety.yml'
   workflow_dispatch:
