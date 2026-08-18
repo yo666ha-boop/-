@@ -1,11 +1,12 @@
-/* AI将棋先生 v2.15.28 - 26人目「未来からやってきたみつき」Worker安定版 */
+/* AI将棋先生 v2.15.28 - 26人目「未来からやってきたみつき」Worker安定版 / mobile-max1 */
 (function installFutureMitsuki21528(){
   const VERSION='2.15.28';
+  const STRENGTH_TUNE='mobile-max1';
   const FUTURE_INDEX=25;
   const FUTURE_NAME='未来からやってきたみつき';
   const FUTURE_RATING=3400;
   const SIDE_BASE=new URL('../shogi-side-test/',location.href).href;
-  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w9',location.href).href;
+  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528w10',location.href).href;
 
   window.AI_SHOGI_FUNCTIONAL_AUDIT21520=window.AI_SHOGI_FUNCTIONAL_AUDIT21520||{future:true,version:VERSION};
 
@@ -87,8 +88,15 @@
     });
   }
   async function initFutureEngine(){if(engineReady&&worker)return true;await callWorker('init',{},75000);engineReady=true;setEngineState('⑤成功 やねうら王＋水匠5 接続済み',true);return true}
+  function futureBudget(s){
+    const ua=String(navigator.userAgent||''),ios=/iPhone|iPad|iPod/i.test(ua),fire=/Silk|KF[A-Z]{2,}|KFTT|KFAPWI|KFASWI|KFSUWI|KFMAWI/i.test(ua),android=/Android/i.test(ua),endgame=(s.log?.length||0)>=55;
+    if(ios)return endgame?11000:7000;
+    if(fire)return endgame?10000:6500;
+    if(android)return endgame?10000:6500;
+    return endgame?12000:8500;
+  }
   async function futureBest(s,opts={}){
-    const sfen=toSFEN(s),mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent),endgame=(s.log?.length||0)>=55,defaultMs=mobile?(endgame?7000:4500):(endgame?10000:7000);
+    const sfen=toSFEN(s),defaultMs=futureBudget(s);
     const requested=Number(opts&&opts.ms),ms=Number.isFinite(requested)&&requested>=250?Math.max(250,Math.min(20000,Math.round(requested))):defaultMs;
     const requestedPV=Number(opts&&opts.multiPV),multiPV=Number.isFinite(requestedPV)?Math.max(1,Math.min(4,Math.round(requestedPV))):1;
     const r=await callWorker('bestmove',{sfen,ms,multiPV},90000);engineReady=true;const tok=String(r.token||'').trim(),info=r.info||{};
@@ -117,8 +125,8 @@
   const undoBase=undo;undo=function(){try{worker?.postMessage({type:'stop'})}catch(e){}const r=undoBase();setTimeout(refreshFutureImages,0);return r};
   document.getElementById('newBtn').onclick=newGame;document.getElementById('undoBtn').onclick=undo;document.getElementById('fundoBtn').onclick=undo;
 
-  window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine,toSFEN,bestMove:futureBest,status:()=>({ready:engineReady,error:engineError,crossOriginIsolated:globalThis.crossOriginIsolated,worker:!!worker})};
-  window.AI_SHOGI_FUTURE_AUDIT21520={version:VERSION,characters:C.length,card:!!document.querySelector('[data-future-mitsuki="1"]'),sfenOK:toSFEN(initial()).startsWith('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -'),crossOriginIsolated:globalThis.crossOriginIsolated,workerURL:WORKER_URL};
+  window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,strengthTune:STRENGTH_TUNE,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine,toSFEN,bestMove:futureBest,budget:futureBudget,status:()=>({ready:engineReady,error:engineError,crossOriginIsolated:globalThis.crossOriginIsolated,worker:!!worker,strengthTune:STRENGTH_TUNE})};
+  window.AI_SHOGI_FUTURE_AUDIT21520={version:VERSION,strengthTune:STRENGTH_TUNE,characters:C.length,card:!!document.querySelector('[data-future-mitsuki="1"]'),sfenOK:toSFEN(initial()).startsWith('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -'),crossOriginIsolated:globalThis.crossOriginIsolated,workerURL:WORKER_URL};
   const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.28 26キャラ・未来みつき Worker版';
   render();renderStats();renderOpponent(false);refreshFutureImages();
 })();
