@@ -1,0 +1,37 @@
+name: Shogi Future actual-game position audit
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/shogi-future-game-position-audit.js'
+      - '.github/workflows/shogi-future-game-position-audit.yml'
+      - 'shogi-side-test/future21520.js'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax check
+        run: node --check .github/scripts/shogi-future-game-position-audit.js
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Start app server
+        run: |
+          python3 -m http.server 8000 >/tmp/gamepos-server.log 2>&1 &
+          echo $! >/tmp/gamepos-server.pid
+          sleep 2
+      - name: Audit actual loss positions
+        run: node .github/scripts/shogi-future-game-position-audit.js
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/gamepos-server.log || true
