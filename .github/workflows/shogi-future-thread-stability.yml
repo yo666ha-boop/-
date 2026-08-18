@@ -1,0 +1,96 @@
+name: Shogi Future iPhone thread stability
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/shogi-future-thread-stability.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  thread-stability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Build one-thread and two-thread test sites
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/threadprobe
+          for T in 1 2; do
+            mkdir -p "$ROOT/t$T/yaneuraou"
+            cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js "$ROOT/t$T/yaneuraou/"
+            cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js "$ROOT/t$T/yaneuraou/"
+            cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm "$ROOT/t$T/yaneuraou/"
+            cp shogi-v21528/yaneuraou/nn.bin "$ROOT/t$T/yaneuraou/"
+            cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/t$T/future-yaneura-worker21528.js"
+            python3 - "$ROOT/t$T/future-yaneura-worker21528.js" "$T" <<'PY'
+          import re,sys
+          p=sys.argv[1]; t=sys.argv[2]
+          s=open(p).read()
+          s,n=re.subn(r'const ENGINE_THREADS=.*?;',f'const ENGINE_THREADS={t};',s,count=1)
+          if n!=1: raise SystemExit('ENGINE_THREADS replacement failed')
+          s,n=re.subn(r'const ENGINE_HASH_MB=.*?;','const ENGINE_HASH_MB=64;',s,count=1)
+          if n!=1: raise SystemExit('ENGINE_HASH_MB replacement failed')
+          open(p,'w').write(s)
+          PY
+            grep -F "const ENGINE_THREADS=$T;" "$ROOT/t$T/future-yaneura-worker21528.js"
+            grep -F 'const ENGINE_HASH_MB=64;' "$ROOT/t$T/future-yaneura-worker21528.js"
+          done
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,''),x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4180,'127.0.0.1');
+          NODE
+          node "$ROOT/server.cjs" >/tmp/threadprobe-server.log 2>&1 &
+          echo $! >/tmp/threadprobe-server.pid
+          sleep 2
+      - name: Compare iPhone one-thread vs two-thread search stability
+        shell: bash
+        run: |
+          cat > /tmp/threadprobe.mjs <<'NODE'
+          import {webkit,devices} from 'playwright';
+          const START='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
+          const PLY44='l2g1gsnl/5k3/p1n1pp1pp/3p2p2/9/6P2/P2PP+l1PP/3G2R2/2+r1BKSNL b Nbg2s5p 45';
+          const browser=await webkit.launch({headless:true});
+          const ctx=await browser.newContext({...devices['iPhone 13']});
+          const page=await ctx.newPage();
+          await page.goto('http://127.0.0.1:4180/t1/future-yaneura-worker21528.js',{waitUntil:'load'}).catch(()=>{});
+          async function run(t){
+            return await page.evaluate(async({t,START,PLY44})=>{
+              const w=new Worker(`http://127.0.0.1:4180/t${t}/future-yaneura-worker21528.js?x=${Date.now()}`);
+              let seq=0;const p=new Map();
+              w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const q=p.get(m.id);if(!q)return;p.delete(m.id);m.ok?q.resolve(m):q.reject(Error(m.error||'worker error'))}};
+              const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id='q'+(++seq);p.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(p.delete(id))reject(Error(type+' timeout'))},timeout)});
+              const init=await call('init');
+              const search=async(sfen,ms)=>{const r=await call('bestmove',{sfen,ms,multiPV:1},ms+120000);return{move:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth||0,nodes:r.info?.nodes||0,ms:r.info?.ms||0}};
+              const start=[];for(let i=0;i<3;i++)start.push(await search(START,15000));const startRef=await search(START,20000);
+              const ply44=[];for(let i=0;i<3;i++)ply44.push(await search(PLY44,9000));const ply44Ref=await search(PLY44,20000);
+              w.terminate();return{init,start,startRef,ply44,ply44Ref};
+            },{t,START,PLY44});
+          }
+          const one=await run(1),two=await run(2);
+          const calc=x=>({startMoves:x.start.map(r=>r.move),startRef:x.startRef.move,startUnique:new Set(x.start.map(r=>r.move)).size,startAgree:x.start.filter(r=>r.move===x.startRef.move).length,ply44Moves:x.ply44.map(r=>r.move),ply44Ref:x.ply44Ref.move,ply44Unique:new Set(x.ply44.map(r=>r.move)).size,ply44Agree:x.ply44.filter(r=>r.move===x.ply44Ref.move).length,startDepth:x.start.map(r=>r.depth),ply44Depth:x.ply44.map(r=>r.depth),startNodes:x.start.map(r=>r.nodes),ply44Nodes:x.ply44.map(r=>r.nodes)});
+          const result={one:calc(one),two:calc(two)};
+          console.log('THREAD_STABILITY',JSON.stringify(result));
+          if([...one.start,...one.ply44,...two.start,...two.ply44].some(r=>!r.move||r.move==='resign'||!r.nodes))throw Error('missing search result');
+          await browser.close();
+          NODE
+          node /tmp/threadprobe.mjs 2>&1 | tee /tmp/thread-stability.log
+      - name: Upload thread stability log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-thread-stability
+          path: |
+            /tmp/thread-stability.log
+            /tmp/threadprobe-server.log
+          retention-days: 2
