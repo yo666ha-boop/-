@@ -26,8 +26,9 @@ jobs:
             COMPILER=g++ TARGET_CPU=AVX2 YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE \
             2>&1 | tee /tmp/native-v970-build.log
           find YaneuraOu970/source -maxdepth 2 -type f -perm -111 -printf '%p %s\n' | tee /tmp/native-executables.txt
-          BIN=$(find YaneuraOu970/source -maxdepth 2 -type f -perm -111 -size +1M | head -n1)
-          test -n "$BIN"
+          BIN=YaneuraOu970/source/YaneuraOu-by-gcc
+          test -x "$BIN"
+          test "$(stat -c%s "$BIN")" -gt 500000
           cp "$BIN" /tmp/yaneuraou-v970
           chmod +x /tmp/yaneuraou-v970
           /tmp/yaneuraou-v970 --help >/tmp/native-help.log 2>&1 || true
