@@ -30,9 +30,15 @@ jobs:
           old='-s PTHREAD_POOL_SIZE=32'
           if old not in s:
               raise SystemExit('pthread marker missing')
-          p.write_text(s.replace(old,'-s PTHREAD_POOL_SIZE=2',1))
+          s=s.replace(old,'-s PTHREAD_POOL_SIZE=2',1)
+          old2='-s "EXPORTED_RUNTIME_METHODS=[\'FS\',\'ccall\']"'
+          if old2 not in s:
+              raise SystemExit('runtime export marker missing')
+          new2=old2+' -s "EXPORTED_FUNCTIONS=[\'_main\',\'_usi_command\']"'
+          p.write_text(s.replace(old2,new2,1))
           PY
           grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu970/source/Makefile
+          grep -F "EXPORTED_FUNCTIONS=['_main','_usi_command']" YaneuraOu970/source/Makefile
           test $(stat -c%s shogi-v21528/yaneuraou/nn.bin) -gt 60000000
 
       - name: Build HalfKP noeval
@@ -51,6 +57,14 @@ jobs:
           test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
           test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
           echo "V970_WASM_BYTES=$(stat -c%s "$LIB/yaneuraou.halfkp.noeval.wasm")"
+          node - "$LIB/yaneuraou.halfkp.noeval.wasm" <<'NODE'
+          const fs=require('fs');
+          const p=process.argv[2];
+          const m=new WebAssembly.Module(fs.readFileSync(p));
+          const names=WebAssembly.Module.exports(m).map(x=>x.name);
+          console.log('V970_WASM_EXPORTS',JSON.stringify(names));
+          if(!names.includes('usi_command'))throw new Error('usi_command export missing');
+          NODE
 
       - name: Install Chromium browser probe
         shell: bash
