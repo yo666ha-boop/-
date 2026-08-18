@@ -90,6 +90,7 @@ jobs:
             const START='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
             const PLY44='l2g1gsnl/5k3/p1n1pp1pp/3p2p2/9/6P2/P2PP+l1PP/3G2R2/2+r1BKSNL b Nbg2s5p 45';
             async function engine(label,path){
+              out(label+'_SPAWN');
               const w=new Worker(path+'future-yaneura-worker21528.js?ab='+Date.now()+Math.random());
               let seq=0;const pending=new Map();
               w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(label+' '+(m.error||'worker error')))}};
@@ -133,7 +134,7 @@ jobs:
           page.on('console',m=>console.log('CONSOLE',m.type(),m.text()));
           page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
           await page.goto('http://127.0.0.1:4173/',{waitUntil:'load'});
-          await page.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:600000});
+          await page.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),null,{timeout:600000});
           const r=await page.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));
           console.log('FINAL',JSON.stringify(r));
           await browser.close();
