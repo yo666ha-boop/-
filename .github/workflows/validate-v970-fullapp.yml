@@ -1,10 +1,13 @@
 name: Validate V9.70 full app integration
 on:
-  push:
+  pull_request:
     branches:
-      - future-mitsuki-v970-final
+      - main
+    types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/validate-v970-fullapp.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-v21528/yaneuraou/**'
   workflow_dispatch:
 permissions:
   contents: read
