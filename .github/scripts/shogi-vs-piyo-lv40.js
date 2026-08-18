@@ -2,7 +2,7 @@ const { chromium, webkit, devices } = require('playwright');
 
 const PIYO_URL='https://www.studiok-i.net/ps/';
 const LOCAL_URL='http://127.0.0.1:8000/shogi-v21528/';
-const MAX_PLIES=180;
+const MAX_PLIES=12;
 
 function initialState(){
   const b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];
@@ -69,13 +69,13 @@ async function prepareFuture(page){
   if(!init.coi)throw new Error('Future crossOriginIsolated=false');
   console.log('FUTURE_READY',JSON.stringify(init));
 }
-async function futureBest(page,state){
-  return await page.evaluate(async s=>{
-    const e=window.AI_SHOGI_YANEURAOU_FUTURE,r=await e.bestMove(s);
+async function futureBest(page,state,opts={}){
+  return await page.evaluate(async ({s,opts})=>{
+    const e=window.AI_SHOGI_YANEURAOU_FUTURE,r=await e.bestMove(s,opts);
     const sq=i=>String(9-(i%9))+String.fromCharCode(97+Math.floor(i/9));
     const tok=m=>!m?'':m.drop?m.drop+'*'+sq(m.to):sq(m.f)+sq(m.to)+(m.prom?'+':'');
     return{token:tok(r?.move),resign:!!r?.resign,declareWin:!!r?.declareWin,info:r?.info||{}};
-  },state);
+  },{s:state,opts});
 }
 
 async function startPiyoLv40(page){
@@ -133,8 +133,11 @@ async function detectResult(page){
   const futureBrowser=await webkit.launch({headless:true});const futureContext=await futureBrowser.newContext({...devices['iPhone 13']});const futurePage=await futureContext.newPage();
   const piyoBrowser=await chromium.launch({headless:true});const piyoPage=await piyoBrowser.newPage({viewport:{width:1280,height:1000}});
   try{
-    await prepareFuture(futurePage);await startPiyoLv40(piyoPage);const geom=await getGeometry(piyoPage);console.log('PIYO_GEOMETRY',JSON.stringify(geom));
-    let state=initialState(),lastTo=null,ply=0,result={done:false,result:'incomplete',reason:'ply cap'},record=[];
+    await prepareFuture(futurePage);
+    const openingRef=await futureBest(futurePage,initialState(),{ms:20000,multiPV:1});
+    console.log('OPENING_20S_REFERENCE',JSON.stringify(openingRef));
+    await startPiyoLv40(piyoPage);const geom=await getGeometry(piyoPage);console.log('PIYO_GEOMETRY',JSON.stringify(geom));
+    let state=initialState(),lastTo=null,ply=0,result={done:false,result:'incomplete',reason:'opening probe cap'},record=[];
     while(ply<MAX_PLIES&&!result.done){
       if(state.t!==1)throw new Error('expected Future turn at ply '+ply+' t='+state.t);
       const fr=await futureBest(futurePage,state);
@@ -155,8 +158,13 @@ async function detectResult(page){
       result=await detectResult(piyoPage);
     }
     const tail=(await kifuOptions(piyoPage)).slice(-12);
-    const summary={result:result.result,reason:result.reason,plies:ply,futureTune:await futurePage.evaluate(()=>window.AI_SHOGI_YANEURAOU_FUTURE.strengthTune),futureBudget:await futurePage.evaluate(()=>window.AI_SHOGI_YANEURAOU_FUTURE.budget({log:[]})),opponent:'Lv40 ピヨ帝 R2610 七段',futureSide:'先手',tail,record};
-    console.log('VS_PIYO_LV40_RESULT',JSON.stringify(summary));
-    if(summary.result==='incomplete')throw new Error('match incomplete at '+ply+' plies');
+    const firstFuture=record.find(r=>r.side==='future');
+    const summary={result:result.result,reason:result.reason,plies:ply,futureTune:await futurePage.evaluate(()=>window.AI_SHOGI_YANEURAOU_FUTURE.strengthTune),futureBudget:await futurePage.evaluate(()=>window.AI_SHOGI_YANEURAOU_FUTURE.budget({log:[]})),opponent:'Lv40 ピヨ帝 R2610 七段',futureSide:'先手',openingRef20s:openingRef.token,firstMove:firstFuture?.usi||'',firstMatches20s:firstFuture?.usi===openingRef.token,tail,record};
+    console.log('PIYO_OPENING_PROBE_RESULT',JSON.stringify(summary));
+    if(summary.result==='future_loss')throw new Error('Future lost inside opening probe at '+ply+' plies');
+    if(summary.futureBudget!==15000)throw new Error('opening budget '+summary.futureBudget);
+    if(!summary.firstMatches20s)throw new Error('15s first move '+summary.firstMove+' != 20s reference '+summary.openingRef20s);
+    if(summary.plies<MAX_PLIES&&!result.done)throw new Error('opening probe incomplete at '+ply);
+    console.log('PASS Future Mitsuki opening probe vs Piyo Lv40: 12 plies survived and 15s first move matches 20s reference');
   } finally {await futureBrowser.close();await piyoBrowser.close();}
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
