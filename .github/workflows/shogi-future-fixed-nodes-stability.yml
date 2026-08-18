@@ -1,0 +1,145 @@
+name: Shogi Future fixed-nodes stability
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/shogi-future-fixed-nodes-stability.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fixed-nodes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Build iPhone fixed-nodes probe site
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/nodesprobe
+          mkdir -p "$ROOT/yaneuraou"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/future-yaneura-worker21528.js"
+          python3 - "$ROOT/future-yaneura-worker21528.js" <<'PY'
+          import sys
+          p=sys.argv[1]
+          s=open(p,encoding='utf-8').read()
+          pairs=[
+            ("const ENGINE_THREADS=IOS_WEBKIT?1:(FIRE_SILK?(HW>=4?2:1):(ANDROID?(HW>=4?2:1):2));","const ENGINE_THREADS=1;"),
+            ("const ENGINE_HASH_MB=IOS_WEBKIT?64:(FIRE_SILK?(DM&&DM<=3?48:64):(ANDROID?(DM&&DM>=6?96:64):128));","const ENGINE_HASH_MB=64;"),
+            ("async function bestmove(sfen,ms,multiPV=1){","async function bestmove(sfen,ms,multiPV=1,nodes=0){"),
+            ("const p=waitLine(x=>x.startsWith('bestmove '),ms+10000,'bestmove');e.postMessage('go movetime '+ms);const line=await p;stage('⑦ bestmove受信');","const nodeBudget=Math.max(0,Math.round(Number(nodes)||0));const waitMs=nodeBudget?90000:(ms+10000);const p=waitLine(x=>x.startsWith('bestmove '),waitMs,'bestmove');e.postMessage(nodeBudget?('go nodes '+nodeBudget):('go movetime '+ms));const line=await p;stage('⑦ bestmove受信');"),
+            ("return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:","return{token,candidates,info:{...latestInfo,ms,nodeBudget,multiPV:mp,candidates:"),
+            ("const out=await bestmove(String(m.sfen||''),ms,inferred||1);","const out=await bestmove(String(m.sfen||''),ms,inferred||1,Number(m.nodes)||0);")
+          ]
+          for old,new in pairs:
+            if old not in s: raise SystemExit('patch marker missing: '+old[:100])
+            s=s.replace(old,new,1)
+          open(p,'w',encoding='utf-8').write(s)
+          PY
+          grep -F 'const ENGINE_THREADS=1;' "$ROOT/future-yaneura-worker21528.js"
+          grep -F 'const ENGINE_HASH_MB=64;' "$ROOT/future-yaneura-worker21528.js"
+          grep -F "go nodes" "$ROOT/future-yaneura-worker21528.js"
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body>fixed-nodes probe</body>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4182,'127.0.0.1');
+          NODE
+          node "$ROOT/server.cjs" >/tmp/nodesprobe-server.log 2>&1 &
+          echo $! >/tmp/nodesprobe-server.pid
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:4182/ >/dev/null && break || sleep .2; done
+      - name: Compare movetime and fixed-node repeatability
+        shell: bash
+        run: |
+          cat > fixed-nodes-probe.mjs <<'NODE'
+          import {webkit,devices} from 'playwright';
+          const POS=[
+            {tag:'START',sfen:'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1',ms:15000,nodes:8000000,strong:11000000},
+            {tag:'PLY24',sfen:'ln1g1gsnl/5k3/p2ppp1pp/2Ps2p2/1r7/5B3/P1+pPPPPPP/2G1G1R2/+b1S2KSNL b nl2p 25',ms:9000,nodes:4500000,strong:8000000},
+            {tag:'PLY34',sfen:'l2g1gsnl/5k3/p1nppp1pp/3s2p2/9/5B3/P2PPPPPP/3G2R2/2+r2KSNL b Bgsnl4p 35',ms:9000,nodes:4500000,strong:8000000},
+            {tag:'PLY44',sfen:'l2g1gsnl/5k3/p1n1pp1pp/3p2p2/9/6P2/P2PP+l1PP/3G2R2/2+r1BKSNL b Nbg2s5p 45',ms:9000,nodes:4500000,strong:8000000}
+          ];
+          const browser=await webkit.launch({headless:true});
+          const ctx=await browser.newContext({...devices['iPhone 13']});
+          const page=await ctx.newPage();
+          await page.goto('http://127.0.0.1:4182/',{waitUntil:'load'});
+          async function makeWorker(){
+            return await page.evaluate(async()=>{
+              const w=new Worker('./future-yaneura-worker21528.js?fixed='+Date.now()+Math.random());
+              let seq=0;const pending=new Map();
+              w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const q=pending.get(m.id);if(!q)return;pending.delete(m.id);m.ok?q.resolve(m):q.reject(Error(m.error||'worker error'))}};
+              const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id='q'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(type+' timeout'))},timeout)});
+              const init=await call('init');
+              w.terminate();
+              return init;
+            });
+          }
+          const init=await makeWorker();
+          console.log('FIXED_NODES_INIT',JSON.stringify(init));
+          async function runMode(mode){
+            return await page.evaluate(async({mode,POS})=>{
+              const w=new Worker('./future-yaneura-worker21528.js?mode='+mode+'&x='+Date.now()+Math.random());
+              let seq=0;const pending=new Map();
+              w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const q=pending.get(m.id);if(!q)return;pending.delete(m.id);m.ok?q.resolve(m):q.reject(Error(m.error||'worker error'))}};
+              const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id='q'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(type+' timeout'))},timeout)});
+              await call('init');
+              const rows=[];
+              for(const pos of POS){
+                const tries=[];
+                const count=mode==='ref'?1:3;
+                for(let i=0;i<count;i++){
+                  const payload={sfen:pos.sfen,multiPV:1,ms:mode==='ref'?20000:pos.ms};
+                  if(mode==='nodes')payload.nodes=pos.nodes;
+                  if(mode==='strong')payload.nodes=pos.strong;
+                  const t0=performance.now();
+                  const r=await call('bestmove',payload,120000);
+                  const elapsed=Math.round(performance.now()-t0);
+                  tries.push({move:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth||0,nodes:r.info?.nodes||0,elapsed,nodeBudget:r.info?.nodeBudget||0});
+                }
+                rows.push({tag:pos.tag,tries});
+              }
+              w.terminate();return rows;
+            },{mode,POS});
+          }
+          const ref=await runMode('ref');
+          const time=await runMode('time');
+          const nodes=await runMode('nodes');
+          const strong=await runMode('strong');
+          const byTag=(rows,tag)=>rows.find(x=>x.tag===tag).tries;
+          const summarize=(tries,refMove)=>({moves:tries.map(x=>x.move),unique:new Set(tries.map(x=>x.move)).size,refAgree:tries.filter(x=>x.move===refMove).length,depths:tries.map(x=>x.depth),nodes:tries.map(x=>x.nodes),elapsed:tries.map(x=>x.elapsed)});
+          const result=[];
+          for(const p of POS){
+            const r=byTag(ref,p.tag)[0];
+            result.push({tag:p.tag,reference:r,time:summarize(byTag(time,p.tag),r.move),nodes:summarize(byTag(nodes,p.tag),r.move),strong:summarize(byTag(strong,p.tag),r.move)});
+          }
+          console.log('FIXED_NODES_STABILITY',JSON.stringify(result));
+          const all=[...time,...nodes,...strong,...ref].flatMap(x=>x.tries);
+          if(all.some(x=>!x.move||x.move==='resign'||!x.nodes||!x.depth))throw Error('missing usable search result');
+          const totals=mode=>result.reduce((a,x)=>{a.refAgree+=x[mode].refAgree;a.unique+=x[mode].unique;a.elapsed+=x[mode].elapsed.reduce((s,n)=>s+n,0);return a},{refAgree:0,unique:0,elapsed:0});
+          console.log('FIXED_NODES_TOTALS',JSON.stringify({time:totals('time'),nodes:totals('nodes'),strong:totals('strong')}));
+          await browser.close();
+          NODE
+          node fixed-nodes-probe.mjs 2>&1 | tee /tmp/fixed-nodes-stability.log
+      - name: Upload fixed-nodes diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-fixed-nodes-stability
+          path: |
+            /tmp/fixed-nodes-stability.log
+            /tmp/nodesprobe-server.log
+          retention-days: 2
