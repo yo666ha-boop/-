@@ -1,0 +1,41 @@
+name: Shogi Future Mitsuki mobile strength
+on:
+  push:
+    branches:
+      - feature/shogi-future-mobile-max-20260818
+    paths:
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future21520.js'
+      - '.github/scripts/shogi-future-mobile-strength-verify.js'
+      - '.github/workflows/shogi-future-mobile-strength.yml'
+  workflow_dispatch:
+jobs:
+  future-mobile-strength:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: |
+          node --check shogi-v21528/future-yaneura-worker21528.js
+          node --check shogi-side-test/future21520.js
+          node --check shogi-side-test/top5-yaneura21529.js
+          node --check .github/scripts/shogi-future-mobile-strength-verify.js
+      - name: Install Playwright WebKit and Chromium
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit chromium
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-future-mobile-server.log 2>&1 &
+          echo $! > /tmp/shogi-future-mobile-server.pid
+          sleep 2
+      - name: Compare Future Mitsuki on iPhone and Fire proxies
+        run: node .github/scripts/shogi-future-mobile-strength-verify.js
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/shogi-future-mobile-server.log || true
