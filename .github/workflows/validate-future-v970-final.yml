@@ -1,0 +1,149 @@
+name: Validate final V9.70 Future Mitsuki
+on:
+  push:
+    branches:
+      - future-mitsuki-v970-final
+    paths:
+      - '.github/workflows/validate-future-v970-final.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare old and fixed V9.70 runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/final/site
+          mkdir -p "$ROOT/old" "$ROOT/new" "$ROOT/yaneuraou" /tmp/final/art
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/old/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/nn.bin"
+          gh run download 32147280548 -n yaneuraou-v970-evalfile-fixed -D /tmp/final/art
+          JS=$(find /tmp/final/art -name 'yaneuraou.halfkp.noeval.js' | head -1); test -n "$JS"; LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/new/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/nn.bin"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/future-worker.js"
+          sha256sum "$ROOT"/old/* "$ROOT"/new/* | tee /tmp/final/runtime-sha.txt
+      - name: Create COOP COEP server and engine driver
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/final/site
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body data-result="running">start</body><script>
+          (async()=>{const b=document.body,L=[],say=x=>{L.push(x);console.log(x);b.textContent=L.join('\n')},fail=e=>{b.dataset.result='error';say('FAIL '+String(e&&e.stack||e))};try{
+            const expected=new URL(location.href).searchParams.get('expected')||'desktop';say('EXPECTED '+expected+' UA '+navigator.userAgent+' COI '+crossOriginIsolated);if(!crossOriginIsolated)throw Error('COI false');
+            const w=new Worker('./future-worker.js?final=1');let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){say('STAGE '+m.text);return}if(m.type==='fatal'){fail(Error(m.text));return}if(m.type==='result'){const p=P.get(m.id);if(!p)return;P.delete(m.id);clearTimeout(p.t);m.ok?p.r(m):p.j(Error(m.error||'worker error'))}};w.onerror=e=>fail(Error(e.message||'worker error'));
+            const call=(type,payload={})=>new Promise((r,j)=>{const id='x'+(++n),t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},180000);P.set(id,{r,j,t});w.postMessage({type,id,...payload})});
+            const init=await call('init');say('INIT '+JSON.stringify(init));
+            if(expected==='desktop'&&(init.threads!==2||init.hashMB!==128||init.mobileSafe))throw Error('desktop profile '+JSON.stringify(init));
+            if(expected==='iphone'&&(init.threads!==1||init.hashMB!==32||!init.mobileWebKit||!init.mobileSafe))throw Error('iphone profile '+JSON.stringify(init));
+            if(expected==='fire'&&(init.threads!==1||init.hashMB!==48||!init.fireSilk||!init.mobileSafe))throw Error('fire profile '+JSON.stringify(init));
+            const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1',times=expected==='fire'?[1500,4500,4500]:[1500];
+            for(let i=0;i<times.length;i++){const r=await call('bestmove',{sfen,ms:times[i],multiPV:1});say('BEST'+i+' '+JSON.stringify(r));if(!r.token||r.token==='resign')throw Error('bad bestmove')}
+            b.dataset.result='ok';say('PASS '+expected);w.terminate();
+          }catch(e){fail(e)}})();
+          </script>
+          HTML
+          cat > "$ROOT/driver.js" <<'JS'
+          'use strict';
+          const kind=new URL(self.location.href).searchParams.get('kind')||'new',BASE=new URL('./'+kind+'/',self.location.href).href;
+          let engine=null,ready=false,waiters=[],lastInfo={};const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          function line(raw){const s=String(raw||'').trim();if(s.startsWith('info ')){const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1]};}for(const w of waiters.slice())if(w.p(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}}
+          function waitLine(p,ms,label){return new Promise((r,j)=>{const w={p,r,j,t:setTimeout(()=>{waiters=waiters.filter(x=>x!==w);j(Error(label+' timeout'))},ms)};waiters.push(w)})}
+          async function direct(c,timeout=90000){const st=Date.now();let back=1;for(;;){const rc=Number(engine.ccall('usi_command','number',['string'],[c]));if(rc===0)return;if(Date.now()-st>timeout)throw Error('direct timeout '+rc+' '+c);await sleep(back);back=Math.min(64,back*2)}}
+          async function send(c,timeout=90000){if(kind==='new')return direct(c,timeout);engine.postMessage(c)}
+          async function init(){if(ready)return;importScripts(BASE+'yaneuraou.halfkp.noeval.js?proof=1');const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});engine.addMessageListener(line);const b=new Uint8Array(await(await fetch('./nn.bin',{cache:'no-store'})).arrayBuffer());try{engine.FS.unlink('/nn.bin')}catch{}engine.FS.writeFile('/nn.bin',b);let p=waitLine(x=>x==='usiok',30000,'usiok');await send('usi');await p;for(const c of['setoption name EvalDir value .','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])await send(c);p=waitLine(x=>x==='readyok',90000,'readyok');await send('isready');await p;await send('setoption name USI_Ponder value false');await send('usinewgame');ready=true}
+          async function search(moves,ms){await init();lastInfo={};await send('position startpos'+(moves?' moves '+moves:''));const p=waitLine(x=>x.startsWith('bestmove '),ms+30000,'bestmove');await send('go movetime '+ms);const s=await p;return{move:(s.split(/\s+/)[1]||''),ms,...lastInfo}}
+          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search'){self.postMessage({id:m.id,ok:true,kind,...await search(String(m.moves||''),Number(m.ms)||4500)});return}if(m.type==='shutdown'){try{engine&&engine.terminate&&engine.terminate()}catch{}self.postMessage({id:m.id,ok:true});close()}}catch(err){self.postMessage({id:m.id,ok:false,error:String(err&&err.stack||err)})}};
+          JS
+      - name: Install Playwright browsers
+        shell: bash
+        run: |
+          mkdir -p /tmp/final/pw && cd /tmp/final/pw
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps firefox webkit chromium >/dev/null
+      - name: Browser profile smoke
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat > /tmp/final/pw/smoke.mjs <<'NODE'
+          import{firefox,webkit,chromium}from'playwright';
+          const tests=[
+            ['desktop',firefox,null],
+            ['iphone',webkit,'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'],
+            ['fire',chromium,'Mozilla/5.0 (Linux; Android 9; KFKAWI Build/PS7314.1745N) AppleWebKit/537.36 (KHTML, like Gecko) Silk/130.4.1 like Chrome/130.0.0.0 Safari/537.36']
+          ];
+          for(const[name,type,ua]of tests){const br=await type.launch({headless:true}),ctx=await br.newContext(ua?{userAgent:ua}:{ }),p=await ctx.newPage();p.on('console',m=>console.log(name,m.text()));await p.goto('http://127.0.0.1:4173/?expected='+name);await p.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:240000});const r=await p.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));console.log('PROFILE',name,JSON.stringify(r));await br.close();if(r.state!=='ok')process.exit(1)}
+          NODE
+          node /tmp/final/site/server.cjs >/tmp/final/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          cd /tmp/final/pw && node smoke.mjs 2>&1 | tee /tmp/final/profile.log
+      - name: Future 24 to 40 ply strength comparison
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat > /tmp/final/pw/strength.mjs <<'NODE'
+          import{firefox}from'playwright';
+          const br=await firefox.launch({headless:true}),p=await br.newPage();await p.goto('http://127.0.0.1:4173/');
+          async function phase(kind,fn,payload){return p.evaluate(async({kind,code,payload})=>{const run=(0,eval)('('+code+')');function rpc(){const w=new Worker('./driver.js?kind='+kind+'&r='+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q)return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'engine error'))};const call=(moves,ms)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(kind+' timeout'))},180000);P.set(id,{r,j,t});w.postMessage({type:'search',id,moves,ms})});return{call,close:()=>new Promise(r=>{const id=++n,t=setTimeout(()=>{w.terminate();r()},3000);P.set(id,{r:()=>{clearTimeout(t);w.terminate();r()},j:()=>{clearTimeout(t);w.terminate();r()},t});w.postMessage({type:'shutdown',id})})}}const x=rpc();try{return await run(x,payload)}finally{await x.close()}},{kind,code:fn.toString(),payload})}
+          const ref=await phase('new',async x=>{const moves=[],snaps=[];for(let ply=1;ply<=40;ply++){const r=await x.call(moves.join(' '),300);if(!r.move||['resign','win','none'].includes(r.move))break;moves.push(r.move);if([24,28,32,34,36,40].includes(ply))snaps.push({ply,moves:moves.join(' ')})}if(snaps.length<5)throw Error('not enough snapshots '+snaps.length);const refs=[];for(const s of snaps)refs.push({...s,ref:await x.call(s.moves,12000)});return refs},null);
+          const old=await phase('old',async(x,data)=>{const out=[];for(const s of data)out.push(await x.call(s.moves,4500));return out},ref);
+          const neu=await phase('new',async(x,data)=>{const out=[];for(const s of data)out.push(await x.call(s.moves,4500));return out},ref);
+          const rows=ref.map((s,i)=>({ply:s.ply,ref:s.ref,old:old[i],new:neu[i],oldMatch:old[i].move===s.ref.move,newMatch:neu[i].move===s.ref.move}));const oldMatch=rows.filter(x=>x.oldMatch).length,newMatch=rows.filter(x=>x.newMatch).length;const summary={positions:rows.length,oldMatch,newMatch,rows};console.log('STRENGTH_SUMMARY',JSON.stringify(summary));for(const r of rows)console.log('STRENGTH_ROW',JSON.stringify(r));await br.close();if(newMatch<oldMatch)process.exit(2);
+          NODE
+          node /tmp/final/site/server.cjs >/tmp/final/server2.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          cd /tmp/final/pw && node strength.mjs 2>&1 | tee /tmp/final/strength.log
+          grep -F 'STRENGTH_SUMMARY ' /tmp/final/strength.log
+      - name: Install verified V9.70 runtime on final branch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          JS=$(find /tmp/final/art -name 'yaneuraou.halfkp.noeval.js' | head -1); LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/
+          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/
+          cp "$LIB"/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/
+          cat > shogi-v21528/yaneuraou/build-info.txt <<'TXT'
+          YaneuraOu V9.70 HalfKP noeval + Suisho5
+          SOURCE=76d58ef2e4cf64116784f41fd4816425ab6817ee
+          EMSCRIPTEN=3.1.43
+          WASM_THREAD_LIFECYCLE_FIX=1
+          EVALFILE_OPTION_FIX=1
+          Future worker direct USI bridge=1
+          iPhone Threads=1 Hash=32
+          Fire Silk Threads=1 Hash=48
+          Desktop Threads=2 Hash=128
+          TXT
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm shogi-v21528/yaneuraou/build-info.txt
+          git diff --cached --quiet || git commit -m 'fix: install validated YaneuraOu V9.70 runtime'
+          git push
+      - name: Upload final proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-v970-final-proof
+          path: |
+            /tmp/final/profile.log
+            /tmp/final/strength.log
+            /tmp/final/runtime-sha.txt
+            /tmp/final/server.log
+            /tmp/final/server2.log
+          if-no-files-found: ignore
+          retention-days: 2
