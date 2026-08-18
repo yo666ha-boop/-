@@ -1,19 +1,9 @@
 name: Shogi Future Mitsuki vs Piyo Lv40
 on:
-  push:
-    branches:
-      - feature/shogi-future-mobile-max-20260818
-    paths:
-      - '.github/scripts/shogi-vs-piyo-lv40.js'
-      - '.github/workflows/shogi-vs-piyo-lv40.yml'
-      - 'shogi-v21528/**'
-      - 'shogi-side-test/future21520.js'
   pull_request:
     paths:
-      - '.github/scripts/shogi-vs-piyo-lv40.js'
       - '.github/workflows/shogi-vs-piyo-lv40.yml'
-      - 'shogi-v21528/**'
-      - 'shogi-side-test/future21520.js'
+      - '.github/scripts/build-deep-budget-harness.py'
   workflow_dispatch:
 jobs:
   match:
@@ -24,38 +14,58 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Syntax check match harness
-        run: node --check .github/scripts/shogi-vs-piyo-lv40.js
-      - name: Install Playwright browsers
-        run: |
-          npm init -y
-          npm install playwright@1.55.0
-          npx playwright install --with-deps webkit chromium
-      - name: Start Future Mitsuki app server
-        run: |
-          python3 -m http.server 8000 > /tmp/shogi-vs-piyo-server.log 2>&1 &
-          echo $! > /tmp/shogi-vs-piyo-server.pid
-          sleep 2
-      - name: Run real match against Piyo Lv40
+      - name: Syntax check deep-budget builder
         shell: bash
         run: |
           set -euo pipefail
-          cp .github/scripts/shogi-vs-piyo-lv40.js /tmp/shogi-vs-piyo-full.js
-          sed -i 's/const MAX_PLIES=12;/const MAX_PLIES=120;/' /tmp/shogi-vs-piyo-full.js
-          grep -F 'const MAX_PLIES=120;' /tmp/shogi-vs-piyo-full.js
-          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/shogi-vs-piyo-full.js 2>&1 | tee /tmp/shogi-vs-piyo-full.log
-          if grep -F '"result":"incomplete"' /tmp/shogi-vs-piyo-full.log; then
-            echo 'FAIL: reached 120-ply cap without a real result'
+          python3 -m py_compile .github/scripts/build-deep-budget-harness.py
+          node --check .github/scripts/shogi-vs-piyo-lv40.js
+      - name: Install Playwright browsers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit chromium
+      - name: Start Future Mitsuki app server
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 > /tmp/shogi-vs-piyo-server.log 2>&1 &
+          echo $! > /tmp/shogi-vs-piyo-server.pid
+          sleep 2
+      - name: Build Future deep-budget match harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/shogi-vs-piyo-lv40.js /tmp/future-deep-budget.js
+          python3 .github/scripts/build-deep-budget-harness.py
+          node --check /tmp/future-deep-budget.js
+          grep -F 'const MAX_PLIES=120;' /tmp/future-deep-budget.js
+          grep -F 'DEEP_BUDGET' /tmp/future-deep-budget.js
+      - name: Run real Piyo Lv40 match with deep budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/future-deep-budget.js 2>&1 | tee /tmp/future-deep-budget.log
+          grep -F 'PIYO_OPENING_PROBE_RESULT' /tmp/future-deep-budget.log
+          grep -F 'DEEP_BUDGET' /tmp/future-deep-budget.log
+          if grep -F '"result":"incomplete"' /tmp/future-deep-budget.log; then
+            echo 'FAIL: reached 120-ply cap without terminal result'
             exit 1
           fi
-          grep -F 'PIYO_OPENING_PROBE_RESULT' /tmp/shogi-vs-piyo-full.log
-          echo 'PASS: Piyo Lv40 match reached a real terminal result before 120 plies'
-      - name: Upload match log
+          if grep -F '"result":"future_win"' /tmp/future-deep-budget.log; then
+            echo 'DEEP_BUDGET_RESULT=WIN'
+          else
+            echo 'DEEP_BUDGET_RESULT=NOT_WIN'
+            exit 1
+          fi
+      - name: Upload deep-budget match log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: future-vs-piyo-lv40-full-match
-          path: /tmp/shogi-vs-piyo-full.log
+          name: future-deep-budget-vs-piyo-lv40
+          path: /tmp/future-deep-budget.log
           if-no-files-found: warn
           retention-days: 2
       - name: Show local server log on failure
