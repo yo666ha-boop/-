@@ -1,0 +1,42 @@
+name: Shogi top-five sequence tactics verify
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/**'
+      - '.github/scripts/shogi-top5-sequence-tactics-verify.js'
+      - '.github/workflows/shogi-top5-sequence-tactics-verify.yml'
+  workflow_dispatch:
+jobs:
+  sequence-tactics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check sequence and tactics verification
+        run: node --check .github/scripts/shogi-top5-sequence-tactics-verify.js
+      - name: Install Playwright Firefox
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps firefox
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-sequence-server.log 2>&1 &
+          echo $! > /tmp/shogi-sequence-server.pid
+          sleep 2
+      - name: Run multi-ply opening and tactics verification
+        run: node .github/scripts/shogi-top5-sequence-tactics-verify.js
+      - name: Upload sequence and tactics report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shogi-top5-sequence-tactics-verify
+          path: .github/benchmark-results/shogi-top5-sequence-tactics-latest.json
+          if-no-files-found: ignore
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/shogi-sequence-server.log || true
