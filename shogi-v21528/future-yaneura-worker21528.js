@@ -11,11 +11,13 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528v970d3';
+const BUILD='21528v970d4';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
-const ENGINE_THREADS=MOBILE_WEBKIT?1:2;
-const ENGINE_HASH_MB=MOBILE_WEBKIT?32:128;
+const FIRE_SILK=/\bSilk\//i.test(UA);
+const MOBILE_SAFE=MOBILE_WEBKIT||FIRE_SILK;
+const ENGINE_THREADS=MOBILE_SAFE?1:2;
+const ENGINE_HASH_MB=MOBILE_WEBKIT?32:FIRE_SILK?48:128;
 const ENGINE_JS_URL=BASE+JS+'?v='+BUILD;
 const TOP5_MPV_BY_MS=new Map([
   [4200,3],[6200,3],[2800,3],[4300,3],
@@ -87,7 +89,7 @@ async function init(){
     stage('⑤-4d USI_Hash設定開始 '+ENGINE_HASH_MB+'MB');await sendUSI('setoption name USI_Hash value '+ENGINE_HASH_MB);stage('⑤-4d USI_Hash設定完了');
     stage('⑤-4e Threads設定開始 '+ENGINE_THREADS);await sendUSI('setoption name Threads value '+ENGINE_THREADS);stage('⑤-4e Threads設定完了');
     stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');
-    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+'MB'+(MOBILE_WEBKIT?' / iPhone省メモリ':''));
+    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+(MOBILE_WEBKIT?' / iPhone省メモリ':FIRE_SILK?' / Fire Silk省メモリ':''));
     stage('⑤-5 readyok待ち');p=waitLine(x=>x==='readyok',60000,'readyok');await sendUSI('isready',60000);await p;stage('⑤-5 readyok受信');
     await sendUSI('setoption name USI_Ponder value false');
     await sendUSI('usinewgame');ready=true;stage('⑤成功 V9.70＋水匠5 接続済み');return engine;
@@ -96,7 +98,7 @@ async function init(){
 }
 async function bestmove(sfen,ms,multiPV=1){
   await init();
-  const mp=Math.max(1,Math.min(MOBILE_WEBKIT?3:4,Math.round(Number(multiPV)||1)));
+  const mp=Math.max(1,Math.min(MOBILE_SAFE?3:4,Math.round(Number(multiPV)||1)));
   latestInfo={};latestMultiPV={};
   await sendUSI('setoption name MultiPV value '+mp);
   await sendUSI('position sfen '+sfen);stage('⑥ 思考中 bestmove待ち');
@@ -105,12 +107,12 @@ async function bestmove(sfen,ms,multiPV=1){
   const candidates=Object.keys(latestMultiPV).map(Number).sort((a,b)=>a-b).map(k=>latestMultiPV[k]).filter(x=>x&&x.token);
   if(!candidates.some(x=>x.rank===1)&&token)candidates.unshift({rank:1,token,...latestInfo});
   await sendUSI('setoption name MultiPV value 1');
-  return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu V9.70 HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}};
+  return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu V9.70 HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}};
 }
 self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
   try{
-    if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init',mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});return}
+    if(m.type==='init'){await init();self.postMessage({type:'result',id,ok:true,kind:'init',mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});return}
     if(m.type==='bestmove'){
       const ms=Number(m.ms)||6000;
       const inferred=m.multiPV==null?TOP5_MPV_BY_MS.get(ms):Number(m.multiPV);
@@ -119,6 +121,6 @@ self.onmessage=async ev=>{
     }
     if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}
     if(m.type==='newgame'){try{if(engine){await sendUSI('stop');await sendUSI('setoption name MultiPV value 1');await sendUSI('usinewgame')}}catch(e){};return}
-  }catch(e){const msg=String(e&&e.message||e);stage('⑤失敗 '+msg);self.postMessage({type:'result',id,ok:false,error:msg,mobileWebKit:MOBILE_WEBKIT,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
+  }catch(e){const msg=String(e&&e.message||e);stage('⑤失敗 '+msg);self.postMessage({type:'result',id,ok:false,error:msg,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE,threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB});}
 };
 self.postMessage({type:'stage',text:'⑤-W0 Worker待受開始'});
