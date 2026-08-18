@@ -35,16 +35,16 @@ async function iphoneAudit(){
     const sq=i=>String(9-(i%9))+String.fromCharCode(97+Math.floor(i/9));const tok=m=>!m?'':m.drop?m.drop+'*'+sq(m.to):sq(m.f)+sq(m.to)+(m.prom?'+':'');
     await shared.init();
     async function generated(seedMove,target){let s=apply(initial(),seedMove,'seed');for(let p=2;p<=target;p++){const r=await shared.bestMove(s,{ms:120,multiPV:1});if(!r?.move)throw new Error('generator stopped '+p);s=apply(s,r.move,'gen')}return s}
-    const states=[{name:'initial',s:initial()},{name:'7g-mid',s:await generated({f:56,to:47,prom:false,drop:null},20)},{name:'2g-mid',s:await generated({f:61,to:52,prom:false,drop:null},20)}];
+    const states=[{name:'initial',s:initial()},{name:'7g-opening',s:await generated({f:56,to:47,prom:false,drop:null},20)},{name:'2g-mid',s:await generated({f:61,to:52,prom:false,drop:null},30)}];
     const rows=[];
     for(const c of states){
       const mitsu=await top.bestMove(c.s,0);
       const future=await shared.bestMove(c.s);
-      const ref=await shared.bestMove(c.s,{ms:12000,multiPV:1});
-      rows.push({name:c.name,mitsu:{move:tok(mitsu?.move),ms:mitsu?.info?.ms,nodes:mitsu?.info?.nodes||0,depth:mitsu?.info?.depth||0},future:{move:tok(future?.move),ms:future?.info?.ms,nodes:future?.info?.nodes||0,depth:future?.info?.depth||0,threads:future?.info?.threads,hashMB:future?.info?.hashMB,deviceClass:future?.info?.deviceClass,hardwareConcurrency:future?.info?.hardwareConcurrency},ref:{move:tok(ref?.move),nodes:ref?.info?.nodes||0,depth:ref?.info?.depth||0}})
+      const ref=await shared.bestMove(c.s,{ms:20000,multiPV:1});
+      rows.push({name:c.name,ply:c.s.log?.length||0,mitsu:{move:tok(mitsu?.move),ms:mitsu?.info?.ms,nodes:mitsu?.info?.nodes||0,depth:mitsu?.info?.depth||0},future:{move:tok(future?.move),ms:future?.info?.ms,nodes:future?.info?.nodes||0,depth:future?.info?.depth||0,threads:future?.info?.threads,hashMB:future?.info?.hashMB,deviceClass:future?.info?.deviceClass,hardwareConcurrency:future?.info?.hardwareConcurrency},ref:{move:tok(ref?.move),nodes:ref?.info?.nodes||0,depth:ref?.info?.depth||0}})
     }
-    const late=initial();late.log=Array(55).fill('late');
-    return{ua:navigator.userAgent,coi:crossOriginIsolated,tune:shared.strengthTune,budgetNormal:shared.budget(initial()),budgetLate:shared.budget(late),topVersion:top.version,topMaxLoss:top.indices.map(i=>top.profiles[i].maxLoss),rows};
+    const mid=initial();mid.log=Array(24).fill('mid');const late=initial();late.log=Array(55).fill('late');
+    return{ua:navigator.userAgent,coi:crossOriginIsolated,tune:shared.strengthTune,budgetOpening:shared.budget(initial()),budgetMid:shared.budget(mid),budgetLate:shared.budget(late),topVersion:top.version,topMaxLoss:top.indices.map(i=>top.profiles[i].maxLoss),rows};
   });
   await browser.close();return audit;
 }
@@ -56,8 +56,8 @@ async function fireAudit(){
   const audit=await page.evaluate(async()=>{
     const shared=window.AI_SHOGI_YANEURAOU_FUTURE;
     function initial(){const b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let x=0;x<9;x++){b[x]={k:back[x],o:-1};b[72+x]={k:back[8-x],o:1};b[18+x]={k:'P',o:-1};b[54+x]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};return{b,h:{1:{},'-1':{}},t:1,log:[],last:null}}
-    await shared.init();const s=initial(),r=await shared.bestMove(s);const late=initial();late.log=Array(55).fill('late');
-    return{coi:crossOriginIsolated,tune:shared.strengthTune,budgetNormal:shared.budget(s),budgetLate:shared.budget(late),move:!!r?.move,ms:r?.info?.ms,threads:r?.info?.threads,hashMB:r?.info?.hashMB,fireSilk:r?.info?.fireSilk,deviceClass:r?.info?.deviceClass,nodes:r?.info?.nodes||0,depth:r?.info?.depth||0};
+    await shared.init();const s=initial(),r=await shared.bestMove(s);const mid=initial();mid.log=Array(24).fill('mid');const late=initial();late.log=Array(55).fill('late');
+    return{coi:crossOriginIsolated,tune:shared.strengthTune,budgetOpening:shared.budget(s),budgetMid:shared.budget(mid),budgetLate:shared.budget(late),move:!!r?.move,ms:r?.info?.ms,threads:r?.info?.threads,hashMB:r?.info?.hashMB,fireSilk:r?.info?.fireSilk,deviceClass:r?.info?.deviceClass,nodes:r?.info?.nodes||0,depth:r?.info?.depth||0};
   });
   await browser.close();return audit;
 }
@@ -69,14 +69,15 @@ async function fireAudit(){
   console.log('FIRE_FUTURE_STRENGTH',JSON.stringify(fire));
   const failures=[];
   if(!iphone.coi)failures.push('iPhone crossOriginIsolated=false');
-  if(iphone.tune!=='mobile-max1')failures.push('iPhone tune='+iphone.tune);
-  if(iphone.budgetNormal!==7000||iphone.budgetLate!==11000)failures.push('iPhone budgets '+iphone.budgetNormal+'/'+iphone.budgetLate);
+  if(iphone.tune!=='mobile-max2-openingdeep')failures.push('iPhone tune='+iphone.tune);
+  if(iphone.budgetOpening!==15000||iphone.budgetMid!==9000||iphone.budgetLate!==13000)failures.push('iPhone budgets '+iphone.budgetOpening+'/'+iphone.budgetMid+'/'+iphone.budgetLate);
   if(JSON.stringify(iphone.topMaxLoss)!==JSON.stringify([0,35,28,45,40]))failures.push('top5 tune changed '+JSON.stringify(iphone.topMaxLoss));
   let futureAgree=0,mitsuAgree=0;
   for(const r of iphone.rows){
+    const expectedFutureMs=r.ply<24?15000:9000;
     if(r.mitsu.ms!==3300)failures.push(r.name+' Mitsuki ms='+r.mitsu.ms);
-    if(r.future.ms!==7000)failures.push(r.name+' Future ms='+r.future.ms);
-    if(!(r.future.nodes>r.mitsu.nodes*1.25))failures.push(r.name+' node lead too small '+r.future.nodes+'/'+r.mitsu.nodes);
+    if(r.future.ms!==expectedFutureMs)failures.push(r.name+' Future ms='+r.future.ms+' expected '+expectedFutureMs);
+    if(!(r.future.nodes>r.mitsu.nodes*1.5))failures.push(r.name+' node lead too small '+r.future.nodes+'/'+r.mitsu.nodes);
     if(r.future.depth<r.mitsu.depth-1)failures.push(r.name+' Future depth '+r.future.depth+' < Mitsuki '+r.mitsu.depth);
     if(r.future.deviceClass!=='ios-webkit')failures.push(r.name+' deviceClass='+r.future.deviceClass);
     if(r.future.hardwareConcurrency>=4&&r.future.threads!==2)failures.push(r.name+' expected 2 threads at HW '+r.future.hardwareConcurrency);
@@ -85,14 +86,14 @@ async function fireAudit(){
     if(r.future.move===r.ref.move)futureAgree++;
     if(r.mitsu.move===r.ref.move)mitsuAgree++;
   }
-  if(futureAgree<mitsuAgree)failures.push('long-reference agreement Future '+futureAgree+' < Mitsuki '+mitsuAgree);
+  if(futureAgree<mitsuAgree)failures.push('20s-reference agreement Future '+futureAgree+' < Mitsuki '+mitsuAgree);
   if(!fire.coi)failures.push('Fire crossOriginIsolated=false');
-  if(fire.tune!=='mobile-max1')failures.push('Fire tune='+fire.tune);
-  if(fire.budgetNormal!==6500||fire.budgetLate!==10000)failures.push('Fire budgets '+fire.budgetNormal+'/'+fire.budgetLate);
+  if(fire.tune!=='mobile-max2-openingdeep')failures.push('Fire tune='+fire.tune);
+  if(fire.budgetOpening!==12000||fire.budgetMid!==8500||fire.budgetLate!==12000)failures.push('Fire budgets '+fire.budgetOpening+'/'+fire.budgetMid+'/'+fire.budgetLate);
   if(!fire.move||!(fire.nodes>0))failures.push('Fire no search result');
   if(fire.deviceClass!=='fire-silk'||fire.fireSilk!==true)failures.push('Fire detection '+JSON.stringify(fire));
   if(![1,2].includes(fire.threads)||fire.hashMB<48||fire.hashMB>64)failures.push('Fire worker ceiling '+JSON.stringify(fire));
-  console.log('MOBILE_STRENGTH_SUMMARY',JSON.stringify({futureAgree,mitsuAgree,iphoneRows:iphone.rows.map(r=>({name:r.name,nodeRatio:Number((r.future.nodes/Math.max(1,r.mitsu.nodes)).toFixed(2)),futureDepth:r.future.depth,mitsuDepth:r.mitsu.depth,futureMove:r.future.move,mitsuMove:r.mitsu.move,refMove:r.ref.move})),fire:{ms:fire.ms,threads:fire.threads,hashMB:fire.hashMB,depth:fire.depth,nodes:fire.nodes}}));
+  console.log('MOBILE_STRENGTH_SUMMARY',JSON.stringify({futureAgree,mitsuAgree,iphoneRows:iphone.rows.map(r=>({name:r.name,ply:r.ply,nodeRatio:Number((r.future.nodes/Math.max(1,r.mitsu.nodes)).toFixed(2)),futureDepth:r.future.depth,mitsuDepth:r.mitsu.depth,futureMove:r.future.move,mitsuMove:r.mitsu.move,refMove:r.ref.move})),fire:{ms:fire.ms,threads:fire.threads,hashMB:fire.hashMB,depth:fire.depth,nodes:fire.nodes}}));
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS Future Mitsuki mobile-max1: iPhone/Fire budgets + node lead + long-reference agreement');
+  console.log('PASS Future Mitsuki mobile-max2-openingdeep: opening/mid/end budgets + node lead + 20s-reference agreement');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});
