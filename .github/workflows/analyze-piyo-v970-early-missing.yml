@@ -1,0 +1,38 @@
+name: Analyze remaining Piyo practical Future moves
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/analyze-piyo-v970-early-missing.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  analyze:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          mkdir -p /tmp/miss && cd /tmp/miss
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Audit remaining Future moves
+        shell: bash
+        run: |
+          cat > /tmp/miss/a.mjs <<'NODE'
+          import{webkit}from'playwright';const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',M=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+ 4g4f 1i2i 3h3i 2i2h 3i3h 2h2g 4h3i N*2f 5h4h 8h8i 4h5g L*4g 5g4g 8i6g 6i5h 7e7i L*5i 2f3h+`.split(/\s+/);function S(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,p=false;for(const c of row){if(c==='+'){p=true;continue}if(/\d/.test(c)){f-=+c;continue}const s=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{s,k:c.toUpperCase(),p});p=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0];h[t][k]=(h[t][k]||0)-1;b.set(m.slice(2),{s:t,k,p:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error(m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,p:pc.p||m.endsWith('+')})}t=t==='b'?'w':'b'}let rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.p?'+':'')+(q.s==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const s of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[s][k]||0;if(n>0)hand+=(n>1?n:'')+(s==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const br=await webkit.launch({headless:true}),p=await br.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});await p.goto('https://yo666ha-boop.github.io/-/shogi-v21528/?missing='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT?.characters===26);await p.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=21528v970d4');let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'w'))};window.__call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('timeout')),180000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});window.__w=w;await window.__call('init')});const go=(pos,ms=12000,pv=3)=>p.evaluate(({pos,ms,pv})=>window.__call('bestmove',{sfen:pos,ms,multiPV:pv}),{pos,ms,pv});const P=[1,3,5,7,9,11,13,15,17,19,23,27,31,35,39],rows=[];for(const ply of P){const chosen=M[ply-1],r=await go(S(M.slice(0,ply-1))),cs=r.candidates||[],best=cs.find(x=>x.rank===1)||cs[0],hit=cs.find(x=>x.token===chosen);let cv=hit?.cp??null,after=null;if(!hit){after=await go(S(M.slice(0,ply)),9000,1);if(Number.isFinite(after.info?.cp))cv=-after.info.cp}const loss=Number.isFinite(best?.cp)&&Number.isFinite(cv)?Math.max(0,best.cp-cv):null,row={ply,chosen,best:best?.token,bestCp:best?.cp,bestMate:best?.mate,rank:hit?.rank??null,chosenCp:cv,lossCp:loss,top3:cs.map(x=>({rank:x.rank,token:x.token,cp:x.cp,mate:x.mate}))};rows.push(row);console.log('MISSING_ROW '+JSON.stringify(row))}const known=rows.map(x=>x.lossCp).filter(Number.isFinite);console.log('MISSING_SUMMARY '+JSON.stringify({positions:rows.length,bestMatches:rows.filter(x=>x.chosen===x.best).length,outsideTop3:rows.filter(x=>x.rank==null).length,maxLossCp:known.length?Math.max(...known):null,lossOver100:rows.filter(x=>Number.isFinite(x.lossCp)&&x.lossCp>=100),rows}));await p.evaluate(()=>window.__w?.terminate());await br.close();
+          NODE
+          cd /tmp/miss && node a.mjs 2>&1 | tee /tmp/missing.log
+          grep -F 'MISSING_SUMMARY ' /tmp/missing.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Remaining Future move audit'; echo '```text'; grep -E '^(MISSING_ROW|MISSING_SUMMARY)' /tmp/missing.log | tail -30 || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
