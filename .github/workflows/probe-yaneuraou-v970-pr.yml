@@ -1,0 +1,62 @@
+name: YaneuraOu V9.70 PR probe
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/probe-yaneuraou-v970-pr.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  v970:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu970
+      - name: Prepare V9.70 browser build
+        run: |
+          set -euxo pipefail
+          grep -F 'name: "halfkp.noeval"' YaneuraOu970/script/wasm_build.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu970/source/Makefile'); s=p.read_text(); old='-s PTHREAD_POOL_SIZE=32'
+          assert old in s, 'pthread marker missing'
+          p.write_text(s.replace(old,'-s PTHREAD_POOL_SIZE=2',1))
+          PY
+          grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu970/source/Makefile
+          test $(stat -c%s shogi-v21528/yaneuraou/nn.bin) -gt 60000000
+      - name: Build HalfKP noeval
+        run: |
+          set -euxo pipefail
+          docker pull emscripten/emsdk:3.1.43
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu970:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval 2>&1 | tee /tmp/v970-build.log
+          LIB=YaneuraOu970/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          echo "V970_WASM_BYTES=$(stat -c%s "$LIB/yaneuraou.halfkp.noeval.wasm")"
+      - name: Node USI proof with current Suisho5
+        run: |
+          cat >/tmp/v970-proof.cjs <<'NODE'
+          const fs=require('fs'),path=require('path');
+          const lib=path.resolve('YaneuraOu970/build/wasm/halfkp.noeval/lib');
+          const F=require(path.join(lib,'yaneuraou.halfkp.noeval.js'));
+          const wait=(pred,ms=120000)=>new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error('timeout')),ms);global._resolve=x=>{if(pred(x)){clearTimeout(t);resolve(x)}}});
+          (async()=>{const y=await F({wasmBinary:fs.readFileSync(path.join(lib,'yaneuraou.halfkp.noeval.wasm'))});const lines=[];y.addMessageListener(x=>{x=String(x);lines.push(x);console.log('USI',x);global._resolve?.(x)});y.FS.writeFile('/nn.bin',fs.readFileSync('shogi-v21528/yaneuraou/nn.bin'));y.postMessage('usi');await wait(x=>x==='usiok');y.postMessage('setoption name EvalDir value .');y.postMessage('setoption name EvalFile value nn.bin');y.postMessage('setoption name FV_SCALE value 24');y.postMessage('setoption name Threads value 2');y.postMessage('setoption name USI_Hash value 64');y.postMessage('isready');await wait(x=>x==='readyok');y.postMessage('usinewgame');y.postMessage('position startpos');y.postMessage('go movetime 3000');const bm=await wait(x=>x.startsWith('bestmove '),60000);if(/bestmove\s+(resign|none)/.test(bm))throw Error('bad '+bm);console.log('PASS_V970_NODE',bm);y.terminate();})().catch(e=>{console.error(e.stack||e);process.exit(1)});
+          NODE
+          node /tmp/v970-proof.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v970-probe
+          path: |
+            /tmp/v970-build.log
+            YaneuraOu970/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js
+            YaneuraOu970/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.worker.js
+            YaneuraOu970/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm
+          if-no-files-found: warn
+          retention-days: 2
