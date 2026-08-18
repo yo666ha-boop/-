@@ -1,0 +1,27 @@
+name: Inspect Piyo promotion setting
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-piyo-nari-20260819.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect current Piyo HTML around promotion settings
+        run: |
+          curl -fsSL --retry 3 https://www.studiok-i.net/ps/ -o /tmp/piyo.html
+          python3 - <<'PY'
+          import re
+          s=open('/tmp/piyo.html',encoding='utf-8').read()
+          for pat in ['dlgSetNariDlg','成る','成らない','成り']:
+              print('PATTERN',pat)
+              for m in list(re.finditer(pat,s))[:20]:
+                  a=max(0,m.start()-300); b=min(len(s),m.end()+500)
+                  print(s[a:b].replace('\n',' ')[:1000])
+          PY
