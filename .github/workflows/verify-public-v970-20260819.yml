@@ -1,8 +1,9 @@
 name: Verify public V9.70 deployment
 on:
-  push:
+  pull_request:
     branches:
-      - verify-public-v970-20260819
+      - main
+    types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/verify-public-v970-20260819.yml'
   workflow_dispatch:
