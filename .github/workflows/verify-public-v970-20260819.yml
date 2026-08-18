@@ -1,0 +1,89 @@
+name: Verify public V9.70 deployment
+on:
+  push:
+    branches:
+      - verify-public-v970-20260819
+    paths:
+      - '.github/workflows/verify-public-v970-20260819.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify GitHub Pages files exactly match main
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://yo666ha-boop.github.io/-'
+          Q="verify=${GITHUB_RUN_ID}"
+          mkdir -p /tmp/public-v970
+          paths=(
+            'shogi-side-test/future21520.js'
+            'shogi-v21528/future-yaneura-worker21528.js'
+            'shogi-v21528/yaneuraou/build-info.txt'
+            'shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js'
+            'shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm'
+          )
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl -fsSL --max-time 30 "$BASE/shogi-v21528/yaneuraou/build-info.txt?$Q-$attempt" -o /tmp/public-v970/build-info.probe && grep -q 'YaneuraOu V9.70 HalfKP noeval + Suisho5' /tmp/public-v970/build-info.probe; then
+              ready=1; break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          for path in "${paths[@]}"; do
+            mkdir -p "/tmp/public-v970/$(dirname "$path")"
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 1 --max-time 120 "$BASE/$path?$Q" -o "/tmp/public-v970/$path"
+            cmp "$path" "/tmp/public-v970/$path"
+            echo "PUBLIC_FILE_MATCH $path $(sha256sum "$path" | awk '{print $1}')"
+          done
+          grep -F 'SOURCE=76d58ef2e4cf64116784f41fd4816425ab6817ee' /tmp/public-v970/shogi-v21528/yaneuraou/build-info.txt
+          grep -F 'future-yaneura-worker21528.js?v=21528v970d4' /tmp/public-v970/shogi-side-test/future21520.js
+          echo PUBLIC_FILES_PASS
+      - name: Install iPhone-equivalent WebKit
+        shell: bash
+        run: |
+          mkdir -p /tmp/public-v970/pw && cd /tmp/public-v970/pw
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Verify public app and Future Mitsuki engine init
+        shell: bash
+        run: |
+          cat > /tmp/public-v970/pw/test.mjs <<'NODE'
+          import { webkit } from 'playwright';
+          const UA='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+          const br=await webkit.launch({headless:true});
+          const ctx=await br.newContext({userAgent:UA});
+          const p=await ctx.newPage();
+          const errors=[];
+          p.on('pageerror',e=>errors.push(String(e)));
+          p.on('console',m=>{console.log('PUBLIC_CONSOLE',m.type(),m.text());if(m.type()==='error')errors.push(m.text())});
+          const url='https://yo666ha-boop.github.io/-/shogi-v21528/?verify='+Date.now();
+          let coi=false;
+          for(let i=0;i<4;i++){
+            await p.goto(url+'&pass='+i,{waitUntil:'domcontentloaded',timeout:120000});
+            await p.waitForTimeout(3000);
+            coi=await p.evaluate(()=>crossOriginIsolated);
+            if(coi)break;
+          }
+          if(!coi)throw Error('public crossOriginIsolated=false');
+          await p.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT&&window.AI_SHOGI_WEB_AUDIT.characters===26,{timeout:120000});
+          const audit=await p.evaluate(()=>window.AI_SHOGI_WEB_AUDIT);
+          const fa=await p.evaluate(()=>window.AI_SHOGI_FUTURE_AUDIT21520||null);
+          if(!audit||!audit.ok||audit.characters!==26||!audit.future||(audit.brokenImages||[]).length||(audit.runtimeErrors||[]).length)throw Error('public audit '+JSON.stringify(audit));
+          if(!fa||!fa.card||!fa.sfenOK||!String(fa.workerURL||'').includes('v=21528v970d4'))throw Error('public future audit '+JSON.stringify(fa));
+          await p.evaluate(async()=>{await window.AI_SHOGI_YANEURAOU_FUTURE.init()});
+          const init=await p.evaluate(()=>window.AI_SHOGI_YANEURAOU_FUTURE.status());
+          if(!init.ready||init.error||!init.crossOriginIsolated||!init.worker)throw Error('public engine init '+JSON.stringify(init));
+          console.log('PUBLIC_APP_PASS '+JSON.stringify({audit,fa,init,errors:errors.slice(-8)}));
+          await br.close();
+          NODE
+          cd /tmp/public-v970/pw
+          node test.mjs 2>&1 | tee /tmp/public-v970/public-app.log
+          grep -F 'PUBLIC_APP_PASS ' /tmp/public-v970/public-app.log
