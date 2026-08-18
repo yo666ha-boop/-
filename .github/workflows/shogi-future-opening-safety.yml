@@ -1,8 +1,7 @@
 name: Shogi Future opening safety vs Piyo Lv40
+# diagnostic PR trigger: opening-safety only
 on:
-  push:
-    branches:
-      - 'diag/future-opening-safety-20260818'
+  pull_request:
     paths:
       - '.github/workflows/shogi-future-opening-safety.yml'
   workflow_dispatch:
