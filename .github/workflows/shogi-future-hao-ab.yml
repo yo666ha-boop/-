@@ -1,0 +1,159 @@
+name: Shogi Future Hao vs Suisho5 A-B
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/shogi-future-hao-ab.yml'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hao-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install browser and 7zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y p7zip-full >/dev/null
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit
+
+      - name: Download official Hao HalfKP evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/nodchip/tanuki-/releases/download/tanuki-.halfkp_256x2-32-32.2023-05-08/tanuki-.halfkp_256x2-32-32.2023-05-08.7z'
+          wget -q --show-progress -O /tmp/hao.7z "$URL"
+          echo "HAO_ARCHIVE_SHA256=$(sha256sum /tmp/hao.7z | awk '{print $1}')"
+          mkdir -p /tmp/hao-extract
+          7z x -y -o/tmp/hao-extract /tmp/hao.7z >/tmp/hao-7z.log
+          HAO=$(find /tmp/hao-extract -type f -name nn.bin -size +50M | head -n1)
+          test -n "$HAO"
+          cp "$HAO" /tmp/hao-nn.bin
+          echo "HAO_NN_BYTES=$(stat -c%s /tmp/hao-nn.bin)"
+          echo "HAO_NN_SHA256=$(sha256sum /tmp/hao-nn.bin | awk '{print $1}')"
+          test $(stat -c%s /tmp/hao-nn.bin) -gt 60000000
+
+      - name: Prepare isolated Suisho5 and Hao browser workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/haoab/site
+          for E in suisho hao; do
+            mkdir -p "$ROOT/$E/yaneuraou"
+            cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js "$ROOT/$E/yaneuraou/"
+            cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js "$ROOT/$E/yaneuraou/"
+            cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm "$ROOT/$E/yaneuraou/"
+            cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/$E/future-yaneura-worker21528.js"
+          done
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/suisho/yaneuraou/nn.bin"
+          cp /tmp/hao-nn.bin "$ROOT/hao/yaneuraou/nn.bin"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/haoab/site/hao/future-yaneura-worker21528.js')
+          s=p.read_text()
+          old="engine.postMessage('setoption name FV_SCALE value 24');"
+          new="engine.postMessage('setoption name FV_SCALE value 20');"
+          if old not in s: raise SystemExit('FV_SCALE marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+          grep -F "FV_SCALE value 20" "$ROOT/hao/future-yaneura-worker21528.js"
+          grep -F "const ENGINE_THREADS=IOS_WEBKIT?1:" "$ROOT/hao/future-yaneura-worker21528.js"
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,''),x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4191,'127.0.0.1');
+          NODE
+          node "$ROOT/server.cjs" >/tmp/haoab-server.log 2>&1 &
+          sleep 2
+
+      - name: A-B latest losing-game checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > haoab.mjs <<'NODE'
+          import {webkit,devices} from 'playwright';
+          const P=[
+            {ply:0, actual:'7g7f', sfen:'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1'},
+            {ply:8, actual:'5g5f', sfen:'lnsgk2nl/1r4gs1/pppppp1pp/6p2/2P2b3/9/PP1PPPPPP/6R2/LNSGKGSNL b B 9'},
+            {ply:16,actual:'9i9h', sfen:'lnsgk2nl/1r4gs1/pppppp1pp/6p2/2P6/P3P4/3P1PP1P/+b4S3/LNSGKG1NL b Br2p 17'},
+            {ply:24,actual:'1i1h', sfen:'ln1gk2nl/1s4gs1/pp1ppp1pp/2p3p2/9/P3P4/3P1PP1P/L4S3/1+rSGKG1NL b RBbn3p 25'},
+            {ply:30,actual:'B*2f', sfen:'ln1gk2nl/1s4gs1/pp2pp1pp/2pp2p2/9/P3P4/3P1PP1P/+r4S2L/2SGKG1N1 b BLrbn3p 31'},
+            {ply:34,actual:'5i5h', sfen:'ln1g3nl/1s2k1gs1/pp2pp1pp/2pp2p2/9/P3P2B1/3P1PP1P/5S2L/+r1SGKG1N1 b rbnl3p 35'}
+          ];
+          const browser=await webkit.launch({headless:true});
+          const ctx=await browser.newContext({...devices['iPhone 13']});
+          const page=await ctx.newPage();
+          await page.goto('http://127.0.0.1:4191/suisho/future-yaneura-worker21528.js',{waitUntil:'load'}).catch(()=>{});
+          async function run(label,path){
+            return await page.evaluate(async({label,path,P})=>{
+              const w=new Worker(`http://127.0.0.1:4191/${path}/future-yaneura-worker21528.js?${label}=`+Date.now());
+              let seq=0;const pending=new Map();
+              w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(label+' '+(m.error||'worker error')))}};
+              const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id=label+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(label+' '+type+' timeout'))},timeout)});
+              const init=await call('init');const rows=[];
+              for(const p of P){
+                const r=await call('bestmove',{sfen:p.sfen,ms:12000,multiPV:3},150000);
+                const c=(r.candidates||[]).map(x=>({rank:x.rank,move:x.token,cp:x.cp??null,mate:x.mate??null}));
+                const actual=c.find(x=>x.move===p.actual)||null;
+                rows.push({ply:p.ply,actual:p.actual,best:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth||0,nodes:r.info?.nodes||0,threads:r.info?.threads,hashMB:r.info?.hashMB,actualRank:actual?.rank||null,actualCp:actual?.cp??null,candidates:c});
+              }
+              w.terminate();return{init,rows};
+            },{label,path,P});
+          }
+          const suisho=await run('SUISHO5','suisho');
+          const hao=await run('HAO','hao');
+          console.log('SUISHO5_ROWS',JSON.stringify(suisho));
+          console.log('HAO_ROWS',JSON.stringify(hao));
+          const summary=P.map((p,i)=>({ply:p.ply,actual:p.actual,suisho:{best:suisho.rows[i].best,cp:suisho.rows[i].cp,actualRank:suisho.rows[i].actualRank,actualCp:suisho.rows[i].actualCp,depth:suisho.rows[i].depth,nodes:suisho.rows[i].nodes},hao:{best:hao.rows[i].best,cp:hao.rows[i].cp,actualRank:hao.rows[i].actualRank,actualCp:hao.rows[i].actualCp,depth:hao.rows[i].depth,nodes:hao.rows[i].nodes}}));
+          console.log('HAO_AB_SUMMARY',JSON.stringify(summary));
+          for(const pack of [suisho,hao])for(const r of pack.rows)if(!r.best||r.best==='resign'||!r.nodes||r.threads!==1||r.hashMB!==64)throw Error('invalid search/profile');
+          await browser.close();
+          NODE
+          node haoab.mjs 2>&1 | tee /tmp/hao-ab.log
+
+      - name: Run one real Piyo Lv40 match with Hao candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/hao-nn.bin shogi-v21528/yaneuraou/nn.bin
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-v21528/future-yaneura-worker21528.js')
+          s=p.read_text()
+          old="engine.postMessage('setoption name FV_SCALE value 24');"
+          new="engine.postMessage('setoption name FV_SCALE value 20');"
+          if old not in s: raise SystemExit('FV_SCALE marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+          cp .github/scripts/shogi-vs-piyo-lv40.js /tmp/hao-piyo.js
+          sed -i 's/const MAX_PLIES=12;/const MAX_PLIES=120;/' /tmp/hao-piyo.js
+          python3 -m http.server 8000 >/tmp/hao-piyo-server.log 2>&1 &
+          sleep 2
+          NODE_PATH="$GITHUB_WORKSPACE/node_modules" node /tmp/hao-piyo.js 2>&1 | tee /tmp/hao-piyo.log
+          grep -F 'PIYO_OPENING_PROBE_RESULT' /tmp/hao-piyo.log
+          if grep -F '"result":"win"' /tmp/hao-piyo.log; then
+            echo 'HAO_PIYO_RESULT=WIN'
+          elif grep -F '"result":"lose"' /tmp/hao-piyo.log; then
+            echo 'HAO_PIYO_RESULT=LOSE'
+          else
+            echo 'HAO_PIYO_RESULT=OTHER'
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: future-hao-ab
+          path: |
+            /tmp/hao-ab.log
+            /tmp/hao-piyo.log
+            /tmp/hao-piyo-server.log
+            /tmp/hao-7z.log
+          retention-days: 2
