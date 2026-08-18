@@ -1,0 +1,152 @@
+name: Compare V9.70 at Future mobile think time
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/compare-v970-mobile-realistic.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  realistic:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare current and fixed V9.70 runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/real/site
+          mkdir -p "$ROOT/old" "$ROOT/new" /tmp/real/art
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/old/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/nn.bin"
+          gh run download 32147280548 -n yaneuraou-v970-evalfile-fixed -D /tmp/real/art
+          JS=$(find /tmp/real/art -name 'yaneuraou.halfkp.noeval.js' | head -1); test -n "$JS"; LIB=$(dirname "$JS")
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/new/"
+          sha256sum "$ROOT"/old/* "$ROOT"/new/* | tee /tmp/real/runtime-sha.txt
+      - name: Create browser engine driver with V9.70 direct bridge
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/real/site
+          cat > "$ROOT/driver.js" <<'JS'
+          'use strict';
+          const kind=new URL(self.location.href).searchParams.get('kind')||'new';
+          const BASE=new URL('./'+kind+'/',self.location.href).href;
+          let engine=null,ready=false,waiters=[],lastInfo={};
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          function onLine(raw){
+            const s=String(raw||'').trim();
+            if(s.startsWith('info ')){
+              const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);
+              if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1],line:s};
+            }
+            for(const w of waiters.slice())if(w.pred(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}
+          }
+          function waitLine(pred,ms,label){return new Promise((r,j)=>{const w={pred,r,j,t:setTimeout(()=>{waiters=waiters.filter(x=>x!==w);j(Error(label+' timeout'))},ms)};waiters.push(w)})}
+          async function direct(command,timeout=20000){
+            const start=Date.now();let backoff=1,rc=NaN;
+            while(true){
+              rc=Number(engine.ccall('usi_command','number',['string'],[String(command)]));
+              if(rc===0)return;
+              if(Date.now()-start>=timeout)throw Error('direct USI timeout rc='+rc+' command='+command);
+              await sleep(backoff);backoff=Math.min(64,backoff*2);
+            }
+          }
+          async function send(command,timeout=20000){
+            if(kind==='new'&&typeof engine.ccall==='function')return direct(command,timeout);
+            engine.postMessage(command);
+          }
+          async function init(){
+            if(ready)return;
+            importScripts(BASE+'yaneuraou.halfkp.noeval.js?real=1');
+            const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;
+            engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});
+            if(!engine||!engine.FS||typeof engine.addMessageListener!=='function')throw Error('engine bridge missing '+kind);
+            if(kind==='new'&&typeof engine.ccall!=='function')throw Error('V9.70 ccall missing');
+            engine.addMessageListener(onLine);
+            const b=new Uint8Array(await (await fetch(new URL('./nn.bin',self.location.href),{cache:'no-store'})).arrayBuffer());
+            try{engine.FS.unlink('/nn.bin')}catch{}
+            engine.FS.writeFile('/nn.bin',b);
+            let p=waitLine(x=>x==='usiok',30000,'usiok');await send('usi',30000);await p;
+            await send('setoption name EvalDir value .');await send('setoption name EvalFile value nn.bin');await send('setoption name FV_SCALE value 24');
+            await send('setoption name USI_Hash value 32');await send('setoption name Threads value 1');await send('setoption name MultiPV value 1');
+            p=waitLine(x=>x==='readyok',90000,'readyok');await send('isready',90000);await p;
+            await send('setoption name USI_Ponder value false');await send('usinewgame');ready=true;
+          }
+          async function search(moves,ms){
+            await init();lastInfo={};
+            await send('position startpos'+(moves?' moves '+moves:''));
+            const p=waitLine(x=>x.startsWith('bestmove '),Math.max(90000,ms+30000),'bestmove');
+            await send('go movetime '+ms,30000);const s=await p;
+            return{move:(s.split(/\s+/)[1]||''),ms,...lastInfo};
+          }
+          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search')self.postMessage({id:m.id,ok:true,kind,...await search(String(m.moves||''),Number(m.ms)||4500)})}catch(err){self.postMessage({id:m.id,ok:false,kind,error:String(err&&err.stack||err)})}};
+          JS
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><body>Future mobile realistic comparison</body>
+          HTML
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          NODE
+      - name: Firefox 4.5s Future-mobile middle-game comparison
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/real/pw && cd /tmp/real/pw
+          npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps firefox >/dev/null
+          cat > realistic.mjs <<'NODE'
+          import{firefox}from'playwright';
+          const browser=await firefox.launch({headless:true}),page=await browser.newPage();
+          await page.goto('http://127.0.0.1:4173/');
+          const summary=await page.evaluate(async()=>{
+            function rpc(kind){
+              const w=new Worker('./driver.js?kind='+kind+'&r='+Math.random());let seq=0,p=new Map();
+              w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q)return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'engine error'))};
+              w.onerror=e=>{for(const q of p.values()){clearTimeout(q.t);q.j(Error(e.message||'worker error'))}p.clear()};
+              return{call:(moves,ms)=>new Promise((r,j)=>{const id=++seq,t=setTimeout(()=>{p.delete(id);j(Error(kind+' timeout'))},180000);p.set(id,{r,j,t});w.postMessage({type:'search',id,moves,ms})}),close:()=>w.terminate()};
+            }
+            const seed=rpc('new'),ref=rpc('new'),old=rpc('old'),neu=rpc('new');
+            const moves=[],snapshots=[],targets=new Set([24,28,32,34,36,40]);
+            for(let ply=1;ply<=40;ply++){
+              const r=await seed.call(moves.join(' '),300);
+              if(!r.move||['resign','win','none'].includes(r.move))break;
+              moves.push(r.move);
+              if(targets.has(ply))snapshots.push({ply,moves:moves.join(' ')});
+            }
+            if(snapshots.length<4)throw Error('not enough middle-game snapshots '+snapshots.length);
+            const rows=[];let oldMatch=0,newMatch=0,newDeeper=0,oldDeeper=0;
+            for(const s of snapshots){
+              const r=await ref.call(s.moves,12000);
+              const o=await old.call(s.moves,4500);
+              const n=await neu.call(s.moves,4500);
+              const row={ply:s.ply,ref:r,old:o,new:n,oldMatch:o.move===r.move,newMatch:n.move===r.move};
+              if(row.oldMatch)oldMatch++;if(row.newMatch)newMatch++;
+              if((n.depth||0)>(o.depth||0))newDeeper++;else if((o.depth||0)>(n.depth||0))oldDeeper++;
+              rows.push(row);
+            }
+            seed.close();ref.close();old.close();neu.close();
+            return{positions:rows.length,oldMatch,newMatch,oldRate:oldMatch/rows.length,newRate:newMatch/rows.length,newDeeper,oldDeeper,rows};
+          });
+          console.log('REALISTIC_SUMMARY',JSON.stringify(summary));
+          for(const row of summary.rows)console.log('REALISTIC_ROW',JSON.stringify(row));
+          await browser.close();
+          NODE
+          node /tmp/real/site/server.cjs >/tmp/real/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
+          node realistic.mjs 2>&1 | tee /tmp/real/result.log
+          grep -F 'REALISTIC_SUMMARY ' /tmp/real/result.log
+      - name: Upload realistic comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v970-future-mobile-realistic
+          path: |
+            /tmp/real/result.log
+            /tmp/real/runtime-sha.txt
+            /tmp/real/server.log
+          if-no-files-found: ignore
+          retention-days: 2
