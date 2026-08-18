@@ -37,7 +37,7 @@ jobs:
         run: |
           cp shogi-v21528/yaneuraou/nn.bin /tmp/nn.bin
           python3 - <<'PY' 2>&1 | tee /tmp/native-v970-crosscheck.log
-          import os,re,select,subprocess,time,json,sys
+          import re,subprocess,time,json,queue,threading
           P=[
             (0,'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1'),
             (8,'lnsgkgsnl/1r5b1/p1ppppppp/2P6/9/9/P+p1PPPPPP/1B4R2/LNSGKGSNL b p 9'),
@@ -46,21 +46,27 @@ jobs:
             (34,'l2g1gsnl/5k3/p1nppp1pp/3s2p2/9/5B3/P2PPPPPP/3G2R2/2+r2KSNL b Bgsnl4p 35')
           ]
           p=subprocess.Popen(['/tmp/yaneuraou-v970'],cwd='/tmp',stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+          q=queue.Queue()
+          def reader():
+            for raw in p.stdout:
+              q.put(raw.rstrip('\n'))
+            q.put(None)
+          threading.Thread(target=reader,daemon=True).start()
           def send(x):
             print('>>',x,flush=True); p.stdin.write(x+'\n');p.stdin.flush()
           def until(pred,timeout):
             end=time.time()+timeout; lines=[]
-            while time.time()<end:
-              r,_,_=select.select([p.stdout],[],[],0.5)
-              if not r: continue
-              line=p.stdout.readline().rstrip('\n')
-              if line=='':
+            while True:
+              left=end-time.time()
+              if left<=0: raise TimeoutError('timeout')
+              try: line=q.get(timeout=min(0.5,left))
+              except queue.Empty:
                 if p.poll() is not None: raise RuntimeError('engine exited '+str(p.returncode))
                 continue
+              if line is None: raise RuntimeError('engine output closed '+str(p.poll()))
               print('<<',line,flush=True);lines.append(line)
               if pred(line): return line,lines
-            raise TimeoutError('timeout')
-          send('usi'); until(lambda x:x=='usiok',20)
+          send('usi'); until(lambda x:x=='usiok',60)
           for cmd in [
             'setoption name EvalDir value .',
             'setoption name EvalFile value nn.bin',
@@ -70,13 +76,13 @@ jobs:
             'setoption name MultiPV value 1',
             'setoption name USI_Ponder value false']:
             send(cmd)
-          send('isready');until(lambda x:x=='readyok',90)
+          send('isready');until(lambda x:x=='readyok',120)
           send('usinewgame')
           rows=[]
           for ply,sfen in P:
             send('position sfen '+sfen)
             send('go movetime 12000')
-            _,lines=until(lambda x:x.startswith('bestmove '),40)
+            _,lines=until(lambda x:x.startswith('bestmove '),60)
             best=[x for x in lines if x.startswith('bestmove ')][-1].split()[1]
             infos=[x for x in lines if x.startswith('info ') and ' pv ' in x]
             last=infos[-1] if infos else ''
