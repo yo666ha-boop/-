@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [7g-middle, 2g-middle, 5g-middle, 7g-late, 2g-late]
+        case: [7g-middle, 2g-middle, 5g-middle, 4g-middle, 7g-deepmiddle, 2g-deepmiddle, 7g-late, 2g-late, 5g-late, 4g-late]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
