@@ -61,47 +61,69 @@ jobs:
           npm i --no-audit --no-fund playwright@1.55.0
           npx playwright install --with-deps chromium
 
-      - name: Browser Worker proof with current Suisho5
+      - name: Browser proof and current-vs-V9.70 A-B
         shell: bash
         run: |
           set -euxo pipefail
           ROOT=/tmp/v970probe/site
-          mkdir -p "$ROOT/yaneuraou"
+          mkdir -p "$ROOT/current/yaneuraou" "$ROOT/v970/yaneuraou"
           LIB="${{ github.workspace }}/YaneuraOu970/build/wasm/halfkp.noeval/lib"
-          cp "$LIB"/yaneuraou.halfkp.noeval.js "$ROOT/yaneuraou/"
-          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js "$ROOT/yaneuraou/"
-          cp "$LIB"/yaneuraou.halfkp.noeval.wasm "$ROOT/yaneuraou/"
-          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
-          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/"
+
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js "$ROOT/current/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js "$ROOT/current/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm "$ROOT/current/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/current/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/current/"
+
+          cp "$LIB"/yaneuraou.halfkp.noeval.js "$ROOT/v970/yaneuraou/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js "$ROOT/v970/yaneuraou/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.wasm "$ROOT/v970/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/v970/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/v970/"
 
           cat > "$ROOT/index.html" <<'HTML'
           <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
           <script>
           (async()=>{
-            const b=document.body, logs=[];
+            const b=document.body,logs=[];
             const out=x=>{logs.push(x);console.log(x);b.textContent=logs.join('\n')};
+            const START='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
+            const PLY44='l2g1gsnl/5k3/p1n1pp1pp/3p2p2/9/6P2/P2PP+l1PP/3G2R2/2+r1BKSNL b Nbg2s5p 45';
+            async function engine(label,path){
+              const w=new Worker(path+'future-yaneura-worker21528.js?ab='+Date.now()+Math.random());
+              let seq=0;const pending=new Map();
+              w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(label+' '+(m.error||'worker error')))}};
+              const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id=label+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(label+' '+type+' timeout'))},timeout)});
+              const init=await call('init');out(label+'_INIT '+JSON.stringify(init));
+              const search=async(sfen,ms,tag)=>{const r=await call('bestmove',{sfen,ms,multiPV:1},ms+120000);if(!r.token||r.token==='resign'||!(r.info&&r.info.nodes>0&&r.info.depth>0))throw Error(label+' unusable '+tag);out(label+'_'+tag+' '+JSON.stringify({move:r.token,cp:r.info.cp??null,mate:r.info.mate??null,depth:r.info.depth,nodes:r.info.nodes,ms:r.info.ms}));return r};
+              const start1=await search(START,15000,'START15_A');
+              const start2=await search(START,15000,'START15_B');
+              const startRef=await search(START,20000,'START20_REF');
+              const tac1=await search(PLY44,9000,'PLY44_9_A');
+              const tac2=await search(PLY44,9000,'PLY44_9_B');
+              const tacRef=await search(PLY44,20000,'PLY44_20_REF');
+              w.terminate();
+              const pack=(a,c,ref)=>({moves:[a.token,c.token],ref:ref.token,unique:new Set([a.token,c.token]).size,refAgree:[a.token,c.token].filter(x=>x===ref.token).length,depths:[a.info.depth,c.info.depth,ref.info.depth],nodes:[a.info.nodes,c.info.nodes,ref.info.nodes]});
+              return{start:pack(start1,start2,startRef),ply44:pack(tac1,tac2,tacRef)};
+            }
             try{
               out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
-              if(!crossOriginIsolated||typeof SharedArrayBuffer!=='function') throw Error('COI unavailable');
-              const w=new Worker('./future-yaneura-worker21528.js?v970='+Date.now());
-              let seq=0; const pending=new Map();
-              w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){out('STAGE '+m.text);return}if(m.type==='result'){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}};
-              const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id='q'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(type+' timeout'))},timeout)});
-              const init=await call('init'); out('INIT '+JSON.stringify(init));
-              const start='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
-              const a=await call('bestmove',{sfen:start,ms:3000,multiPV:1}); out('START_3S '+JSON.stringify(a));
-              const c=await call('bestmove',{sfen:start,ms:15000,multiPV:1}); out('START_15S '+JSON.stringify(c));
-              if(!a.token||a.token==='resign'||!c.token||c.token==='resign')throw Error('no usable bestmove');
-              if(!(c.info&&Number(c.info.nodes)>0&&Number(c.info.depth)>0))throw Error('missing search stats');
-              b.dataset.result='ok'; out('PASS V9.70 Suisho5 browser bestmove '+c.token+' depth='+c.info.depth+' nodes='+c.info.nodes); w.terminate();
-            }catch(e){b.dataset.result='error';out('FAIL '+String(e&&e.stack||e))}
+              if(!crossOriginIsolated||typeof SharedArrayBuffer!=='function')throw Error('COI unavailable');
+              const current=await engine('CURRENT','./current/');
+              const v970=await engine('V970','./v970/');
+              const score=x=>(2-x.start.unique)+(2-x.ply44.unique)+x.start.refAgree+x.ply44.refAgree;
+              const summary={current,v970,currentScore:score(current),v970Score:score(v970),v970NotLessStable:v970.start.unique<=current.start.unique&&v970.ply44.unique<=current.ply44.unique};
+              out('AB_SUMMARY '+JSON.stringify(summary));
+              out('PASS V9.70 Suisho5 real-browser Worker; A/B diagnostic complete');
+              b.dataset.result='ok';
+            }catch(e){out('FAIL '+String(e&&e.stack||e));b.dataset.result='error'}
           })();
           </script>
           HTML
 
           cat > "$ROOT/server.cjs" <<'NODE'
           const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
-          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
           NODE
 
           cat > /tmp/v970probe/check.mjs <<'NODE'
@@ -111,23 +133,23 @@ jobs:
           page.on('console',m=>console.log('CONSOLE',m.type(),m.text()));
           page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e));
           await page.goto('http://127.0.0.1:4173/',{waitUntil:'load'});
-          await page.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:240000});
+          await page.waitForFunction(()=>['ok','error'].includes(document.body.dataset.result),{timeout:600000});
           const r=await page.evaluate(()=>({state:document.body.dataset.result,text:document.body.textContent}));
           console.log('FINAL',JSON.stringify(r));
           await browser.close();
-          if(r.state!=='ok') process.exit(1);
+          if(r.state!=='ok')process.exit(1);
           NODE
 
           node "$ROOT/server.cjs" >/tmp/v970-server.log 2>&1 & PID=$!
           trap 'kill $PID 2>/dev/null || true' EXIT
-          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break || sleep .2; done
+          for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
           cd /tmp/v970probe
           node check.mjs 2>&1 | tee /tmp/v970-browser.log
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v970-browser-probe
+          name: v970-browser-ab-probe
           path: |
             /tmp/v970-build.log
             /tmp/v970-browser.log
