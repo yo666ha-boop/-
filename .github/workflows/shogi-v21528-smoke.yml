@@ -11,6 +11,7 @@ on:
       - '.github/scripts/shogi-v21528-smoke.js'
       - '.github/scripts/shogi-top5-yaneura-smoke.js'
       - '.github/scripts/shogi-top5-deep-verify.js'
+      - '.github/scripts/shogi-top5-opening-verify.js'
       - '.github/workflows/shogi-v21528-smoke.yml'
   pull_request:
     paths:
@@ -24,7 +25,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +37,7 @@ jobs:
           node --check shogi-side-test/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
           node --check .github/scripts/shogi-top5-deep-verify.js
+          node --check .github/scripts/shogi-top5-opening-verify.js
           node --check shogi-v21528/coi-serviceworker.js
       - name: Install Playwright Firefox
         run: |
@@ -62,6 +64,17 @@ jobs:
           name: shogi-top5-deep-verify
           path: .github/benchmark-results/shogi-top5-deep-verify-latest.json
           if-no-files-found: ignore
+      - name: Run targeted opening verification
+        id: openingverify
+        continue-on-error: true
+        run: node .github/scripts/shogi-top5-opening-verify.js
+      - name: Upload opening verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shogi-top5-opening-verify
+          path: .github/benchmark-results/shogi-top5-opening-verify-latest.json
+          if-no-files-found: ignore
       - name: Save deep verification result on verification branch
         if: always() && github.ref == 'refs/heads/feature/shogi-top5-deepverify-21532-20260818'
         run: |
@@ -74,8 +87,8 @@ jobs:
               git push
             fi
           fi
-      - name: Fail if deep verification failed
-        if: steps.deepverify.outcome != 'success'
+      - name: Fail if verification failed
+        if: steps.deepverify.outcome != 'success' || steps.openingverify.outcome != 'success'
         run: exit 1
       - name: Show server log on failure
         if: failure()
