@@ -4,6 +4,9 @@ on:
     paths:
       - '.github/workflows/compare-v970-mobile-realistic.yml'
   workflow_dispatch:
+concurrency:
+  group: v970-future-mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   actions: read
   contents: read
@@ -38,61 +41,19 @@ jobs:
           const BASE=new URL('./'+kind+'/',self.location.href).href;
           let engine=null,ready=false,waiters=[],lastInfo={};
           const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-          function onLine(raw){
-            const s=String(raw||'').trim();
-            if(s.startsWith('info ')){
-              const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);
-              if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1],line:s};
-            }
-            for(const w of waiters.slice())if(w.pred(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}
-          }
+          function onLine(raw){const s=String(raw||'').trim();if(s.startsWith('info ')){const cp=/\bscore cp (-?\d+)/.exec(s),mate=/\bscore mate (-?\d+)/.exec(s),d=/\bdepth (\d+)/.exec(s),n=/\bnodes (\d+)/.exec(s),pv=/\bpv ([^\s]+)/.exec(s);if(pv)lastInfo={cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:0,nodes:n?+n[1]:0,pv:pv[1],line:s};}for(const w of waiters.slice())if(w.pred(s)){waiters=waiters.filter(x=>x!==w);clearTimeout(w.t);w.r(s)}}
           function waitLine(pred,ms,label){return new Promise((r,j)=>{const w={pred,r,j,t:setTimeout(()=>{waiters=waiters.filter(x=>x!==w);j(Error(label+' timeout'))},ms)};waiters.push(w)})}
-          async function direct(command,timeout=20000){
-            const start=Date.now();let backoff=1,rc=NaN;
-            while(true){
-              rc=Number(engine.ccall('usi_command','number',['string'],[String(command)]));
-              if(rc===0)return;
-              if(Date.now()-start>=timeout)throw Error('direct USI timeout rc='+rc+' command='+command);
-              await sleep(backoff);backoff=Math.min(64,backoff*2);
-            }
-          }
-          async function send(command,timeout=20000){
-            if(kind==='new'&&typeof engine.ccall==='function')return direct(command,timeout);
-            engine.postMessage(command);
-          }
-          async function init(){
-            if(ready)return;
-            importScripts(BASE+'yaneuraou.halfkp.noeval.js?real=1');
-            const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;
-            engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});
-            if(!engine||!engine.FS||typeof engine.addMessageListener!=='function')throw Error('engine bridge missing '+kind);
-            if(kind==='new'&&typeof engine.ccall!=='function')throw Error('V9.70 ccall missing');
-            engine.addMessageListener(onLine);
-            const b=new Uint8Array(await (await fetch(new URL('./nn.bin',self.location.href),{cache:'no-store'})).arrayBuffer());
-            try{engine.FS.unlink('/nn.bin')}catch{}
-            engine.FS.writeFile('/nn.bin',b);
-            let p=waitLine(x=>x==='usiok',30000,'usiok');await send('usi',30000);await p;
-            await send('setoption name EvalDir value .');await send('setoption name EvalFile value nn.bin');await send('setoption name FV_SCALE value 24');
-            await send('setoption name USI_Hash value 32');await send('setoption name Threads value 1');await send('setoption name MultiPV value 1');
-            p=waitLine(x=>x==='readyok',90000,'readyok');await send('isready',90000);await p;
-            await send('setoption name USI_Ponder value false');await send('usinewgame');ready=true;
-          }
-          async function search(moves,ms){
-            await init();lastInfo={};
-            await send('position startpos'+(moves?' moves '+moves:''));
-            const p=waitLine(x=>x.startsWith('bestmove '),Math.max(90000,ms+30000),'bestmove');
-            await send('go movetime '+ms,30000);const s=await p;
-            return{move:(s.split(/\s+/)[1]||''),ms,...lastInfo};
-          }
-          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search')self.postMessage({id:m.id,ok:true,kind,...await search(String(m.moves||''),Number(m.ms)||4500)})}catch(err){self.postMessage({id:m.id,ok:false,kind,error:String(err&&err.stack||err)})}};
+          async function direct(command,timeout=20000){const start=Date.now();let backoff=1,rc=NaN;while(true){rc=Number(engine.ccall('usi_command','number',['string'],[String(command)]));if(rc===0)return;if(Date.now()-start>=timeout)throw Error('direct USI timeout rc='+rc+' command='+command);await sleep(backoff);backoff=Math.min(64,backoff*2)}}
+          async function send(command,timeout=20000){if(kind==='new'&&typeof engine.ccall==='function')return direct(command,timeout);engine.postMessage(command)}
+          async function init(){if(ready)return;importScripts(BASE+'yaneuraou.halfkp.noeval.js?real=2');const F=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;engine=await F({locateFile:p=>BASE+String(p).split('/').pop(),mainScriptUrlOrBlob:BASE+'yaneuraou.halfkp.noeval.js'});if(!engine||!engine.FS||typeof engine.addMessageListener!=='function')throw Error('engine bridge missing '+kind);if(kind==='new'&&typeof engine.ccall!=='function')throw Error('V9.70 ccall missing');engine.addMessageListener(onLine);const b=new Uint8Array(await(await fetch(new URL('./nn.bin',self.location.href),{cache:'no-store'})).arrayBuffer());try{engine.FS.unlink('/nn.bin')}catch{}engine.FS.writeFile('/nn.bin',b);let p=waitLine(x=>x==='usiok',30000,'usiok');await send('usi',30000);await p;for(const c of['setoption name EvalDir value .','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])await send(c);p=waitLine(x=>x==='readyok',90000,'readyok');await send('isready',90000);await p;await send('setoption name USI_Ponder value false');await send('usinewgame');ready=true}
+          async function search(moves,ms){await init();lastInfo={};await send('position startpos'+(moves?' moves '+moves:''));const p=waitLine(x=>x.startsWith('bestmove '),Math.max(90000,ms+30000),'bestmove');await send('go movetime '+ms,30000);const s=await p;return{move:(s.split(/\s+/)[1]||''),ms,...lastInfo}}
+          self.onmessage=async e=>{const m=e.data||{};try{if(m.type==='search'){self.postMessage({id:m.id,ok:true,kind,...await search(String(m.moves||''),Number(m.ms)||4500)});return}}catch(err){self.postMessage({id:m.id,ok:false,kind,error:String(err&&err.stack||err)})}};
           JS
-          cat > "$ROOT/index.html" <<'HTML'
-          <!doctype html><meta charset="utf-8"><body>Future mobile realistic comparison</body>
-          HTML
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><body>Future mobile realistic comparison</body>' > "$ROOT/index.html"
           cat > "$ROOT/server.cjs" <<'NODE'
           const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
           NODE
-      - name: Firefox 4.5s Future-mobile middle-game comparison
+      - name: Firefox sequential Future-mobile strength comparison
         shell: bash
         run: |
           set -euxo pipefail
@@ -100,40 +61,18 @@ jobs:
           npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps firefox >/dev/null
           cat > realistic.mjs <<'NODE'
           import{firefox}from'playwright';
-          const browser=await firefox.launch({headless:true}),page=await browser.newPage();
-          await page.goto('http://127.0.0.1:4173/');
-          const summary=await page.evaluate(async()=>{
-            function rpc(kind){
-              const w=new Worker('./driver.js?kind='+kind+'&r='+Math.random());let seq=0,p=new Map();
-              w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q)return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'engine error'))};
-              w.onerror=e=>{for(const q of p.values()){clearTimeout(q.t);q.j(Error(e.message||'worker error'))}p.clear()};
-              return{call:(moves,ms)=>new Promise((r,j)=>{const id=++seq,t=setTimeout(()=>{p.delete(id);j(Error(kind+' timeout'))},180000);p.set(id,{r,j,t});w.postMessage({type:'search',id,moves,ms})}),close:()=>w.terminate()};
-            }
-            const seed=rpc('new'),ref=rpc('new'),old=rpc('old'),neu=rpc('new');
-            const moves=[],snapshots=[],targets=new Set([24,28,32,34,36,40]);
-            for(let ply=1;ply<=40;ply++){
-              const r=await seed.call(moves.join(' '),300);
-              if(!r.move||['resign','win','none'].includes(r.move))break;
-              moves.push(r.move);
-              if(targets.has(ply))snapshots.push({ply,moves:moves.join(' ')});
-            }
-            if(snapshots.length<4)throw Error('not enough middle-game snapshots '+snapshots.length);
-            const rows=[];let oldMatch=0,newMatch=0,newDeeper=0,oldDeeper=0;
-            for(const s of snapshots){
-              const r=await ref.call(s.moves,12000);
-              const o=await old.call(s.moves,4500);
-              const n=await neu.call(s.moves,4500);
-              const row={ply:s.ply,ref:r,old:o,new:n,oldMatch:o.move===r.move,newMatch:n.move===r.move};
-              if(row.oldMatch)oldMatch++;if(row.newMatch)newMatch++;
-              if((n.depth||0)>(o.depth||0))newDeeper++;else if((o.depth||0)>(n.depth||0))oldDeeper++;
-              rows.push(row);
-            }
-            seed.close();ref.close();old.close();neu.close();
-            return{positions:rows.length,oldMatch,newMatch,oldRate:oldMatch/rows.length,newRate:newMatch/rows.length,newDeeper,oldDeeper,rows};
-          });
-          console.log('REALISTIC_SUMMARY',JSON.stringify(summary));
-          for(const row of summary.rows)console.log('REALISTIC_ROW',JSON.stringify(row));
-          await browser.close();
+          const browser=await firefox.launch({headless:true}),page=await browser.newPage();await page.goto('http://127.0.0.1:4173/');
+          async function runPhase(kind,requests){return await page.evaluate(async({kind,requests})=>{const w=new Worker('./driver.js?kind='+kind+'&r='+Math.random());let seq=0,p=new Map();w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q)return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'engine error'))};function call(moves,ms){return new Promise((r,j)=>{const id=++seq,t=setTimeout(()=>{p.delete(id);j(Error(kind+' timeout'))},180000);p.set(id,{r,j,t});w.postMessage({type:'search',id,moves,ms})})}const out=[];try{for(const q of requests)out.push(await call(q.moves,q.ms));return out}finally{w.terminate()}},{kind,requests})}
+          const seedReq=[];let moves='';const snapshots=[];
+          for(let ply=1;ply<=40;ply++){const [r]=await runPhase('new',[{moves,ms:300}]);if(!r.move||['resign','win','none'].includes(r.move))break;moves+=(moves?' ':'')+r.move;if([24,28,32,34,36,40].includes(ply))snapshots.push({ply,moves})}
+          if(snapshots.length<4)throw Error('not enough snapshots '+snapshots.length);
+          const ref=await runPhase('new',snapshots.map(s=>({moves:s.moves,ms:12000})));
+          const old45=await runPhase('old',snapshots.map(s=>({moves:s.moves,ms:4500})));
+          const new45=await runPhase('new',snapshots.map(s=>({moves:s.moves,ms:4500})));
+          const new65=await runPhase('new',snapshots.map(s=>({moves:s.moves,ms:6500})));
+          const rows=snapshots.map((s,i)=>({ply:s.ply,ref:ref[i],old45:old45[i],new45:new45[i],new65:new65[i],old45Match:old45[i].move===ref[i].move,new45Match:new45[i].move===ref[i].move,new65Match:new65[i].move===ref[i].move}));
+          const count=k=>rows.filter(r=>r[k]).length;const summary={positions:rows.length,old45Match:count('old45Match'),new45Match:count('new45Match'),new65Match:count('new65Match'),old45Rate:count('old45Match')/rows.length,new45Rate:count('new45Match')/rows.length,new65Rate:count('new65Match')/rows.length,rows};
+          console.log('REALISTIC_SUMMARY',JSON.stringify(summary));for(const row of rows)console.log('REALISTIC_ROW',JSON.stringify(row));await browser.close();
           NODE
           node /tmp/real/site/server.cjs >/tmp/real/server.log 2>&1 & PID=$!; trap 'kill $PID 2>/dev/null||true' EXIT
           for i in $(seq 1 50);do curl -fsS http://127.0.0.1:4173/ >/dev/null&&break||sleep .2;done
