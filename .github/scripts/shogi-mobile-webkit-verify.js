@@ -76,7 +76,7 @@ const { webkit, devices } = require('playwright');
       future:{move:!!future?.move,ms:future?.info?.ms,threads:future?.info?.threads,hashMB:future?.info?.hashMB,mobileWebKit:future?.info?.mobileWebKit,engine:future?.info?.engine,depth:future?.info?.depth,nodes:future?.info?.nodes},
       mama:{move:!!mama?.move,ms:mama?.info?.ms,threads:mama?.info?.threads,hashMB:mama?.info?.hashMB,mobileWebKit:mama?.info?.mobileWebKit,engine:mama?.info?.engine,selectedRank:mama?.info?.selectedRank,cpLoss:mama?.info?.cpLoss},
       futureEnd:{move:!!futureEnd?.move,ms:futureEnd?.info?.ms,threads:futureEnd?.info?.threads,hashMB:futureEnd?.info?.hashMB,mobileWebKit:futureEnd?.info?.mobileWebKit,engine:futureEnd?.info?.engine,depth:futureEnd?.info?.depth,nodes:futureEnd?.info?.nodes},
-      mamaEnd:{move:!!mamaEnd?.move,ms:mamaEnd?.info?.ms,threads:mamaEnd?.info?.threads,hashMB:mamaEnd?.info?.hashMB,mobileWebKit:mamaEnd?.info?.mobileWebKit,engine:mamaEnd?.info?.engine,selectedRank:mamaEnd?.info?.selectedRank,cpLoss:mamaEnd?.info?.cpLoss},
+      mamaEnd:{move:!!mamaEnd?.move,ms:mamaEnd?.info?.ms,threads:mamaEnd?.info?.threads,hashMB:mamaEnd?.info?.hashMB,mobileWebKit:mamaEnd?.info?.mobileWebKit,engine:mamaEnd?.info?.engine,depth:mamaEnd?.info?.depth,nodes:mamaEnd?.info?.nodes,selectedRank:mamaEnd?.info?.selectedRank,cpLoss:mamaEnd?.info?.cpLoss},
       soak,
       soakPly:soakState.log.length
     };
