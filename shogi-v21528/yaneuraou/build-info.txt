@@ -1,6 +1,9 @@
-YaneuraOu HalfKP noeval + Suisho5
-SOURCE=0056b408e904f0733f3cfd2c2a7e57c3d74fcd62
+YaneuraOu V9.70 HalfKP noeval + Suisho5
+SOURCE=76d58ef2e4cf64116784f41fd4816425ab6817ee
 EMSCRIPTEN=3.1.43
-PTHREAD_POOL_SIZE=2
-THREAD_STARTED_RETRY=1
-Firefox: usiok / readyok / bestmove OK
+WASM_THREAD_LIFECYCLE_FIX=1
+EVALFILE_OPTION_FIX=1
+Future worker direct USI bridge=1
+iPhone Threads=1 Hash=32
+Fire Silk Threads=1 Hash=48
+Desktop Threads=2 Hash=128
