@@ -28,19 +28,15 @@ jobs:
           const br=await chromium.launch({headless:true}),p=await br.newPage({viewport:{width:1280,height:1000}});
           await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
           await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(2000);
-          // Use built-in visible paste-kifu dialog by opening menu and finding the paste command.
           await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(200);
-          const menu=await p.evaluate(()=>[...document.querySelectorAll('[id]')].filter(e=>!!e.offsetParent&&/kif|paste/i.test(e.id)).map(e=>({id:e.id,text:(e.textContent||'').trim(),tag:e.tagName})));
-          console.log('HAND_MENU',JSON.stringify(menu));
-          const pasteId=menu.find(x=>/paste/i.test(x.id))?.id||menu.find(x=>/貼り付け/.test(x.text))?.id;
-          if(!pasteId)throw Error('paste menu item not found');await p.locator('#'+pasteId).click();await p.waitForTimeout(200);
+          await p.click('#menuPasteKif');await p.waitForTimeout(200);
           const seq='position startpos moves 4i5h 3c3d 2h3h 8c8d 7g7f 8d8e 8h2b+ 3a2b';
-          await p.fill('#dialogPasteKifBox',seq);await p.click('#btnDialogPasteKifOK');await p.waitForTimeout(800);
+          await p.fill('#dialogPasteKifBox',seq);await p.click('#btnDialogPasteKifOK');await p.waitForTimeout(1000);
           const out=await p.evaluate(()=>{
             const board=document.querySelector('#board_img').getBoundingClientRect();
-            const all=[...document.querySelectorAll('img')].map(i=>{const r=i.getBoundingClientRect();return{id:i.id,alt:i.alt,src:i.getAttribute('src'),cls:i.className,parentId:i.parentElement?.id,parentCls:i.parentElement?.className,x:r.x,y:r.y,w:r.width,h:r.height,vis:!!(r.width&&r.height),insideBoard:r.x>=board.x&&r.x<board.x+board.width&&r.y>=board.y&&r.y<board.y+board.height}}).filter(x=>x.vis);
-            const elems=[...document.querySelectorAll('[id]')].filter(e=>/koma|komadai|mochi|hand|KA|ka/i.test(e.id)).map(e=>{const r=e.getBoundingClientRect();return{id:e.id,tag:e.tagName,cls:e.className,text:(e.textContent||'').trim().slice(0,100),x:r.x,y:r.y,w:r.width,h:r.height,vis:!!(r.width&&r.height),html:e.outerHTML.slice(0,400)}}).filter(x=>x.vis);
-            return{board:{x:board.x,y:board.y,w:board.width,h:board.height},imgs:all,elems};
+            const imgs=[...document.querySelectorAll('img')].map(i=>{const r=i.getBoundingClientRect();return{id:i.id,alt:i.alt,src:i.getAttribute('src'),cls:i.className,parentId:i.parentElement?.id,parentCls:i.parentElement?.className,x:r.x,y:r.y,w:r.width,h:r.height,vis:!!(r.width&&r.height),insideBoard:r.x>=board.x&&r.x<board.x+board.width&&r.y>=board.y&&r.y<board.y+board.height}}).filter(x=>x.vis);
+            const elems=[...document.querySelectorAll('[id]')].filter(e=>/koma|komadai|mochi|hand|KA|ka/i.test(e.id)).map(e=>{const r=e.getBoundingClientRect();return{id:e.id,tag:e.tagName,cls:e.className,text:(e.textContent||'').trim().slice(0,100),x:r.x,y:r.y,w:r.width,h:r.height,vis:!!(r.width&&r.height),html:e.outerHTML.slice(0,500)}}).filter(x=>x.vis);
+            return{board:{x:board.x,y:board.y,w:board.width,h:board.height},imgs,elems};
           });
           console.log('HAND_DOM',JSON.stringify(out));
           await br.close();
@@ -51,5 +47,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### Piyo hand DOM'; echo '```text'; grep -E '^(HAND_MENU|HAND_DOM)' /tmp/hand.log || true; echo '```'; } >/tmp/report.md
+          { echo '### Piyo hand DOM'; echo '```text'; grep -E '^HAND_DOM' /tmp/hand.log || true; echo '```'; } >/tmp/report.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
