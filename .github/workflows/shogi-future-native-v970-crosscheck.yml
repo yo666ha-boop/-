@@ -1,0 +1,104 @@
+name: Shogi Future native V9.70 cross-check
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/shogi-future-native-v970-crosscheck.yml'
+      - 'shogi-v21528/yaneuraou/nn.bin'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-crosscheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu970
+      - name: Build native HalfKP NNUE V9.70
+        shell: bash
+        run: |
+          set -euxo pipefail
+          make -C YaneuraOu970/source -j2 normal \
+            COMPILER=g++ TARGET_CPU=AVX2 YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE \
+            2>&1 | tee /tmp/native-v970-build.log
+          find YaneuraOu970/source -maxdepth 2 -type f -perm -111 -printf '%p %s\n' | tee /tmp/native-executables.txt
+          BIN=$(find YaneuraOu970/source -maxdepth 2 -type f -perm -111 -size +1M | head -n1)
+          test -n "$BIN"
+          cp "$BIN" /tmp/yaneuraou-v970
+          chmod +x /tmp/yaneuraou-v970
+          /tmp/yaneuraou-v970 --help >/tmp/native-help.log 2>&1 || true
+      - name: Run same Suisho5 on verified Piyo checkpoints
+        shell: bash
+        run: |
+          cp shogi-v21528/yaneuraou/nn.bin /tmp/nn.bin
+          python3 - <<'PY' 2>&1 | tee /tmp/native-v970-crosscheck.log
+          import os,re,select,subprocess,time,json,sys
+          P=[
+            (0,'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1'),
+            (8,'lnsgkgsnl/1r5b1/p1ppppppp/2P6/9/9/P+p1PPPPPP/1B4R2/LNSGKGSNL b p 9'),
+            (16,'ln1gkgsnl/3s5/p1pppp1pp/2P3p2/1r7/5B3/P+p1PPPPPP/4G1R2/+bNSG1KSNL b lp 17'),
+            (24,'ln1g1gsnl/5k3/p2ppp1pp/2Ps2p2/1r7/5B3/P1+pPPPPPP/2G1G1R2/+b1S2KSNL b nl2p 25'),
+            (34,'l2g1gsnl/5k3/p1nppp1pp/3s2p2/9/5B3/P2PPPPPP/3G2R2/2+r2KSNL b Bgsnl4p 35')
+          ]
+          p=subprocess.Popen(['/tmp/yaneuraou-v970'],cwd='/tmp',stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+          def send(x):
+            print('>>',x,flush=True); p.stdin.write(x+'\n');p.stdin.flush()
+          def until(pred,timeout):
+            end=time.time()+timeout; lines=[]
+            while time.time()<end:
+              r,_,_=select.select([p.stdout],[],[],0.5)
+              if not r: continue
+              line=p.stdout.readline().rstrip('\n')
+              if line=='':
+                if p.poll() is not None: raise RuntimeError('engine exited '+str(p.returncode))
+                continue
+              print('<<',line,flush=True);lines.append(line)
+              if pred(line): return line,lines
+            raise TimeoutError('timeout')
+          send('usi'); until(lambda x:x=='usiok',20)
+          for cmd in [
+            'setoption name EvalDir value .',
+            'setoption name EvalFile value nn.bin',
+            'setoption name FV_SCALE value 24',
+            'setoption name USI_Hash value 64',
+            'setoption name Threads value 1',
+            'setoption name MultiPV value 1',
+            'setoption name USI_Ponder value false']:
+            send(cmd)
+          send('isready');until(lambda x:x=='readyok',90)
+          send('usinewgame')
+          rows=[]
+          for ply,sfen in P:
+            send('position sfen '+sfen)
+            send('go movetime 12000')
+            _,lines=until(lambda x:x.startswith('bestmove '),40)
+            best=[x for x in lines if x.startswith('bestmove ')][-1].split()[1]
+            infos=[x for x in lines if x.startswith('info ') and ' pv ' in x]
+            last=infos[-1] if infos else ''
+            def num(pattern):
+              m=re.search(pattern,last);return int(m.group(1)) if m else None
+            cp=num(r'\bscore cp (-?\d+)')
+            mate=num(r'\bscore mate (-?\d+)')
+            depth=num(r'\bdepth (\d+)') or 0
+            nodes=num(r'\bnodes (\d+)') or 0
+            pv=re.search(r'\bpv ([^ ]+)',last)
+            row={'ply':ply,'move':best,'cp':cp,'mate':mate,'depth':depth,'nodes':nodes,'pv1':pv.group(1) if pv else None}
+            rows.append(row);print('NATIVE_ROW',json.dumps(row,separators=(',',':')),flush=True)
+          print('NATIVE_V970_SUMMARY',json.dumps(rows,separators=(',',':')),flush=True)
+          if any((not r['move'] or r['move']=='resign' or not r['nodes']) for r in rows): raise RuntimeError('missing native search result')
+          send('quit');p.wait(timeout=10)
+          PY
+      - name: Upload native cross-check logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: future-native-v970-crosscheck
+          path: |
+            /tmp/native-v970-build.log
+            /tmp/native-executables.txt
+            /tmp/native-v970-crosscheck.log
+          retention-days: 2
