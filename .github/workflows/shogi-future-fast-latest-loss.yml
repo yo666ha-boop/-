@@ -1,0 +1,91 @@
+name: Future fast latest-loss diagnostic
+on:
+  push:
+    branches:
+      - work/future-fast-diagnose-20260818
+    paths:
+      - '.github/workflows/shogi-future-fast-latest-loss.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install WebKit
+        run: |
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Prepare isolated COI site
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/fastdiag/site
+          mkdir -p "$ROOT/yaneuraou"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm "$ROOT/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
+          cat > "$ROOT/server.cjs" <<'NODE'
+          const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,''),x=p.resolve(r,n);if(!x.startsWith(r)){s.writeHead(403);return s.end()}f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4190,'127.0.0.1');
+          NODE
+          node "$ROOT/server.cjs" >/tmp/fastdiag-server.log 2>&1 &
+          sleep 2
+      - name: Score latest 1T Piyo game checkpoints and moves
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > fastdiag.mjs <<'NODE'
+          import {webkit,devices} from 'playwright';
+          const P=[
+            {ply:0, ms:15000, actual:'7g7f', sfen:'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1'},
+            {ply:8, ms:15000, actual:'5g5f', sfen:'lnsgk2nl/1r4gs1/pppppp1pp/6p2/2P2b3/9/PP1PPPPPP/6R2/LNSGKGSNL b B 9'},
+            {ply:16,ms:15000, actual:'9i9h', sfen:'lnsgk2nl/1r4gs1/pppppp1pp/6p2/2P6/P3P4/3P1PP1P/+b4S3/LNSGKG1NL b Br2p 17'},
+            {ply:24,ms:9000, actual:'1i1h', sfen:'ln1gk2nl/1s4gs1/pp1ppp1pp/2p3p2/9/P3P4/3P1PP1P/L4S3/1+rSGKG1NL b RBbn3p 25'},
+            {ply:30,ms:9000, actual:'B*2f', sfen:'ln1gk2nl/1s4gs1/pp2pp1pp/2pp2p2/9/P3P4/3P1PP1P/+r4S2L/2SGKG1N1 b BLrbn3p 31'},
+            {ply:34,ms:9000, actual:'5i5h', sfen:'ln1g3nl/1s2k1gs1/pp2pp1pp/2pp2p2/9/P3P2B1/3P1PP1P/5S2L/+r1SGKG1N1 b rbnl3p 35'},
+            {ply:40,ms:9000, actual:'5h6h', sfen:'ln1g3nl/1s4gs1/pp2kp1pp/2pp2p2/9/P3P4/3PpPP1P/4KS1rL/+r1SG2GN1 b P2bnl2p 41'}
+          ];
+          const browser=await webkit.launch({headless:true});
+          const ctx=await browser.newContext({...devices['iPhone 13']});
+          const page=await ctx.newPage();
+          await page.goto('http://127.0.0.1:4190/future-yaneura-worker21528.js',{waitUntil:'load'}).catch(()=>{});
+          const out=await page.evaluate(async P=>{
+            const w=new Worker('http://127.0.0.1:4190/future-yaneura-worker21528.js?fast='+Date.now());
+            let seq=0;const pending=new Map();
+            w.onmessage=e=>{const m=e.data||{};if(m.type==='result'){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker error'))}};
+            const call=(type,payload={},timeout=180000)=>new Promise((resolve,reject)=>{const id='q'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.delete(id))reject(Error(type+' timeout'))},timeout)});
+            const init=await call('init');const rows=[];
+            for(const p of P){
+              const live=await call('bestmove',{sfen:p.sfen,ms:p.ms,multiPV:3},p.ms+120000);
+              const ref=await call('bestmove',{sfen:p.sfen,ms:20000,multiPV:3},150000);
+              const lc=(live.candidates||[]).map(c=>({rank:c.rank,move:c.token,cp:c.cp??null,mate:c.mate??null}));
+              const rc=(ref.candidates||[]).map(c=>({rank:c.rank,move:c.token,cp:c.cp??null,mate:c.mate??null}));
+              const aLive=lc.find(c=>c.move===p.actual)||null,aRef=rc.find(c=>c.move===p.actual)||null;
+              rows.push({ply:p.ply,actual:p.actual,liveMove:live.token,liveCp:live.info?.cp??null,refMove:ref.token,refCp:ref.info?.cp??null,liveDepth:live.info?.depth||0,refDepth:ref.info?.depth||0,liveNodes:live.info?.nodes||0,refNodes:ref.info?.nodes||0,threads:live.info?.threads,hashMB:live.info?.hashMB,actualLiveRank:aLive?.rank||null,actualLiveCp:aLive?.cp??null,actualRefRank:aRef?.rank||null,actualRefCp:aRef?.cp??null,liveCandidates:lc,refCandidates:rc});
+            }
+            w.terminate();return{init,rows};
+          },P);
+          console.log('FAST_LATEST_LOSS',JSON.stringify(out));
+          if(out.rows.some(r=>!r.liveMove||!r.refMove||!r.liveNodes||!r.refNodes||r.threads!==1||r.hashMB!==64))throw Error('search/profile failure');
+          const bad=out.rows.map(r=>({ply:r.ply,actual:r.actual,live:r.liveMove,ref:r.refMove,liveCp:r.liveCp,refCp:r.refCp,actualRefRank:r.actualRefRank,actualRefCp:r.actualRefCp,refLoss:(Number.isFinite(r.refCp)&&Number.isFinite(r.actualRefCp))?r.refCp-r.actualRefCp:null}));
+          console.log('FAST_LATEST_SUMMARY',JSON.stringify(bad));
+          await browser.close();
+          NODE
+          node fastdiag.mjs 2>&1 | tee /tmp/fastdiag.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: future-fast-latest-loss
+          path: |
+            /tmp/fastdiag.log
+            /tmp/fastdiag-server.log
+          retention-days: 2
