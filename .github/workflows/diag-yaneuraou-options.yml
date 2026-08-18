@@ -9,19 +9,21 @@ on:
       - '.github/workflows/diag-yaneuraou-options.yml'
       - 'shogi-v21528/future-yaneura-worker21528.js'
   workflow_dispatch:
+
 jobs:
   diag:
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/checkout@v4
         with:
           repository: yaneurao/YaneuraOu
           ref: 33ccf1f907eb7184889fa23051243f81ab0bf973
           path: YaneuraOu
 
-      - name: Patch V9.70-era YaneuraOu for live WebAssembly USI
+      - name: Patch V9.70 for lazy browser USI bridge
         shell: bash
         run: |
           set -euxo pipefail
@@ -29,38 +31,40 @@ jobs:
           from pathlib import Path
           import re
 
-          m=Path('YaneuraOu/source/Makefile')
-          s=m.read_text().replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          makefile = Path('YaneuraOu/source/Makefile')
+          s = makefile.read_text()
+          s = s.replace('-s PTHREAD_POOL_SIZE=32', '-s PTHREAD_POOL_SIZE=2', 1)
           if 'PTHREAD_POOL_SIZE=2' not in s:
               raise SystemExit('pthread pool patch failed')
-          m.write_text(s)
+          makefile.write_text(s)
 
-          h=Path('YaneuraOu/source/usi.h')
-          s=h.read_text()
-          marker='\tvoid loop();\n'
-          bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
+          header = Path('YaneuraOu/source/usi.h')
+          s = header.read_text()
+          marker = '\tvoid loop();\n'
+          bridge = '''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
           if marker not in s:
               raise SystemExit('USIEngine marker missing')
-          h.write_text(s.replace(marker,bridge,1))
+          header.write_text(s.replace(marker, bridge, 1))
 
-          p=Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
-          s=p.read_text()
-          marker='using namespace YaneuraOu;\nnamespace {'
-          live='''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd || !wasm_usi) return 1;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
+          engine = Path('YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp')
+          s = engine.read_text()
+          marker = 'using namespace YaneuraOu;\nnamespace {'
+          live = '''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\n\nstatic void ensure_wasm_usi() {\n    if (wasm_usi) return;\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n}\n\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd) return 1;\n    ensure_wasm_usi();\n    if (!wasm_usi) return 2;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
           if marker not in s:
               raise SystemExit('engine marker missing')
-          s=s.replace(marker,live,1)
-          pat=re.compile(r'void engine_main\(\) \{.*?\n\}',re.S)
-          rep='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
+          s = s.replace(marker, live, 1)
+
+          pat = re.compile(r'void engine_main\(\) \{.*?\n\}', re.S)
+          rep = '''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    ensure_wasm_usi();\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
           if len(pat.findall(s)) != 1:
               raise SystemExit('engine_main match failure')
-          p.write_text(pat.sub(rep,s,count=1))
+          engine.write_text(pat.sub(rep, s, count=1))
           PY
+          grep -F 'ensure_wasm_usi' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
           grep -F 'EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
           grep -F 'wasm_command' YaneuraOu/source/usi.h
-          grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu/source/Makefile
 
-      - name: Build WASM without redundant EXPORTED_FUNCTIONS override
+      - name: Build V9.70 WASM
         shell: bash
         run: |
           set -euxo pipefail
@@ -72,7 +76,7 @@ jobs:
             emscripten/emsdk:3.1.43 \
             bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160'
 
-      - name: Verify WASM exports and JS runtime bridge
+      - name: Verify bridge export
         shell: bash
         run: |
           set -euxo pipefail
@@ -85,7 +89,7 @@ jobs:
           const fs=require('fs');
           const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
           const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
-          console.log('WASM_EXPORTS',ex);
+          console.log('WASM_EXPORTS', ex);
           if(!ex.includes('usi_command')) throw new Error('usi_command missing from wasm exports');
           NODE
 
@@ -93,12 +97,13 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p /tmp/yane/site/yaneuraou
           ROOT=/tmp/yane/site
+          mkdir -p "$ROOT/yaneuraou"
           LIB="${{ github.workspace }}/YaneuraOu/build/wasm/halfkp.noeval/lib"
           cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/yaneuraou/"
           cp shogi-v21528/yaneuraou/nn.bin "$ROOT/yaneuraou/"
           cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/worker.js"
+
           cat > "$ROOT/index.html" <<'HTML'
           <!doctype html><meta charset="utf-8"><body data-result="running">starting</body>
           <script>
@@ -109,25 +114,38 @@ jobs:
             try{
               out('COI '+crossOriginIsolated+' SAB '+typeof SharedArrayBuffer);
               if(!crossOriginIsolated||typeof SharedArrayBuffer!=='function') throw Error('cross-origin isolation unavailable');
-              const w=new Worker('./worker.js?diag=v970d1');
+              const w=new Worker('./worker.js?diag=v970lazy');
               let seq=0,pending=new Map();
-              w.onmessage=e=>{const m=e.data||{}; if(m.type==='stage'){out('STAGE '+m.text);return} if(m.type==='fatal'){fail(Error(m.text));return} if(m.type==='result'){const p=pending.get(m.id);if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}}};
+              w.onmessage=e=>{
+                const m=e.data||{};
+                if(m.type==='stage'){out('STAGE '+m.text);return}
+                if(m.type==='fatal'){fail(Error(m.text));return}
+                if(m.type==='result'){
+                  const p=pending.get(m.id);
+                  if(p){pending.delete(m.id);m.ok?p.resolve(m):p.reject(Error(m.error||'worker result error'))}
+                }
+              };
               w.onerror=e=>fail(Error('worker '+e.message+' '+e.filename+':'+e.lineno));
-              const call=(type,payload={})=>new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},150000)});
+              const call=(type,payload={})=>new Promise((resolve,reject)=>{
+                const id='t'+(++seq);pending.set(id,{resolve,reject});w.postMessage({type,id,...payload});
+                setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error(type+' timeout'))}},150000);
+              });
               await call('init'); out('INIT OK');
               const sfen='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1';
               const bm=await call('bestmove',{sfen,ms:1200,multiPV:1});
               out('BEST '+JSON.stringify(bm));
               if(!bm.token||bm.token==='resign') throw Error('no usable bestmove');
-              b.dataset.result='ok'; out('PASS usiok readyok bestmove '+bm.token); w.terminate();
+              b.dataset.result='ok';out('PASS usiok readyok bestmove '+bm.token);w.terminate();
             }catch(e){fail(e)}
           })();
           </script>
           HTML
+
           cat > "$ROOT/server.cjs" <<'NODE'
           const h=require('http'),f=require('fs'),p=require('path'),r=__dirname,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
           h.createServer((q,s)=>{const n=new URL(q.url,'http://x').pathname.replace(/^\//,'')||'index.html',x=p.resolve(r,n);f.readFile(x,(e,d)=>{if(e){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[p.extname(x)]||'application/octet-stream');s.end(d)})}).listen(4173,'127.0.0.1');
           NODE
+
           cd /tmp/yane
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
