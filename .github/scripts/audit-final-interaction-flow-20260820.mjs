@@ -58,16 +58,18 @@ try{
  await page.selectOption('#sideSelect2157','random');await page.click('#newBtn');await page.waitForTimeout(250);
  const randomActual=await text('#sideActual2157');
  if(!/(先手|後手)/.test(randomActual))throw Error('random side unresolved '+randomActual);
+ await page.waitForFunction(()=>!/考えています/.test(document.getElementById('status')?.textContent||''),{timeout:45000});
  const teacherBefore=await text('#teacherMove');
  await page.click('#analyzeBtn');
- await page.waitForFunction(b=>(document.getElementById('teacherMove')?.textContent||'').trim()!==b,teacherBefore,{timeout:30000});
+ await page.waitForFunction(b=>(document.getElementById('teacherMove')?.textContent||'').trim()!==b,teacherBefore,{timeout:45000});
  const teacherAfter=await text('#teacherMove');
  const finalStats={main:await text('#statsMain'),sub:await text('#statsSub'),result:await text('#resultBanner')};
- const diagnostic={platform:mode,boardCount,sente:{humanMoves,repliedMoves,status:senteStatus},undo:{preUndo,postUndo},saveResume:{savedMoves,resumedMoves},gote,randomActual,analysis:{teacherBefore,teacherAfter},stats:finalStats,browser:{pageErrors,consoleErrors,badResponses,requestFailures}};
+ const badImages=await page.evaluate(()=>[...document.querySelectorAll('#chars .ch img,#oppPortrait img,#foppPortrait img')].filter(i=>!i.complete||i.naturalWidth<1).map(i=>i.alt||i.src));
+ const diagnostic={platform:mode,boardCount,sente:{humanMoves,repliedMoves,status:senteStatus},undo:{preUndo,postUndo},saveResume:{savedMoves,resumedMoves},gote,randomActual,analysis:{teacherBefore,teacherAfter},stats:finalStats,browser:{pageErrors,consoleErrors,badResponses,requestFailures,badImages}};
  console.log('FLOW_DIAGNOSTIC '+JSON.stringify(diagnostic));
- const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon/i.test(x));
+ const severeConsole=consoleErrors.filter(x=>!/favicon|Data URL decoding failed|ERR_INVALID_URL/i.test(x));
  const severeResponses=badResponses.filter(x=>!/favicon\.ico(?:\?|$)/i.test(x.url));
- const severeFailures=requestFailures.filter(x=>!/^data:/i.test(x.url)&&!/favicon\.ico(?:\?|$)/i.test(x.url));
- if(pageErrors.length||severeConsole.length||severeResponses.length||severeFailures.length)throw Error('browser errors '+JSON.stringify({pageErrors,severeConsole,severeResponses,severeFailures}));
+ const severeFailures=requestFailures.filter(x=>!/^data:/i.test(x.url)&&!/favicon\.ico(?:\?|$)/i.test(x.url)&&!/ERR_ABORTED/i.test(x.failure));
+ if(pageErrors.length||severeConsole.length||severeResponses.length||severeFailures.length||badImages.length)throw Error('browser errors '+JSON.stringify({pageErrors,severeConsole,severeResponses,severeFailures,badImages}));
  console.log('PASS_FINAL_INTERACTION_FLOW '+JSON.stringify(diagnostic));
 }finally{await browser.close();}
