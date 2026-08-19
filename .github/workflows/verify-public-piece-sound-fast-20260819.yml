@@ -1,0 +1,45 @@
+name: Fast verify public piece sound bytes
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-public-piece-sound-fast-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare deployed JS with main
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCAL=shogi-side-test/future21520.js
+          WANT=$(sha256sum "$LOCAL" | awk '{print $1}')
+          URL='https://yo666ha-boop.github.io/-/shogi-side-test/future21520.js'
+          GOT=''
+          for i in $(seq 1 30); do
+            curl -fsSL -H 'Cache-Control: no-cache' "$URL?verify=$RANDOM-$(date +%s)" -o /tmp/public-future.js || true
+            if [ -s /tmp/public-future.js ]; then GOT=$(sha256sum /tmp/public-future.js | awk '{print $1}'); fi
+            echo "PUBLIC_BYTE_CHECK attempt=$i want=$WANT got=${GOT:-none}"
+            if [ "$GOT" = "$WANT" ]; then break; fi
+            sleep 5
+          done
+          test "$GOT" = "$WANT"
+          grep -F "AI_SHOGI_PIECE_SOUND={version:'21529a'" /tmp/public-future.js
+          grep -F "pieceSoundBtn" /tmp/public-future.js
+          grep -F "fpieceSoundBtn" /tmp/public-future.js
+          curl -fsSL -H 'Cache-Control: no-cache' "https://yo666ha-boop.github.io/-/shogi-v21528/?verify=$(date +%s)" -o /tmp/public-index.html
+          grep -F "get(test+'future21520.js?v=21528g')" /tmp/public-index.html
+          grep -F "fetch(u,{cache:'no-store'})" /tmp/public-index.html
+          echo "PUBLIC_SOUND_BYTES_PASS sha256=$GOT version=21529a"
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Public sound byte deployment'; echo '```text'; grep -E '^(PUBLIC_BYTE_CHECK|PUBLIC_SOUND_BYTES_PASS)' /tmp/public-byte.log 2>/dev/null || true; if [ -f /tmp/public-future.js ]; then echo "deployed_sha=$(sha256sum /tmp/public-future.js | awk '{print $1}')"; fi; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
