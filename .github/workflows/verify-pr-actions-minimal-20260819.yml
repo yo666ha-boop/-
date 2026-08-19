@@ -1,4 +1,4 @@
-name: Future quiet-search A/B
+name: Future quiet-search fast A/B
 on:
   pull_request:
     branches: [main]
@@ -6,9 +6,9 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
-  quiet:
+  quiet-fast:
     runs-on: ubuntu-22.04
-    timeout-minutes: 16
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Prepare quiet worker
@@ -25,13 +25,15 @@ jobs:
           if old not in s: raise SystemExit('marker missing')
           p.write_text(s.replace(old,new,1))
           PY
-      - name: Install WebKit
+      - name: Prepare Playwright with runner Chrome
         run: |
           mkdir -p /tmp/qprobe && cd /tmp/qprobe
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps webkit >/dev/null
-          cp "$GITHUB_WORKSPACE/.github/scripts/quiet-search-probe-20260819.mjs" /tmp/qprobe/run.mjs
+          cp "$GITHUB_WORKSPACE/.github/scripts/quiet-search-probe-20260819.mjs" run.mjs
+          sed -i "s/import{webkit}from'playwright';/import{chromium}from'playwright';/" run.mjs
+          sed -i "s/const browser=await webkit.launch({headless:true});/const browser=await chromium.launch({headless:true,channel:'chrome'});/" run.mjs
+          google-chrome --version
       - name: Start COOP COEP server
         run: |
           TEST_PORT=4184 node .github/scripts/coop-coep-test-server-20260819.mjs >/tmp/qprobe/server.log 2>&1 &
@@ -43,5 +45,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### Future quiet-search A/B'; echo '```text'; grep -E '^(QUIET_ROW|QUIET_SUMMARY)' /tmp/qprobe/result.log || true; echo '```'; } >/tmp/qprobe/report.md
+          { echo '### Future quiet-search fast A/B'; echo '```text'; grep -E '^(QUIET_ROW|QUIET_SUMMARY)' /tmp/qprobe/result.log || true; echo '```'; } >/tmp/qprobe/report.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/qprobe/report.md
