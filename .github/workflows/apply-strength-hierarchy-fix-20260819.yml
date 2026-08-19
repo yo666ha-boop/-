@@ -1,0 +1,48 @@
+name: Apply strength hierarchy fix once
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-strength-hierarchy-fix-20260819.yml'
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'fix-strength-hierarchy-20260819'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-strength-hierarchy-20260819
+      - name: Apply exact hierarchy correction
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-side-test/future21520.js')
+          s=p.read_text()
+          old="  CHAR_META[FUTURE_INDEX]={style:'未来型・超深読み',feature:'やねうら王 V9.70 HalfKP＋水匠5 / Web Worker本格USIエンジン'};"
+          new=old+"\n  if(CHAR_META[0]){CHAR_META[0]={...CHAR_META[0],style:'現代最強万能型・終盤最強級',feature:'みっちゃんが成長した現代最強形。攻め・受け・読み・寄せのすべてが現代最高水準。'}}"
+          if s.count(old)!=1: raise SystemExit('future metadata anchor count='+str(s.count(old)))
+          s=s.replace(old,new)
+          old="  const rankTextBase=rankText;rankText=function(i){return i===FUTURE_INDEX?'未来・やねうら王V9.70':rankTextBase(i)};"
+          new="  const rankTextBase=rankText;const FUTURE_RANK_LABELS={25:'強さ1位・未来最強',0:'強さ2位・現代最強',1:'強さ3位',2:'強さ4位',3:'強さ5位',4:'強さ6位'};rankText=function(i){return FUTURE_RANK_LABELS[i]||rankTextBase(i)};"
+          if s.count(old)!=1: raise SystemExit('rank anchor count='+str(s.count(old)))
+          s=s.replace(old,new)
+          old="  addFutureCard();ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}});"
+          new=old+"\n  const regularMitsukiCard=document.querySelectorAll('#chars .ch')[0];if(regularMitsukiCard){const style=regularMitsukiCard.querySelector('.chStyle');if(style)style.textContent=CHAR_META[0].style+'｜'+(typeof openingLabel==='function'?openingLabel(0):'万能・局面対応')}"
+          if s.count(old)!=1: raise SystemExit('card anchor count='+str(s.count(old)))
+          s=s.replace(old,new)
+          p.write_text(s)
+          PY
+          node --check shogi-side-test/future21520.js
+          grep -F "強さ1位・未来最強" shogi-side-test/future21520.js
+          grep -F "強さ2位・現代最強" shogi-side-test/future21520.js
+          git diff --check
+      - name: Commit correction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-side-test/future21520.js
+          git commit -m 'Correct visible strength hierarchy after Future Mitsuki'
+          git push origin HEAD:fix-strength-hierarchy-20260819
