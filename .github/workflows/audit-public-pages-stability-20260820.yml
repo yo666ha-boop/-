@@ -1,0 +1,44 @@
+name: Audit public Pages stability
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  public:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install matching Playwright package
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Audit deployed public app
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-public-pages-stability-20260820.mjs 2>&1 | tee /tmp/public-${{ matrix.platform }}.log
+          grep -q '^PASS_PUBLIC_PAGES_STABILITY ' /tmp/public-${{ matrix.platform }}.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Public Pages stability — ${{ matrix.platform }}'; echo '```text'; grep -E '^(PUBLIC_PAGES_DIAGNOSTIC|PASS_PUBLIC_PAGES_STABILITY|Error:)' /tmp/public-${{ matrix.platform }}.log || true; echo '```'; } >/tmp/public-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/public-report.md
