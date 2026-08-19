@@ -1,0 +1,74 @@
+import {webkit,chromium} from 'playwright';
+const mode=process.env.PLATFORM||'desktop';
+const cfg={
+ iphone:{browser:webkit,ua:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}},
+ fire:{browser:chromium,ua:'Mozilla/5.0 (Linux; U; en-US; KFMAWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/124.5.3 like Chrome/124.0 Safari/535.19',viewport:{width:800,height:1280}},
+ desktop:{browser:chromium,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36',viewport:{width:1440,height:900}}
+}[mode];
+if(!cfg)throw Error('bad platform '+mode);
+const browser=await cfg.browser.launch({headless:true});
+const page=await browser.newPage({userAgent:cfg.ua,viewport:cfg.viewport});
+const pageErrors=[],consoleErrors=[];
+page.on('pageerror',e=>pageErrors.push(String(e.message||e)));
+page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
+const text=sel=>page.locator(sel).textContent().then(v=>String(v||'').trim());
+try{
+ await page.goto('http://127.0.0.1:4218/shogi-v21528/index.html?flow='+mode+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+ await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
+ await page.waitForTimeout(1600);
+ // Use regular Mitsuki for interaction flow so this tests shared game/UI logic without re-benchmarking Future strength.
+ await page.locator('#chars .ch').nth(0).click();
+ await page.waitForTimeout(150);
+ const stats0={main:await text('#statsMain'),sub:await text('#statsSub'),resultExists:await page.locator('#resultBanner').count()===1};
+ if(!/R\d+/.test(stats0.main)||!/勝/.test(stats0.sub)||!stats0.resultExists)throw Error('stats/result display '+JSON.stringify(stats0));
+ // Sente: actual board click -> human move -> AI reply.
+ await page.selectOption('#sideSelect2157','sente');
+ await page.click('#newBtn');
+ await page.waitForTimeout(120);
+ const boardCount=await page.locator('#board').locator(':scope > *').count();
+ if(boardCount<81)throw Error('board child count '+boardCount);
+ const beforeMoves=await text('#moves');
+ await page.locator('#board').locator(':scope > *').nth(56).click(); // 7g pawn
+ await page.waitForTimeout(60);
+ await page.locator('#board').locator(':scope > *').nth(47).click(); // 7f
+ await page.waitForFunction(before=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==before;},beforeMoves,{timeout:5000});
+ const humanMoves=await text('#moves');
+ await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},humanMoves,{timeout:30000});
+ const repliedMoves=await text('#moves');
+ const senteStatus=await text('#status');
+ if(!repliedMoves||repliedMoves===humanMoves)throw Error('AI reply missing');
+ // Focus/fullscreen controls and undo.
+ await page.click('#focusBtn');await page.waitForTimeout(100);
+ if(await page.locator('#focus').evaluate(e=>getComputedStyle(e).display)==='none')throw Error('focus did not open');
+ if((await page.locator('#foppPortrait img').count())<1)throw Error('focus portrait missing');
+ await page.click('#closeBtn');await page.waitForTimeout(80);
+ const preUndo=await text('#moves');
+ await page.click('#undoBtn');await page.waitForTimeout(200);
+ const postUndo=await text('#moves');
+ if(postUndo===preUndo)throw Error('undo did not change moves');
+ // Save -> disturb with new game -> resume -> restore saved state.
+ await page.click('#saveGameBtn21530');await page.waitForTimeout(100);
+ const savedMoves=await text('#moves');
+ await page.click('#newBtn');await page.waitForTimeout(100);
+ await page.click('#resumeGameBtn21530');await page.waitForTimeout(250);
+ const resumedMoves=await text('#moves');
+ if(resumedMoves!==savedMoves)throw Error('save/resume mismatch '+JSON.stringify({savedMoves,resumedMoves}));
+ // Gote: AI must make the first move and then hand control to the user.
+ await page.selectOption('#sideSelect2157','gote');await page.click('#newBtn');
+ await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return !!t&&!/考えています/.test(s);},{timeout:30000});
+ const gote={moves:await text('#moves'),status:await text('#status'),actual:await text('#sideActual2157')};
+ if(!/後手/.test(gote.actual))throw Error('gote actual label '+JSON.stringify(gote));
+ // Random mode must resolve to one actual side and remain operational.
+ await page.selectOption('#sideSelect2157','random');await page.click('#newBtn');await page.waitForTimeout(250);
+ const randomActual=await text('#sideActual2157');
+ if(!/(先手|後手)/.test(randomActual))throw Error('random side unresolved '+randomActual);
+ // Analysis control should transition from the default label.
+ const teacherBefore=await text('#teacherMove');
+ await page.click('#analyzeBtn');
+ await page.waitForFunction(b=>(document.getElementById('teacherMove')?.textContent||'').trim()!==b,teacherBefore,{timeout:30000});
+ const teacherAfter=await text('#teacherMove');
+ const finalStats={main:await text('#statsMain'),sub:await text('#statsSub'),result:await text('#resultBanner')};
+ const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon/i.test(x));
+ if(pageErrors.length||severeConsole.length)throw Error('browser errors '+JSON.stringify({pageErrors,severeConsole}));
+ console.log('PASS_FINAL_INTERACTION_FLOW '+JSON.stringify({platform:mode,boardCount,sente:{humanMoves,repliedMoves,status:senteStatus},undo:{preUndo,postUndo},saveResume:{savedMoves,resumedMoves},gote,randomActual,analysis:{teacherBefore,teacherAfter},stats:finalStats}));
+}finally{await browser.close();}
