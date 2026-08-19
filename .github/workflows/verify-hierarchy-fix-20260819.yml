@@ -8,17 +8,17 @@ permissions:
 jobs:
   hierarchy:
     runs-on: ubuntu-22.04
-    timeout-minutes: 8
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Chromium
+      - name: Install Playwright library
         run: |
+          google-chrome --version || google-chrome-stable --version
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps chromium >/dev/null
       - name: Start COOP COEP server
         run: |
           cat >/tmp/coi-hierfix.mjs <<'NODE'
