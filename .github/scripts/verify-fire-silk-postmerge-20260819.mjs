@@ -16,7 +16,7 @@ try {
     w.terminate();return{init,rows};
   });
   if(!result.init?.ok)throw Error('engine init '+JSON.stringify(result.init));
-  for(const r of result.rows){if(!r.ok||!r.token)throw Error('search '+JSON.stringify(r));if(r.info?.threads!==1||r.info?.hashMB!==32||r.info?.fireSilk!==true||r.info?.mobileSafe!==true)throw Error('profile '+JSON.stringify(r.info));}
+  for(const r of result.rows){if(!r.ok||!r.token)throw Error('search '+JSON.stringify(r));if(r.info?.threads!==1||r.info?.hashMB!==48||r.info?.fireSilk!==true||r.info?.mobileSafe!==true)throw Error('profile '+JSON.stringify(r.info));}
   console.log('PASS_FIRE '+JSON.stringify({staticCheck,result}));
 } finally {
   await browser.close();
