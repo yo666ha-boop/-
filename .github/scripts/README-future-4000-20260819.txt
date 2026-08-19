@@ -1,0 +1,1 @@
+PR23 evidence: across all 30 legal Sente first moves using exact V9.70 + Suisho5 iPhone profile (Threads=1 Hash=32), 4.0s scored exact 14/30 and top3 29/30, while 4.5s scored exact 14/30 and top3 27/30. This branch changes only the mobile non-endgame default from 4500ms to 4000ms; endgame stays 7000ms and desktop stays 7000/10000ms.
