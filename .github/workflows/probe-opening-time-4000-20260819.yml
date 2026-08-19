@@ -1,0 +1,37 @@
+name: Future opening 4.0 vs 4.5 probe
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  opening4:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Prepare Playwright with runner Chrome
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          google-chrome --version
+      - name: Start COOP COEP static server
+        run: |
+          cat >/tmp/coi-open4.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4190,'127.0.0.1');
+          NODE
+          node /tmp/coi-open4.mjs >/tmp/open4-server.log 2>&1 &
+          sleep 1
+      - name: Compare 4.0 and 4.5 second opening searches
+        run: node .github/scripts/probe-opening-time-4000-20260819.mjs 2>&1 | tee /tmp/open4.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Opening 4.0 vs 4.5 probe'; echo '```text'; grep -E '^(OPEN4_PROFILE|OPEN4_REF|OPEN4_ROW|OPEN4_SUMMARY)' /tmp/open4.log 2>/dev/null | tail -100 || true; echo '```'; } >/tmp/open4-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/open4-report.md
