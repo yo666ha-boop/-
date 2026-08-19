@@ -19,14 +19,24 @@ jobs:
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Create worker variants
+      - name: Create valid worker variants
         shell: bash
         run: |
-          mkdir -p shogi-v21528/n2m shogi-v21528/n25m
-          sed "s/go movetime '+ms/go nodes 2000000/" shogi-v21528/future-yaneura-worker21528.js > shogi-v21528/n2m/future-worker.js
-          sed "s/go movetime '+ms/go nodes 2500000/" shogi-v21528/future-yaneura-worker21528.js > shogi-v21528/n25m/future-worker.js
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('shogi-v21528/future-yaneura-worker21528.js').read_text()
+          needle="await sendUSI('go movetime '+ms);"
+          assert needle in src
+          for name,nodes in [('n2m',2000000),('n25m',2500000)]:
+              d=Path('shogi-v21528')/name
+              d.mkdir(parents=True,exist_ok=True)
+              out=src.replace(needle,f"await sendUSI('go nodes {nodes}');",1)
+              (d/'future-worker.js').write_text(out)
+          PY
           ln -s ../yaneuraou shogi-v21528/n2m/yaneuraou
           ln -s ../yaneuraou shogi-v21528/n25m/yaneuraou
+          node --check shogi-v21528/n2m/future-worker.js
+          node --check shogi-v21528/n25m/future-worker.js
           grep -F "go nodes 2000000" shogi-v21528/n2m/future-worker.js
           grep -F "go nodes 2500000" shogi-v21528/n25m/future-worker.js
       - name: Start server
@@ -42,9 +52,11 @@ jobs:
           import{webkit}from'playwright';
           const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',M=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+`.split(/\s+/);
           function S(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,p=false;for(const c of row){if(c==='+'){p=true;continue}if(/\d/.test(c)){f-=+c;continue}const s=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{s,k:c.toUpperCase(),p});p=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{s:t,k,p:false})}else{const a=m.slice(0,2),d=m.slice(2,4),q=b.get(a),cap=b.get(d);if(!q)throw Error(m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...q,p:q.p||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.p?'+':'')+(q.s==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const s of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[s][k]||0;if(n>0)hand+=(n>1?n:'')+(s==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
-          const ps=[{ply:23,ref:'5g5f'},{ply:33,ref:'3g3f'},{ply:35,ref:'4i3h'}].map(x=>({...x,sfen:S(M.slice(0,x.ply-1))}));const vars=[{name:'movetime4500',url:'./future-yaneura-worker21528.js?v=mt'},{name:'nodes2m',url:'./n2m/future-worker.js?v=n2'},{name:'nodes2.5m',url:'./n25m/future-worker.js?v=n25'}];const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});await p.goto('http://127.0.0.1:4180/shogi-v21528/index.html',{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const rows=[];
+          const ps=[{ply:23,ref:'5g5f'},{ply:33,ref:'3g3f'},{ply:35,ref:'4i3h'}].map(x=>({...x,sfen:S(M.slice(0,x.ply-1))}));
+          const vars=[{name:'movetime4500',url:'./future-yaneura-worker21528.js?v=mt2'},{name:'nodes2m',url:'./n2m/future-worker.js?v=n2b'},{name:'nodes2.5m',url:'./n25m/future-worker.js?v=n25b'}];
+          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});await p.goto('http://127.0.0.1:4180/shogi-v21528/index.html',{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const rows=[];
           async function start(url){await p.evaluate(async url=>{if(window.__nw)window.__nw.terminate();const w=new Worker(url+'&x='+Math.random());let id=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const mid=++id,t=setTimeout(()=>j(Error(type+' timeout')),120000);P.set(mid,{r,j,t});w.postMessage({type,id:mid,...x})});window.__nw={call,terminate:()=>w.terminate()};await call('init')},url)}
-          for(const v of vars)for(let rep=1;rep<=3;rep++){await start(v.url);for(const pos of ps){const t=Date.now(),r=await p.evaluate(pos=>window.__nw.call('bestmove',{sfen:pos.sfen,ms:4500,multiPV:1}),pos),elapsed=Date.now()-t,row={variant:v.name,rep,ply:pos.ply,ref:pos.ref,token:r.token,match:r.token===pos.ref,elapsed,cp:r.info?.cp,depth:r.info?.depth,nodes:r.info?.nodes};rows.push(row);console.log('NODES_ROW '+JSON.stringify(row))}}
+          for(const v of vars)for(let rep=1;rep<=2;rep++){await start(v.url);for(const pos of ps){const t=Date.now(),r=await p.evaluate(pos=>window.__nw.call('bestmove',{sfen:pos.sfen,ms:4500,multiPV:1}),pos),elapsed=Date.now()-t,row={variant:v.name,rep,ply:pos.ply,ref:pos.ref,token:r.token,match:r.token===pos.ref,elapsed,cp:r.info?.cp,depth:r.info?.depth,nodes:r.info?.nodes};rows.push(row);console.log('NODES_ROW '+JSON.stringify(row))}}
           for(const v of vars){const a=rows.filter(x=>x.variant===v.name);console.log('NODES_SUMMARY '+JSON.stringify({variant:v.name,tests:a.length,matches:a.filter(x=>x.match).length,meanElapsed:Math.round(a.reduce((z,x)=>z+x.elapsed,0)/a.length),maxElapsed:Math.max(...a.map(x=>x.elapsed)),meanDepth:+(a.reduce((z,x)=>z+(x.depth||0),0)/a.length).toFixed(2),meanNodes:Math.round(a.reduce((z,x)=>z+(x.nodes||0),0)/a.length)}))}await p.evaluate(()=>window.__nw?.terminate());await b.close();
           NODE
           cd /tmp/nodes && node run.mjs 2>&1 | tee /tmp/nodes/result.log
@@ -53,5 +65,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### Fixed-node Future probe'; echo '```text'; grep -E '^(NODES_ROW|NODES_SUMMARY)' /tmp/nodes/result.log || true; echo '```'; } >/tmp/nodes/report.md
+          { echo '### Fixed-node Future probe v2'; echo '```text'; grep -E '^(NODES_ROW|NODES_SUMMARY)' /tmp/nodes/result.log || true; echo '```'; } >/tmp/nodes/report.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/nodes/report.md
