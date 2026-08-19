@@ -32,16 +32,29 @@ jobs:
           set -euo pipefail
           cat >verify-future-4000.mjs <<'NODE'
           import { webkit, chromium } from 'playwright';
-          for (const [name,browserType] of [['webkit',webkit],['chromium',chromium]]) {
+          const cases=[
+            ['webkit',webkit,'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'],
+            ['chromium',chromium,'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/139 Safari/537.36']
+          ];
+          for (const [name,browserType,userAgent] of cases) {
             const browser=await browserType.launch({headless:true});
-            const context=await browser.newContext({userAgent:name==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1':'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/139 Safari/537.36'});
+            const context=await browser.newContext({userAgent});
             const page=await context.newPage();
             await page.goto('http://127.0.0.1:4194/shogi-v21528/index.html?verify4000='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
             await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
             const staticCheck=await page.evaluate(async()=>{const t=await (await fetch('../shogi-side-test/future21520.js?x='+Date.now(),{cache:'no-store'})).text();return{has4000:t.includes('endgame?7000:4000'),has4500:t.includes('endgame?7000:4500'),coi:crossOriginIsolated,cards:document.querySelectorAll('#chars .ch').length,sound:window.AI_SHOGI_PIECE_SOUND?.audit?.()||null};});
             if(!staticCheck.has4000||staticCheck.has4500||!staticCheck.coi||staticCheck.cards!==26)throw Error(name+' static '+JSON.stringify(staticCheck));
-            const r=await page.evaluate(async()=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE;await a.init();const s=a.status();const t=performance.now();const x=await a.bestMove((()=>{const f=window.initial||null;return f?f():null})(),{ms:300,multiPV:1}).catch(e=>({error:String(e)}));return{status:s,elapsed:Math.round(performance.now()-t),ok:!x?.error,error:x?.error||'',sound:window.AI_SHOGI_PIECE_SOUND?.audit?.()||null};});
+            const r=await page.evaluate(async()=>{
+              const a=window.AI_SHOGI_YANEURAOU_FUTURE;await a.init();const status=a.status();
+              let b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];
+              for(let x=0;x<9;x++){b[x]={k:back[x],o:-1};b[72+x]={k:back[8-x],o:1};b[18+x]={k:'P',o:-1};b[54+x]={k:'P',o:1}}
+              b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};
+              const state={b,h:{1:{},'-1':{}},t:1,log:[],last:null};
+              const t=performance.now();const x=await a.bestMove(state,{ms:300,multiPV:1}).catch(e=>({error:String(e)}));
+              return{status,elapsed:Math.round(performance.now()-t),ok:!x?.error,error:x?.error||'',info:x?.info||{},sound:window.AI_SHOGI_PIECE_SOUND?.audit?.()||null};
+            });
             if(!r.status.ready||!r.status.worker||!r.ok)throw Error(name+' engine '+JSON.stringify(r));
+            if(r.info?.threads!==1||r.info?.hashMB!==32)throw Error(name+' profile '+JSON.stringify(r.info));
             console.log('PASS_'+name.toUpperCase()+' '+JSON.stringify({staticCheck,r}));
             await browser.close();
           }
