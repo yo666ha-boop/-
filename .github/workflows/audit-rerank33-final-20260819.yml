@@ -1,0 +1,34 @@
+name: Audit rerank33 final integrity
+on:
+  pull_request:
+    branches: [future-mobile-rerank20-runtime-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium >/dev/null
+      - name: Verify SFEN USI and desktop profile
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-rerank33-final-20260819.mjs 2>&1 | tee /tmp/final-audit.log
+          grep -q '^PASS_SFEN_USI_RERANK20 ' /tmp/final-audit.log
+          grep -q '^PASS_DESKTOP_RERANK20 ' /tmp/final-audit.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### PR33 final integrity audit'; echo '```text'; grep -E '^(PASS_SFEN_USI_RERANK20|PASS_DESKTOP_RERANK20|Error:|FAIL)' /tmp/final-audit.log || true; echo '```'; } >/tmp/final-audit-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/final-audit-report.md
