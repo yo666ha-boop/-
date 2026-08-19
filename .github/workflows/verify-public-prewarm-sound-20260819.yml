@@ -1,0 +1,45 @@
+name: Verify public Future prewarm and sound deployment
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for GitHub Pages bytes and verify exact runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://yo666ha-boop.github.io/-'
+          ok=0
+          for i in $(seq 1 30); do
+            q="probe=${GITHUB_RUN_ID}-${i}"
+            if curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$BASE/shogi-side-test/future21520.js?$q" -o /tmp/public-future.js \
+              && curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$BASE/shogi-v21528/future-yaneura-worker21528.js?$q" -o /tmp/public-worker.js; then
+              if cmp -s shogi-side-test/future21520.js /tmp/public-future.js \
+                && cmp -s shogi-v21528/future-yaneura-worker21528.js /tmp/public-worker.js; then
+                ok=1; break
+              fi
+            fi
+            sleep 10
+          done
+          test "$ok" = 1
+          grep -F "master.gain.setValueAtTime(.34*" /tmp/public-future.js
+          grep -F "version:'21529b'" /tmp/public-future.js
+          grep -F '21528v970d5' /tmp/public-future.js
+          grep -F "const BUILD='21528v970d5'" /tmp/public-worker.js
+          grep -F "{cache:'force-cache'}" /tmp/public-worker.js
+          echo "PUBLIC_FUTURE_SHA256=$(sha256sum /tmp/public-future.js | awk '{print $1}')"
+          echo "PUBLIC_WORKER_SHA256=$(sha256sum /tmp/public-worker.js | awk '{print $1}')"
+          echo 'PUBLIC_PREWARM_SOUND_PASS'
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "Public GitHub Pages exact-byte verification finished for main d43eb7af: future21520.js + Future worker, gain 0.34, sound 21529b, worker/eval build 21528v970d5, force-cache. Check job conclusion for PASS/FAIL."
