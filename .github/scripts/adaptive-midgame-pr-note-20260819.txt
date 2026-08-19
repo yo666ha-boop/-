@@ -1,0 +1,1 @@
+Diagnostic only at this stage. No runtime source modified. The branch adds only an iPhone-equivalent WebKit A/B audit and checkpoint. It compares fixed 4.0s against a complexity-based 4/8/12s budget over four historical weak positions using fresh 15s MultiPV3 references. Runtime adoption requires materially better exact/top3 stability and full regressions before merge.
