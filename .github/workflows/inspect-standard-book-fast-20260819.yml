@@ -1,0 +1,100 @@
+name: Fast inspect official standard book coverage
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-standard-book-fast-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bookfast
+          curl -fL --retry 3 'https://github.com/yaneurao/YaneuraOu/releases/download/v4.73_book/standard_book.zip' -o /tmp/bookfast/book.zip
+          unzip -o /tmp/bookfast/book.zip -d /tmp/bookfast/unpack >/dev/null
+          BOOK=$(find /tmp/bookfast/unpack -type f -name standard_book.db | head -1)
+          test -n "$BOOK"
+          echo "BOOK_FAST_SIZE $(stat -c%s "$BOOK")"
+          echo "BOOK_FAST_SHA256 $(sha256sum "$BOOK" | awk '{print $1}')"
+          file "$BOOK" | sed 's/^/BOOK_FAST_FILE /'
+          head -8 "$BOOK" | sed 's/^/BOOK_FAST_HEAD /'
+          BOOK="$BOOK" python3 - <<'PY' | tee /tmp/bookfast/result.log
+          import os,re
+          from pathlib import Path
+          book=Path(os.environ['BOOK'])
+          R='abcdefghi'; INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL'
+          M='4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+'.split()
+          refs={1:'4i5h',3:'2h3h',5:'7g7f',7:'8g8f',9:'P*8g',11:'6i7h',13:'5i4i',15:'8h7g',17:'3i4h',19:'4h5i',23:'5g5f',27:'6h6i',31:'7i8h',35:'4i3h'}
+          def sfen(ms):
+              b={}; h={'b':{},'w':{}}; rr=0
+              for row in INIT.split('/'):
+                  f=9; prom=False
+                  for c in row:
+                      if c=='+': prom=True; continue
+                      if c.isdigit(): f-=int(c); continue
+                      side='b' if c.isupper() else 'w'; b[f'{f}{R[rr]}']=[side,c.upper(),prom]; prom=False; f-=1
+                  rr+=1
+              t='b'
+              for m in ms:
+                  if re.match(r'^[PLNSGBR]\*',m):
+                      k=m[0]; d=m[2:]; h[t][k]=h[t].get(k,0)-1; b[d]=[t,k,False]
+                  else:
+                      a,d=m[:2],m[2:4]; q=b[a]; cap=b.get(d)
+                      if cap: h[t][cap[1]]=h[t].get(cap[1],0)+1
+                      del b[a]; b[d]=[q[0],q[1],q[2] or m.endswith('+')]
+                  t='w' if t=='b' else 'b'
+              rows=[]
+              for r in range(9):
+                  x=''; e=0
+                  for f in range(9,0,-1):
+                      q=b.get(f'{f}{R[r]}')
+                      if not q: e+=1; continue
+                      if e: x+=str(e); e=0
+                      ch=q[1] if q[0]=='b' else q[1].lower(); x+=('+' if q[2] else '')+ch
+                  if e:x+=str(e)
+                  rows.append(x)
+              hand=''
+              for side in ('b','w'):
+                  for k in 'RBGSNLP':
+                      n=h[side].get(k,0)
+                      if n>0: hand+=(str(n) if n>1 else '')+(k if side=='b' else k.lower())
+              return '/'.join(rows)+' '+t+' '+(hand or '-')+' '+str(len(ms)+1)
+          targets={ply:sfen(M[:ply-1]) for ply in refs}
+          # Read as text; YaneuraOu DB has position lines beginning with 'sfen '.
+          text=book.read_text(errors='replace').splitlines()
+          pos_to_moves={}
+          current=None
+          for line in text:
+              line=line.strip()
+              if line.startswith('sfen '):
+                  current=line[5:]; pos_to_moves.setdefault(current,[])
+              elif current and line and not line.startswith('#'):
+                  pos_to_moves[current].append(line)
+          covered=0
+          for ply,target in targets.items():
+              moves=pos_to_moves.get(target,[])
+              # Some old books may normalize the move number. Retry first 3 SFEN fields.
+              if not moves:
+                  key3=' '.join(target.split()[:3])
+                  hit=next((v for k,v in pos_to_moves.items() if ' '.join(k.split()[:3])==key3),[])
+                  moves=hit
+              if moves: covered+=1
+              first=moves[0].split()[0] if moves else ''
+              print('BOOK_FAST_ROW',{'ply':ply,'ref':refs[ply],'covered':bool(moves),'first':first,'candidates':moves[:3]})
+          print('BOOK_FAST_SUMMARY',{'positions':len(targets),'covered':covered,'bookPositions':len(pos_to_moves)})
+          PY
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Fast official standard book inspection'; echo '```text'; grep -E '^(BOOK_FAST_ROW|BOOK_FAST_SUMMARY)' /tmp/bookfast/result.log || true; echo '```'; } >/tmp/bookfast/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/bookfast/report.md
