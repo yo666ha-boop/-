@@ -1,0 +1,40 @@
+name: Verify PR37 desktop system Chrome
+on:
+  pull_request:
+    branches: [future-safe-rerank12-threads1-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  desktop-system-chrome:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright library only
+        run: |
+          google-chrome --version || google-chrome-stable --version || true
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-pr37d.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4212,'127.0.0.1');
+          NODE
+          node /tmp/coi-pr37d.mjs >/tmp/coi-pr37d.log 2>&1 &
+          sleep 1
+      - name: Run true desktop profile
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-pr37-desktop-systemchrome-20260819.mjs 2>&1 | tee /tmp/pr37-desktop-fast.log
+          grep -q '^PASS_PR37_DESKTOP_SYSTEM_CHROME ' /tmp/pr37-desktop-fast.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### PR37 true desktop — system Chrome'; echo '```text'; grep -E '^(PASS_PR37_DESKTOP_SYSTEM_CHROME|Error:)' /tmp/pr37-desktop-fast.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
