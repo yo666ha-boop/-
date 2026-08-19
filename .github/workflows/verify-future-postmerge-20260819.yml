@@ -1,0 +1,46 @@
+name: Verify Future post-merge platforms
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install browser
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          if [ "${{ matrix.platform }}" = "iphone" ]; then npx playwright install --with-deps webkit >/dev/null; else npx playwright install --with-deps chromium >/dev/null; fi
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-post.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4213,'127.0.0.1');
+          NODE
+          node /tmp/coi-post.mjs >/tmp/coi-post.log 2>&1 &
+          sleep 1
+      - name: Verify merged Future runtime
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-future-postmerge-20260819.mjs 2>&1 | tee /tmp/post-${{ matrix.platform }}.log
+          grep -q '^PASS_POSTMERGE_FUTURE ' /tmp/post-${{ matrix.platform }}.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Future post-merge — ${{ matrix.platform }}'; echo '```text'; grep -E '^(PASS_POSTMERGE_FUTURE|Error:)' /tmp/post-${{ matrix.platform }}.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
