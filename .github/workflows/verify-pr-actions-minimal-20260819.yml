@@ -1,4 +1,4 @@
-name: Minimal PR Actions trigger
+name: Future quiet-search A/B
 on:
   pull_request:
     branches: [main]
@@ -6,13 +6,42 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
-  hello:
+  quiet:
     runs-on: ubuntu-22.04
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@v4
-      - name: Marker
+      - name: Prepare quiet worker
+        shell: bash
+        run: |
+          mkdir -p shogi-v21528/quiet
+          ln -s ../yaneuraou shogi-v21528/quiet/yaneuraou
+          cp shogi-v21528/future-yaneura-worker21528.js shogi-v21528/quiet/future-worker.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-v21528/quiet/future-worker.js'); s=p.read_text()
+          old="stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');"
+          new=old+"\n    stage('⑤-4g PV出力抑制設定開始');await sendUSI('setoption name PvInterval value 100000000');await sendUSI('setoption name OutputFailLHPV value false');stage('⑤-4g PV出力抑制設定完了');"
+          if old not in s: raise SystemExit('marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Install WebKit
+        run: |
+          mkdir -p /tmp/qprobe && cd /tmp/qprobe
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+          cp "$GITHUB_WORKSPACE/.github/scripts/quiet-search-probe-20260819.mjs" /tmp/qprobe/run.mjs
+      - name: Start COOP COEP server
+        run: |
+          TEST_PORT=4184 node .github/scripts/coop-coep-test-server-20260819.mjs >/tmp/qprobe/server.log 2>&1 &
+          sleep 1
+      - name: Run A/B
+        run: cd /tmp/qprobe && node run.mjs 2>&1 | tee /tmp/qprobe/result.log
+      - name: Report
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo MINIMAL_PR_ACTIONS_PASS
-          gh pr comment ${{ github.event.pull_request.number }} --body 'MINIMAL_PR_ACTIONS_PASS'
+          { echo '### Future quiet-search A/B'; echo '```text'; grep -E '^(QUIET_ROW|QUIET_SUMMARY)' /tmp/qprobe/result.log || true; echo '```'; } >/tmp/qprobe/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/qprobe/report.md
