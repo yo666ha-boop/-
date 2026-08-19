@@ -1,0 +1,72 @@
+name: Probe official standard book with V9.70 WASM
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-standard-book-v970-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official standard book and prepare worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bookprobe shogi-v21528/bookprobe
+          curl -fL --retry 3 'https://github.com/yaneurao/YaneuraOu/releases/download/v4.73_book/standard_book.zip' -o /tmp/bookprobe/standard_book.zip
+          unzip -o /tmp/bookprobe/standard_book.zip -d /tmp/bookprobe/unpack >/dev/null
+          BOOK=$(find /tmp/bookprobe/unpack -type f -name 'standard_book.db' | head -1)
+          test -n "$BOOK"
+          cp "$BOOK" shogi-v21528/yaneuraou/standard_book.db
+          ln -s ../yaneuraou shogi-v21528/bookprobe/yaneuraou
+          cp shogi-v21528/future-yaneura-worker21528.js shogi-v21528/bookprobe/future-worker.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-v21528/bookprobe/future-worker.js')
+          s=p.read_text()
+          old="""    stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');
+    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+(MOBILE_WEBKIT?' / iPhone省メモリ':FIRE_SILK?' / Fire Silk省メモリ':''));"""
+          new="""    stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');
+    stage('⑤-4g 定跡設定開始');await sendUSI('setoption name USI_OwnBook value true');await sendUSI('setoption name BookDir value .');await sendUSI('setoption name BookFile value standard_book.db');stage('⑤-4g 定跡設定完了 standard_book.db');
+    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+' / Book=standard_book.db'+(MOBILE_WEBKIT?' / iPhone省メモリ':FIRE_SILK?' / Fire Silk省メモリ':''));"""
+          if old not in s: raise SystemExit('worker marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+          echo "BOOK_ZIP_SIZE $(stat -c%s /tmp/bookprobe/standard_book.zip)"
+          echo "BOOK_DB_SIZE $(stat -c%s shogi-v21528/yaneuraou/standard_book.db)"
+          echo "BOOK_DB_SHA256 $(sha256sum shogi-v21528/yaneuraou/standard_book.db | awk '{print $1}')"
+      - name: Install WebKit
+        run: |
+          cd /tmp/bookprobe
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          cat > /tmp/bookprobe/server.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd();const mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream','.db':'application/octet-stream'};http.createServer((req,res)=>{let u=decodeURIComponent(req.url.split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';let f=path.join(root,u);try{f=fs.realpathSync(f)}catch{}if(!f.startsWith(root)||!fs.existsSync(f)){res.writeHead(404);return res.end('404')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(res)}).listen(4182,'127.0.0.1');
+          NODE
+          node /tmp/bookprobe/server.mjs >/tmp/bookprobe/server.log 2>&1 & sleep 1
+      - name: Measure coverage on confirmed Piyo line
+        shell: bash
+        run: |
+          cat > /tmp/bookprobe/run.mjs <<'NODE'
+          import{webkit}from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',M=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+`.split(/\s+/);
+          function S(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,p=false;for(const c of row){if(c==='+'){p=true;continue}if(/\d/.test(c)){f-=+c;continue}const s=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{s,k:c.toUpperCase(),p});p=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{s:t,k,p:false})}else{const a=m.slice(0,2),d=m.slice(2,4),q=b.get(a),cap=b.get(d);if(!q)throw Error(m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...q,p:q.p||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.p?'+':'')+(q.s==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const s of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[s][k]||0;if(n>0)hand+=(n>1?n:'')+(s==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const refs={1:'4i5h',3:'2h3h',5:'7g7f',7:'8g8f',9:'P*8g',11:'6i7h',13:'5i4i',15:'8h7g',17:'3i4h',19:'4h5i',23:'5g5f',27:'6h6i',31:'7i8h',35:'4i3h'};const plies=Object.keys(refs).map(Number);const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});await p.goto('http://127.0.0.1:4182/shogi-v21528/index.html',{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');await p.evaluate(async()=>{const w=new Worker('./bookprobe/future-worker.js?v='+Date.now());let id=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const mid=++id,t=setTimeout(()=>j(Error(type+' timeout')),120000);P.set(mid,{r,j,t});w.postMessage({type,id:mid,...x})});window.__bp={w,call};await call('init')});let covered=0,refmatch=0;for(const ply of plies){const pos={ply,sfen:S(M.slice(0,ply-1)),ref:refs[ply]},t=Date.now(),r=await p.evaluate(pos=>window.__bp.call('bestmove',{sfen:pos.sfen,ms:4500,multiPV:1}),pos),elapsed=Date.now()-t,isBook=elapsed<1000&&(r.info?.nodes||0)===0;if(isBook)covered++;if(r.token===pos.ref)refmatch++;console.log('BOOK_ROW '+JSON.stringify({ply,ref:pos.ref,token:r.token,elapsed,nodes:r.info?.nodes||0,depth:r.info?.depth||0,book:isBook,refmatch:r.token===pos.ref}))}console.log('BOOK_SUMMARY '+JSON.stringify({tests:plies.length,covered,referenceMatches:refmatch}));await p.evaluate(()=>window.__bp.w.terminate());await b.close();
+          NODE
+          cd /tmp/bookprobe && node run.mjs 2>&1 | tee /tmp/bookprobe/result.log
+          grep -F 'BOOK_SUMMARY ' /tmp/bookprobe/result.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Official standard book probe'; echo '```text'; grep -E '^(BOOK_ROW|BOOK_SUMMARY)' /tmp/bookprobe/result.log || true; echo '```'; } >/tmp/bookprobe/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/bookprobe/report.md
