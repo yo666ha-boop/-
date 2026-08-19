@@ -1,0 +1,46 @@
+name: Audit final app coverage
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  coverage:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install browser support
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          if [ "${{ matrix.platform }}" = "iphone" ]; then npx playwright install --with-deps webkit >/dev/null; else google-chrome --version || google-chrome-stable --version; fi
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-final.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4217,'127.0.0.1');
+          NODE
+          node /tmp/coi-final.mjs >/tmp/coi-final.log 2>&1 &
+          sleep 1
+      - name: Audit all characters and responsive layout
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-final-app-coverage-20260819.mjs 2>&1 | tee /tmp/final-${{ matrix.platform }}.log
+          grep -q '^PASS_FINAL_APP_COVERAGE ' /tmp/final-${{ matrix.platform }}.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Final app coverage — ${{ matrix.platform }}'; echo '```text'; grep -E '^(PASS_FINAL_APP_COVERAGE|Error:)' /tmp/final-${{ matrix.platform }}.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
