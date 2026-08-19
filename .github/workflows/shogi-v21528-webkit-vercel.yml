@@ -16,7 +16,7 @@ jobs:
       - name: Mark start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment 17 --body 'PBOOK_PIYO_PRACTICAL_START'
+        run: gh pr comment 17 --body 'PBOOK_PIYO_PRACTICAL_START_V2'
       - name: Prepare official standard book and worker
         shell: bash
         run: |
