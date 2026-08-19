@@ -104,8 +104,8 @@
   }
   async function initFutureEngine(){if(engineReady&&worker)return true;await callWorker('init',{},75000);engineReady=true;setEngineState('⑤成功 V9.70＋水匠5 接続済み',true);return true}
   async function futureBest(s,opts={}){
-    const sfen=toSFEN(s),mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent),endgame=(s.log?.length||0)>=55,defaultMs=mobile?(endgame?7000:4500):(endgame?10000:7000);
-    const requested=Number(opts&&opts.ms),ms=Number.isFinite(requested)&&requested>=250?Math.max(250,Math.min(20000,Math.round(requested))):defaultMs;
+    const ply=s.log?.length||0,ios=/iPhone|iPad|iPod/i.test(navigator.userAgent),mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent),opening=ios&&ply<=15,endgame=ply>=55,defaultMs=mobile?(endgame?7000:(opening?4000:4500)):(endgame?10000:7000);
+    const sfen=toSFEN(s),requested=Number(opts&&opts.ms),ms=Number.isFinite(requested)&&requested>=250?Math.max(250,Math.min(20000,Math.round(requested))):defaultMs;
     const requestedPV=Number(opts&&opts.multiPV),multiPV=Number.isFinite(requestedPV)?Math.max(1,Math.min(4,Math.round(requestedPV))):1;
     const r=await callWorker('bestmove',{sfen,ms,multiPV},90000);engineReady=true;const tok=String(r.token||'').trim(),info=r.info||{};
     if(tok==='resign')return{resign:true,info};if(tok==='win')return{declareWin:true,info};const lm=legal(s),m=lm.find(x=>usi(x)===tok);if(!m)throw new Error('YaneuraOu illegal/unmapped bestmove '+tok+' for '+sfen);return{move:m,info};
