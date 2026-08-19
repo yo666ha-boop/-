@@ -1,4 +1,4 @@
-name: Future quiet-search fast A/B
+name: Future official-book Piyo Lv40 practical
 on:
   pull_request:
     branches: [main]
@@ -6,44 +6,61 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
-  quiet-fast:
+  practical:
     runs-on: ubuntu-22.04
-    timeout-minutes: 10
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare quiet worker
+      - name: Prepare official standard book and book-enabled worker
         shell: bash
         run: |
-          mkdir -p shogi-v21528/quiet
-          ln -s ../yaneuraou shogi-v21528/quiet/yaneuraou
-          cp shogi-v21528/future-yaneura-worker21528.js shogi-v21528/quiet/future-worker.js
+          set -euo pipefail
+          mkdir -p /tmp/pbook shogi-v21528/bookpractical
+          curl -fL --retry 3 'https://github.com/yaneurao/YaneuraOu/releases/download/v4.73_book/standard_book.zip' -o /tmp/pbook/book.zip
+          unzip -o /tmp/pbook/book.zip -d /tmp/pbook/unpack >/dev/null
+          BOOK=$(find /tmp/pbook/unpack -type f -name standard_book.db | head -1); test -n "$BOOK"
+          cp "$BOOK" shogi-v21528/yaneuraou/standard_book.db
+          ln -s ../yaneuraou shogi-v21528/bookpractical/yaneuraou
+          cp shogi-v21528/future-yaneura-worker21528.js shogi-v21528/bookpractical/future-worker.js
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('shogi-v21528/quiet/future-worker.js'); s=p.read_text()
-          old="stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');"
-          new=old+"\n    stage('⑤-4g PV出力抑制設定開始');await sendUSI('setoption name PvInterval value 100000000');await sendUSI('setoption name OutputFailLHPV value false');stage('⑤-4g PV出力抑制設定完了');"
-          if old not in s: raise SystemExit('marker missing')
-          p.write_text(s.replace(old,new,1))
+          p=Path('shogi-v21528/bookpractical/future-worker.js'); s=p.read_text()
+          s=s.replace("const EVAL='nn.bin';","const EVAL='nn.bin';\nconst BOOK='standard_book.db';",1)
+          old="""    engine.FS.writeFile('/'+EVAL,bytes);
+    engine.addMessageListener(onLine);"""
+          new="""    engine.FS.writeFile('/'+EVAL,bytes);
+    stage('⑤-3b 公式標準定跡取得中');
+    const rb=await fetch(BASE+BOOK+'?v=bookprobe',{cache:'no-store'});if(!rb.ok)throw new Error(BOOK+' '+rb.status);
+    const bbytes=new Uint8Array(await rb.arrayBuffer());if(bbytes.byteLength<1000000)throw new Error(BOOK+' too small '+bbytes.byteLength);
+    try{engine.FS.unlink('/'+BOOK)}catch(e){}
+    engine.FS.writeFile('/'+BOOK,bbytes);stage('⑤-3b 標準定跡 '+Math.round(bbytes.byteLength/1024/1024)+'MB 読込完了');
+    engine.addMessageListener(onLine);"""
+          if old not in s: raise SystemExit('FS marker missing')
+          s=s.replace(old,new,1)
+          old2="stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');"
+          new2=old2+"\n    stage('⑤-4g 定跡設定開始');await sendUSI('setoption name USI_OwnBook value true');await sendUSI('setoption name BookDir value .');await sendUSI('setoption name BookFile value '+BOOK);stage('⑤-4g 定跡設定完了 '+BOOK);"
+          if old2 not in s: raise SystemExit('option marker missing')
+          p.write_text(s.replace(old2,new2,1))
           PY
+          echo "PBOOK_SIZE $(stat -c%s shogi-v21528/yaneuraou/standard_book.db)"
+          echo "PBOOK_SHA $(sha256sum shogi-v21528/yaneuraou/standard_book.db | awk '{print $1}')"
       - name: Prepare Playwright with runner Chrome
         run: |
-          mkdir -p /tmp/qprobe && cd /tmp/qprobe
+          mkdir -p /tmp/pbook && cd /tmp/pbook
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          cp "$GITHUB_WORKSPACE/.github/scripts/quiet-search-probe-20260819.mjs" run.mjs
-          sed -i "s/import{webkit}from'playwright';/import{chromium}from'playwright';/" run.mjs
-          sed -i "s/const browser=await webkit.launch({headless:true});/const browser=await chromium.launch({headless:true,channel:'chrome'});/" run.mjs
           google-chrome --version
+          cp "$GITHUB_WORKSPACE/.github/scripts/piyo-book-practical-20260819.mjs" match.mjs
       - name: Start COOP COEP server
         run: |
-          TEST_PORT=4184 node .github/scripts/coop-coep-test-server-20260819.mjs >/tmp/qprobe/server.log 2>&1 &
+          TEST_PORT=4183 node .github/scripts/coop-coep-test-server-20260819.mjs >/tmp/pbook/server.log 2>&1 &
           sleep 1
-      - name: Run A/B
-        run: cd /tmp/qprobe && node run.mjs 2>&1 | tee /tmp/qprobe/result.log
+      - name: Run practical match
+        run: cd /tmp/pbook && node match.mjs 2>&1 | tee /tmp/pbook/match.log
       - name: Report
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### Future quiet-search fast A/B'; echo '```text'; grep -E '^(QUIET_ROW|QUIET_SUMMARY)' /tmp/qprobe/result.log || true; echo '```'; } >/tmp/qprobe/report.md
-          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/qprobe/report.md
+          { echo '### Future + official book vs Piyo Lv40'; echo '```text'; grep -E '^(PBOOK_PIYO|PBOOK_PROFILE|PBOOK_FUTURE|PBOOK_REPLY|PBOOK_ERROR|PBOOK_SUMMARY)' /tmp/pbook/match.log | tail -140 || true; echo '```'; } >/tmp/pbook/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/pbook/report.md
