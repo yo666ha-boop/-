@@ -22,29 +22,14 @@ jobs:
       - name: Start COOP COEP server
         run: |
           cat >/tmp/coi.mjs <<'NODE'
-          import http from 'http';import fs from 'fs';import path from 'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4195,'127.0.0.1');
+          import http from 'http';import fs from 'fs';import path from 'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4195,'127.0.0.1');
           NODE
           node /tmp/coi.mjs >/tmp/coi-fire.log 2>&1 &
           sleep 1
       - name: Verify Silk profile and repeated engine searches
         run: |
-          cat >/tmp/fire.mjs <<'NODE'
-          import { chromium } from 'playwright';
-          const browser=await chromium.launch({headless:true});
-          const context=await browser.newContext({userAgent:'Mozilla/5.0 (Linux; U; en-US; KFMAWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/3.13 Safari/535.19 Silk-Accelerated=true'});
-          const page=await context.newPage();
-          await page.goto('http://127.0.0.1:4195/shogi-v21528/index.html?fireaudit='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-          await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
-          const staticCheck=await page.evaluate(async()=>{const t=await (await fetch('../shogi-side-test/future21520.js?x='+Date.now(),{cache:'no-store'})).text();return{has4000:t.includes('endgame?7000:4000'),has4500:t.includes('endgame?7000:4500'),coi:crossOriginIsolated,cards:document.querySelectorAll('#chars .ch').length};});
-          if(!staticCheck.has4000||staticCheck.has4500||!staticCheck.coi||staticCheck.cards!==26)throw Error('static '+JSON.stringify(staticCheck));
-          const result=await page.evaluate(async()=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE;await a.init();const status=a.status();const rows=[];for(const ms of [300,700,1200]){const t=performance.now();const r=await a.bestMove(null,{ms,multiPV:1}).catch(e=>({error:String(e)}));rows.push({ms,elapsed:Math.round(performance.now()-t),ok:!r?.error,error:r?.error||'',info:r?.info||null,token:r?.token||''});}return{status,rows};});
-          if(!result.status.ready||!result.status.worker)throw Error('engine status '+JSON.stringify(result.status));
-          for(const r of result.rows){if(!r.ok||!r.token)throw Error('search '+JSON.stringify(r));if(r.info?.threads!==1||r.info?.hashMB!==32||r.info?.fireSilk!==true||r.info?.mobileSafe!==true)throw Error('profile '+JSON.stringify(r.info));}
-          console.log('PASS_FIRE '+JSON.stringify({staticCheck,result}));
-          await browser.close();
-          NODE
           set -o pipefail
-          node /tmp/fire.mjs 2>&1 | tee /tmp/fire.log
+          node .github/scripts/verify-fire-silk-postmerge-20260819.mjs 2>&1 | tee /tmp/fire.log
       - name: Report
         if: always()
         env:
