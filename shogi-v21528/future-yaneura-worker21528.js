@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528v970d5';
+const BUILD='21528v970d6';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const FIRE_SILK=/\bSilk\//i.test(UA);
@@ -19,6 +19,9 @@ const MOBILE_SAFE=MOBILE_WEBKIT||FIRE_SILK;
 const ENGINE_THREADS=MOBILE_SAFE?1:2;
 const ENGINE_HASH_MB=MOBILE_WEBKIT?32:FIRE_SILK?48:128;
 const ENGINE_JS_URL=BASE+JS+'?v='+BUILD;
+const MOBILE_STAGE1_NODES=1000000;
+const MOBILE_RERANK_NODES=1500000;
+const MOBILE_RERANK_GAP_CP=20;
 const TOP5_MPV_BY_MS=new Map([
   [4200,3],[6200,3],[2800,3],[4300,3],
   [3400,2],[5100,2],[2300,2],[3600,2],
@@ -96,18 +99,50 @@ async function init(){
   })();
   try{return await initPromise}finally{if(!ready)initPromise=null}
 }
-async function bestmove(sfen,ms,multiPV=1){
+async function runSearch(sfen,{ms=6000,nodes=0,multiPV=1,searchmoves=[]}={}){
   await init();
-  const mp=Math.max(1,Math.min(MOBILE_SAFE?3:4,Math.round(Number(multiPV)||1)));
+  const mp=Math.max(1,Math.min(5,Math.round(Number(multiPV)||1)));
+  const nodeBudget=Math.max(0,Math.round(Number(nodes)||0));
+  const limited=Array.isArray(searchmoves)?searchmoves.map(x=>String(x||'').trim()).filter(Boolean).slice(0,8):[];
   latestInfo={};latestMultiPV={};
   await sendUSI('setoption name MultiPV value '+mp);
   await sendUSI('position sfen '+sfen);stage('⑥ 思考中 bestmove待ち');
-  const p=waitLine(x=>x.startsWith('bestmove '),ms+10000,'bestmove');await sendUSI('go movetime '+ms);const line=await p;stage('⑦ bestmove受信');
+  const waitMs=nodeBudget>0?120000:ms+10000;
+  const p=waitLine(x=>x.startsWith('bestmove '),waitMs,'bestmove');
+  const limit=nodeBudget>0?('go nodes '+nodeBudget):('go movetime '+ms);
+  await sendUSI(limit+(limited.length?' searchmoves '+limited.join(' '):''));
+  const line=await p;stage('⑦ bestmove受信');
   const token=(line.split(/\s+/)[1]||'').trim();
   const candidates=Object.keys(latestMultiPV).map(Number).sort((a,b)=>a-b).map(k=>latestMultiPV[k]).filter(x=>x&&x.token);
   if(!candidates.some(x=>x.rank===1)&&token)candidates.unshift({rank:1,token,...latestInfo});
   await sendUSI('setoption name MultiPV value 1');
-  return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu V9.70 HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}};
+  return{token,candidates,info:{...latestInfo,ms,nodes:nodeBudget||latestInfo.nodes,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu V9.70 HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE,searchmoves:limited}};
+}
+function stageGapCp(candidates){
+  const a=(candidates||[]).find(x=>x&&x.rank===1),b=(candidates||[]).find(x=>x&&x.rank===2);
+  if(!a||!b||!Number.isFinite(a.cp)||!Number.isFinite(b.cp))return Infinity;
+  return Math.abs(Number(a.cp)-Number(b.cp));
+}
+async function bestmove(sfen,ms,multiPV=1,nodes=0,searchmoves=[]){
+  const requestedNodes=Math.max(0,Math.round(Number(nodes)||0));
+  const explicitSearch=Array.isArray(searchmoves)&&searchmoves.length>0;
+  const explicitPV=Math.max(1,Math.round(Number(multiPV)||1));
+  const useMobilePolicy=MOBILE_SAFE&&!requestedNodes&&!explicitSearch&&explicitPV===1&&Number(ms)===4000;
+  if(!useMobilePolicy)return runSearch(sfen,{ms,nodes:requestedNodes,multiPV:explicitPV,searchmoves});
+
+  stage('⑥-A 候補5手を短探索中');
+  const first=await runSearch(sfen,{nodes:MOBILE_STAGE1_NODES,multiPV:5});
+  const candidates=(first.candidates||[]).map(x=>x&&x.token).filter(Boolean).slice(0,5);
+  const gapCp=stageGapCp(first.candidates);
+  const trigger=gapCp<=MOBILE_RERANK_GAP_CP&&candidates.length>=2;
+  if(!trigger){
+    first.info={...(first.info||{}),policy:'mobile-conditional-rerank-v1',policyStage:'stage1-confident',policyTriggered:false,policyGapCp:gapCp,policyThresholdCp:MOBILE_RERANK_GAP_CP,stage1Nodes:MOBILE_STAGE1_NODES,stage2Nodes:0,stageCandidates:candidates};
+    return first;
+  }
+  stage('⑥-B 候補差'+gapCp+'cp・再評価中');
+  const second=await runSearch(sfen,{nodes:MOBILE_RERANK_NODES,multiPV:1,searchmoves:candidates});
+  second.info={...(second.info||{}),policy:'mobile-conditional-rerank-v1',policyStage:'reranked',policyTriggered:true,policyGapCp:gapCp,policyThresholdCp:MOBILE_RERANK_GAP_CP,stage1Nodes:MOBILE_STAGE1_NODES,stage2Nodes:MOBILE_RERANK_NODES,stageCandidates:candidates,stage1Token:first.token};
+  return second;
 }
 self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
@@ -116,7 +151,7 @@ self.onmessage=async ev=>{
     if(m.type==='bestmove'){
       const ms=Number(m.ms)||6000;
       const inferred=m.multiPV==null?TOP5_MPV_BY_MS.get(ms):Number(m.multiPV);
-      const out=await bestmove(String(m.sfen||''),ms,inferred||1);
+      const out=await bestmove(String(m.sfen||''),ms,inferred||1,Math.max(0,Number(m.nodes)||0),Array.isArray(m.searchmoves)?m.searchmoves:[]);
       self.postMessage({type:'result',id,ok:true,kind:'bestmove',...out});return;
     }
     if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}
