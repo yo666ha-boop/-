@@ -1,0 +1,50 @@
+name: Verify PR37 safe runtime quality
+on:
+  pull_request:
+    branches: [future-safe-rerank12-threads1-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [opening, gote]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Prepare exact main worker baseline
+        run: |
+          git fetch origin main --depth=1
+          git show FETCH_HEAD:shogi-v21528/future-yaneura-worker21528.js > shogi-v21528/future-yaneura-worker-main-test.js
+      - name: Install WebKit
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-pr37.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4210,'127.0.0.1');
+          NODE
+          node /tmp/coi-pr37.mjs >/tmp/coi-pr37.log 2>&1 &
+          sleep 1
+      - name: Run quality comparison
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-pr37-quality-20260819.mjs 2>&1 | tee /tmp/pr37-${{ matrix.mode }}.log
+          grep -q '^PR37_SUMMARY ' /tmp/pr37-${{ matrix.mode }}.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### PR37 quality — ${{ matrix.mode }}'; echo '```text'; grep -E '^(PR37_SUMMARY|Error:)' /tmp/pr37-${{ matrix.mode }}.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
