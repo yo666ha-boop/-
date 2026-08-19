@@ -1,0 +1,45 @@
+name: Validate piece sound release
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'shogi-side-test/future21520.js'
+      - '.github/workflows/validate-piece-sound-release-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  sound:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Playwright
+        run: |
+          mkdir -p /tmp/sound && cd /tmp/sound
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium firefox webkit >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          cat > /tmp/sound/server.mjs <<'NODE'
+          import http from 'http';import fs from 'fs';import path from 'path';const root=process.cwd();const mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream','.css':'text/css','.jpg':'image/jpeg','.webp':'image/webp'};http.createServer((req,res)=>{let u=decodeURIComponent(req.url.split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.join(root,u);if(!f.startsWith(root)||!fs.existsSync(f)){res.writeHead(404);return res.end('404')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(res)}).listen(4174,'127.0.0.1');
+          NODE
+          node /tmp/sound/server.mjs >/tmp/sound/server.log 2>&1 &
+          sleep 1
+      - name: Validate sound UI persistence and move hook
+        shell: bash
+        run: |
+          cat > /tmp/sound/test.mjs <<'NODE'
+          import{chromium,firefox,webkit}from'playwright';
+          const cases=[['iPhoneWebKit',webkit,{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'}],['Firefox',firefox,{}],['FireSilk',chromium,{userAgent:'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/537.36 Silk/132.3 like Chrome Safari/537.36'}]];
+          for(const[name,type,ctxOpts]of cases){const b=await type.launch({headless:true});const p=await b.newPage(ctxOpts);const errors=[];p.on('pageerror',e=>errors.push(String(e)));await p.goto('http://127.0.0.1:4174/shogi-v21528/index.html?'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT?.characters===26,{timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_PIECE_SOUND?.audit?.().buttons===2,{timeout:15000});let a=await p.evaluate(()=>({audit:window.AI_SHOGI_PIECE_SOUND.audit(),texts:[...document.querySelectorAll('[data-piece-sound-toggle="1"]')].map(x=>x.textContent),coi:crossOriginIsolated}));if(a.audit.buttons!==2||!a.texts.every(x=>/駒音 (ON|OFF)/.test(x)))throw Error(name+' buttons '+JSON.stringify(a));await p.click('#pieceSoundBtn');a=await p.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND.enabled,stored:localStorage.getItem('aiShogiPieceSound21529'),play:window.AI_SHOGI_PIECE_SOUND.play()}));if(a.enabled||a.stored!=='0'||a.play!==false)throw Error(name+' off '+JSON.stringify(a));await p.reload({waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_PIECE_SOUND?.audit?.().buttons===2,{timeout:120000});a=await p.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND.enabled,stored:localStorage.getItem('aiShogiPieceSound21529')}));if(a.enabled||a.stored!=='0')throw Error(name+' persist off '+JSON.stringify(a));await p.click('#pieceSoundBtn');await p.waitForTimeout(80);a=await p.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND.enabled,stored:localStorage.getItem('aiShogiPieceSound21529'),play:window.AI_SHOGI_PIECE_SOUND.play(),ctx:window.AI_SHOGI_PIECE_SOUND.audit().context}));if(!a.enabled||a.stored!=='1'||!a.play||a.ctx==='none')throw Error(name+' on '+JSON.stringify(a));const before=await p.locator('#moves').textContent();await p.locator('#board .sq').nth(56).click();await p.locator('#board .sq').nth(47).click();await p.waitForTimeout(50);const after=await p.locator('#moves').textContent();if(after===before||!/1\./.test(after||''))throw Error(name+' move not recorded '+after);const final=await p.evaluate(()=>({sound:window.AI_SHOGI_PIECE_SOUND.audit(),audit:window.AI_SHOGI_WEB_AUDIT,runtime:window.AI_SHOGI_WEB_AUDIT?.runtimeErrors||[]}));if(errors.length||final.runtime.length)throw Error(name+' runtime '+JSON.stringify({errors,final}));console.log('SOUND_PASS '+JSON.stringify({name,context:final.sound.context,buttons:final.sound.buttons,move:(after||'').trim().slice(0,80)}));await b.close()}
+          NODE
+          cd /tmp/sound && node test.mjs 2>&1 | tee /tmp/sound/result.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Piece sound release validation'; echo '```text'; grep -E '^(SOUND_PASS|Error:)' /tmp/sound/result.log || true; echo '```'; } >/tmp/sound/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/sound/report.md
