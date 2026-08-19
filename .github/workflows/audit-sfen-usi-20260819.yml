@@ -1,0 +1,38 @@
+name: Audit Future SFEN and USI integrity
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/scripts/audit-sfen-usi-20260819.mjs'
+      - '.github/workflows/audit-sfen-usi-20260819.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Verify SFEN serialization and USI token format
+        shell: bash
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-sfen-usi-20260819.mjs 2>&1 | tee /tmp/sfen-usi.log
+          grep -F 'PASS_SFEN_USI ' /tmp/sfen-usi.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Future SFEN / USI integrity audit'; echo '```text'; grep -E '^(PASS_SFEN_USI|Error:|FAIL)' /tmp/sfen-usi.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
