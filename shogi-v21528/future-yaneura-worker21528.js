@@ -108,7 +108,7 @@ function collectCandidates(token){
 }
 async function runSearch(sfen,{ms=6000,nodes=0,multiPV=1,searchmoves=[]}={}){
   await init();
-  const mp=Math.max(1,Math.min(5,Math.round(Number(multiPV)||1));
+  const mp=Math.max(1,Math.min(5,Math.round(Number(multiPV)||1)));
   const nodeLimit=Math.max(0,Math.round(Number(nodes)||0));
   const sm=Array.isArray(searchmoves)?searchmoves.map(x=>String(x||'').trim()).filter(Boolean).slice(0,8):[];
   latestInfo={};latestMultiPV={};
