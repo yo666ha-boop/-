@@ -1,0 +1,37 @@
+name: Audit main desktop baseline
+on:
+  pull_request:
+    branches: [future-mobile-rerank20-runtime-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  desktop-main:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fetch main baseline
+        run: |
+          git fetch origin main --depth=1
+          git worktree add /tmp/main-baseline FETCH_HEAD
+      - name: Install Chromium
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Run main desktop baseline
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-main-desktop-baseline-20260819.mjs 2>&1 | tee /tmp/main-desktop.log
+          grep -q '^PASS_MAIN_DESKTOP_BASELINE ' /tmp/main-desktop.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Main true-desktop baseline'; echo '```text'; grep -E '^(MAIN_DESKTOP_BASELINE|PASS_MAIN_DESKTOP_BASELINE|Error:)' /tmp/main-desktop.log || true; echo '```'; } >/tmp/main-desktop-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/main-desktop-report.md
