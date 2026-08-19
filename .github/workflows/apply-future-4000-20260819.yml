@@ -1,0 +1,34 @@
+name: Apply Future 4.0s runtime patch
+on:
+  push:
+    branches: [adopt-future-4000-20260819]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: adopt-future-4000-20260819
+      - name: Patch mobile opening budget to 4.0s
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-side-test/future21520.js')
+          s=p.read_text()
+          old="defaultMs=mobile?(endgame?7000:4500):(endgame?10000:7000)"
+          new="defaultMs=mobile?(endgame?7000:4000):(endgame?10000:7000)"
+          if s.count(old)!=1:
+              raise SystemExit(f'expected exactly one target, found {s.count(old)}')
+          p.write_text(s.replace(old,new))
+          PY
+          rm .github/workflows/apply-future-4000-20260819.yml
+      - name: Commit runtime-only change
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-side-test/future21520.js .github/workflows/apply-future-4000-20260819.yml
+          git commit -m "Use 4.0s mobile opening search for Future Mitsuki"
+          git push origin HEAD:adopt-future-4000-20260819
