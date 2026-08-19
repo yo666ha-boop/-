@@ -1,0 +1,65 @@
+name: Probe quiet V9.70 search output
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-quiet-search-v970-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare quiet worker
+        shell: bash
+        run: |
+          mkdir -p shogi-v21528/quiet
+          ln -s ../yaneuraou shogi-v21528/quiet/yaneuraou
+          cp shogi-v21528/future-yaneura-worker21528.js shogi-v21528/quiet/future-worker.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-v21528/quiet/future-worker.js');s=p.read_text()
+          old="""    stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');
+    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+(MOBILE_WEBKIT?' / iPhone省メモリ':FIRE_SILK?' / Fire Silk省メモリ':''));"""
+          new="""    stage('⑤-4f MultiPV設定開始');await sendUSI('setoption name MultiPV value 1');stage('⑤-4f MultiPV設定完了');
+    stage('⑤-4g PV出力抑制設定開始');await sendUSI('setoption name PvInterval value 100000000');await sendUSI('setoption name OutputFailLHPV value false');stage('⑤-4g PV出力抑制設定完了');
+    stage('⑤-4 設定 Threads='+ENGINE_THREADS+' / Hash='+ENGINE_HASH_MB+' / QuietPV=1'+(MOBILE_WEBKIT?' / iPhone省メモリ':FIRE_SILK?' / Fire Silk省メモリ':''));"""
+          if old not in s:raise SystemExit('marker missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Install WebKit
+        run: |
+          mkdir -p /tmp/qprobe && cd /tmp/qprobe
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start server
+        run: |
+          cat > /tmp/qprobe/server.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd();const mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((req,res)=>{let u=decodeURIComponent(req.url.split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';let f=path.join(root,u);try{f=fs.realpathSync(f)}catch{}if(!f.startsWith(root)||!fs.existsSync(f)){res.writeHead(404);return res.end('404')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(res)}).listen(4184,'127.0.0.1');
+          NODE
+          node /tmp/qprobe/server.mjs >/tmp/qprobe/server.log 2>&1 & sleep 1
+      - name: Compare 4.5 second weak positions
+        shell: bash
+        run: |
+          cat > /tmp/qprobe/run.mjs <<'NODE'
+          import{webkit}from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',M=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+`.split(/\s+/);
+          function S(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,p=false;for(const c of row){if(c==='+'){p=true;continue}if(/\d/.test(c)){f-=+c;continue}const s=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{s,k:c.toUpperCase(),p});p=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{s:t,k,p:false})}else{const a=m.slice(0,2),d=m.slice(2,4),q=b.get(a),cap=b.get(d);if(!q)throw Error(m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...q,p:q.p||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.p?'+':'')+(q.s==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const s of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[s][k]||0;if(n>0)hand+=(n>1?n:'')+(s==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const ps=[{ply:19,ref:'4h5i'},{ply:23,ref:'5g5f'},{ply:33,ref:'3g3f'},{ply:35,ref:'4i3h'}].map(x=>({...x,sfen:S(M.slice(0,x.ply-1))}));const vars=[{name:'baseline',url:'./future-yaneura-worker21528.js?v=b'},{name:'quiet',url:'./quiet/future-worker.js?v=q'}];const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});await p.goto('http://127.0.0.1:4184/shogi-v21528/index.html',{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const rows=[];
+          async function start(url){await p.evaluate(async url=>{if(window.__qw)window.__qw.terminate();const w=new Worker(url+'&x='+Math.random());let id=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const mid=++id,t=setTimeout(()=>j(Error(type+' timeout')),120000);P.set(mid,{r,j,t});w.postMessage({type,id:mid,...x})});window.__qw={w,call};await call('init')},url)}
+          for(const v of vars)for(let rep=1;rep<=3;rep++){await start(v.url);for(const pos of ps){const t=Date.now(),r=await p.evaluate(pos=>window.__qw.call('bestmove',{sfen:pos.sfen,ms:4500,multiPV:1}),pos),elapsed=Date.now()-t,row={variant:v.name,rep,ply:pos.ply,ref:pos.ref,token:r.token,match:r.token===pos.ref,elapsed,cp:r.info?.cp,depth:r.info?.depth,nodes:r.info?.nodes};rows.push(row);console.log('QUIET_ROW '+JSON.stringify(row))}}
+          for(const v of vars){const a=rows.filter(x=>x.variant===v.name);console.log('QUIET_SUMMARY '+JSON.stringify({variant:v.name,tests:a.length,matches:a.filter(x=>x.match).length,meanElapsed:Math.round(a.reduce((z,x)=>z+x.elapsed,0)/a.length),meanDepth:+(a.reduce((z,x)=>z+(x.depth||0),0)/a.length).toFixed(2),meanNodes:Math.round(a.reduce((z,x)=>z+(x.nodes||0),0)/a.length)}))}await p.evaluate(()=>window.__qw?.w.terminate());await b.close();
+          NODE
+          cd /tmp/qprobe && node run.mjs 2>&1 | tee /tmp/qprobe/result.log
+          grep -F 'QUIET_SUMMARY ' /tmp/qprobe/result.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Quiet PV search probe'; echo '```text'; grep -E '^(QUIET_ROW|QUIET_SUMMARY)' /tmp/qprobe/result.log || true; echo '```'; } >/tmp/qprobe/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/qprobe/report.md
