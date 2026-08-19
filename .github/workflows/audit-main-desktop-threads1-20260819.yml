@@ -1,0 +1,37 @@
+name: Audit main desktop Threads1
+on:
+  pull_request:
+    branches: [future-mobile-rerank20-runtime-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  desktop-threads1:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fetch main baseline
+        run: |
+          git fetch origin main --depth=1
+          git worktree add /tmp/main-threads1 FETCH_HEAD
+      - name: Install Chromium
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Compare main with Threads1
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-main-desktop-threads1-20260819.mjs 2>&1 | tee /tmp/main-t1.log
+          grep -q '^PASS_MAIN_DESKTOP_THREADS1 ' /tmp/main-t1.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Main desktop Threads=1 diagnostic'; echo '```text'; grep -E '^(MAIN_DESKTOP_THREADS1|PASS_MAIN_DESKTOP_THREADS1|Error:)' /tmp/main-t1.log || true; echo '```'; } >/tmp/main-t1-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/main-t1-report.md
