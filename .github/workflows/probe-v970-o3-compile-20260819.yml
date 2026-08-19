@@ -1,0 +1,103 @@
+name: Exact V9.70 compile-time O3 A-B
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  o3:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu
+      - name: Apply proven browser fixes and O3-only compile change
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fsSL 'https://raw.githubusercontent.com/yo666ha-boop/-/future-mitsuki-v970-browser-fix/.github/workflows/diag-yaneuraou-v970-threadfix.yml' -o /tmp/threadfix.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          yml=Path('/tmp/threadfix.yml').read_text()
+          key="python3 - <<'PY'"
+          if key not in yml: raise SystemExit('threadfix block not found')
+          block=yml.split(key,1)[1]
+          end='\n          PY'
+          if end not in block: raise SystemExit('threadfix end not found')
+          Path('/tmp/threadfix.py').write_text(textwrap.dedent(block.split(end,1)[0].lstrip('\n')))
+          PY
+          python3 /tmp/threadfix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu/source/eval/nnue/evaluate_nnue.cpp');s=p.read_text()
+          needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
+          repl=needle+'''#if defined(__EMSCRIPTEN__)\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n'''
+          if needle not in s: raise SystemExit('EvalDir marker missing')
+          if 'Options.add("EvalFile"' in s: raise SystemExit('EvalFile already present')
+          p.write_text(s.replace(needle,repl,1))
+          m=Path('YaneuraOu/source/Makefile');s=m.read_text()
+          needle2='\tCPPFLAGS += -O2\n'
+          if s.count(needle2)!=1: raise SystemExit('expected one em++ O2, got '+str(s.count(needle2)))
+          m.write_text(s.replace(needle2,'\tCPPFLAGS += -O3\n',1))
+          PY
+          grep -n -A2 -B2 'findstring em++' YaneuraOu/source/Makefile
+          grep -F 'wasmNativeStarted' YaneuraOu/source/thread.cpp
+          grep -F 'Options.add("EvalFile"' YaneuraOu/source/eval/nnue/evaluate_nnue.cpp
+      - name: Build exact O3 V9.70 WASM
+        shell: bash
+        run: |
+          set -euxo pipefail
+          docker pull emscripten/emsdk:3.1.43
+          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src/source emscripten/emsdk:3.1.43 \
+            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160'
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          node - <<'NODE'
+          const fs=require('fs');const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);if(!ex.includes('usi_command'))throw Error('usi_command missing');console.log('O3_WASM_SIZE',fs.statSync(p).size,'USI_EXPORT',ex.includes('usi_command'));
+          NODE
+      - name: Prepare identical baseline and O3 sites
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT=/tmp/o3site; mkdir -p "$ROOT/baseline/yaneuraou" "$ROOT/o3/yaneuraou"
+          cp shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/baseline/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/baseline/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/baseline/worker.js"
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} "$ROOT/o3/yaneuraou/"
+          cp shogi-v21528/yaneuraou/nn.bin "$ROOT/o3/yaneuraou/"
+          cp shogi-v21528/future-yaneura-worker21528.js "$ROOT/o3/worker.js"
+          cat > "$ROOT/index.html" <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>O3 A/B</title><body>O3 A/B</body>
+          HTML
+          cat > "$ROOT/server.mjs" <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=path.resolve('/tmp/o3site'),mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=new URL(q.url,'http://x').pathname;if(n==='/')n='/index.html';let f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}for(const[k,v]of Object.entries({'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp','Cross-Origin-Resource-Policy':'same-origin','Cache-Control':'no-store'}))s.setHeader(k,v);s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4186,'127.0.0.1');
+          NODE
+      - name: Run same-time weak-position A-B
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/o3run && cd /tmp/o3run
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          node /tmp/o3site/server.mjs >/tmp/o3server.log 2>&1 &
+          sleep 1
+          cp "$GITHUB_WORKSPACE/.github/scripts/v970-o3-weak-ab-20260819.mjs" ./probe.mjs
+          node probe.mjs 2>&1 | tee /tmp/o3result.log
+          grep -F 'O3_SUMMARY ' /tmp/o3result.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Exact V9.70 compile-time O3 A/B'; echo '```text'; grep -E '^(O3_WASM_SIZE|O3_ENV|O3_ROW|O3_SUMMARY)' /tmp/o3result.log 2>/dev/null || true; echo '```'; } >/tmp/o3report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/o3report.md
