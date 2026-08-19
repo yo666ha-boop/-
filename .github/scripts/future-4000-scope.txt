@@ -1,0 +1,1 @@
+Scope guard: do not change engine binary/eval, Threads=1, Hash=32, mobile endgame=7000ms, desktop budgets, prewarm, sound, images, or existing 25 characters in this candidate.
