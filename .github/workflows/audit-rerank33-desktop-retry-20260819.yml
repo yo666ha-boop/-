@@ -1,0 +1,33 @@
+name: Audit rerank33 desktop retry
+on:
+  pull_request:
+    branches: [future-mobile-rerank20-runtime-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  desktop:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Chromium
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Verify true desktop profile
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-rerank33-desktop-retry-20260819.mjs 2>&1 | tee /tmp/desktop-retry.log
+          grep -q '^PASS_DESKTOP_RERANK20_RETRY ' /tmp/desktop-retry.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### PR33 true desktop retry'; echo '```text'; grep -E '^(PASS_DESKTOP_RERANK20_RETRY|Error:|FAIL)' /tmp/desktop-retry.log || true; echo '```'; } >/tmp/desktop-retry-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/desktop-retry-report.md
