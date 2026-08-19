@@ -29,6 +29,7 @@ const ADAPTIVE_MS=4000;
 const ADAPTIVE_STAGE1_NODES=1000000;
 const ADAPTIVE_RERANK_NODES=1500000;
 const ADAPTIVE_GAP_CP=20;
+const ADAPTIVE_MIN_MOVE=12;
 let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};
 const stage=text=>self.postMessage({type:'stage',text});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -105,6 +106,10 @@ function collectCandidates(token){
   if(!candidates.some(x=>x.rank===1)&&token)candidates.unshift({rank:1,token,...latestInfo});
   return candidates;
 }
+function sfenMoveNumber(sfen){
+  const m=/\s(\d+)\s*$/.exec(String(sfen||''));
+  return m?Math.max(1,Number(m[1])||1):1;
+}
 async function runSearch(sfen,{ms=6000,nodes=0,multiPV=1,searchmoves=[]}={}){
   await init();
   const mp=Math.max(1,Math.min(5,Math.round(Number(multiPV)||1)));
@@ -125,7 +130,8 @@ async function runSearch(sfen,{ms=6000,nodes=0,multiPV=1,searchmoves=[]}={}){
 async function bestmove(sfen,ms,multiPV=1,nodes=0,searchmoves=[],adaptive=true){
   const nodeLimit=Math.max(0,Math.round(Number(nodes)||0));
   const sm=Array.isArray(searchmoves)?searchmoves.map(x=>String(x||'').trim()).filter(Boolean):[];
-  const useAdaptive=adaptive!==false&&MOBILE_SAFE&&Number(ms)===ADAPTIVE_MS&&Number(multiPV||1)===1&&nodeLimit===0&&sm.length===0;
+  const moveNumber=sfenMoveNumber(sfen);
+  const useAdaptive=adaptive!==false&&MOBILE_SAFE&&moveNumber>=ADAPTIVE_MIN_MOVE&&Number(ms)===ADAPTIVE_MS&&Number(multiPV||1)===1&&nodeLimit===0&&sm.length===0;
   if(!useAdaptive)return runSearch(sfen,{ms,nodes:nodeLimit,multiPV,searchmoves:sm});
   stage('⑥-1 候補5手を高速比較中');
   const first=await runSearch(sfen,{nodes:ADAPTIVE_STAGE1_NODES,multiPV:5});
@@ -136,9 +142,9 @@ async function bestmove(sfen,ms,multiPV=1,nodes=0,searchmoves=[],adaptive=true){
   if(gap<=ADAPTIVE_GAP_CP&&tokens.length>=2){
     stage('⑥-2 候補拮抗 '+gap+'cp / 上位候補を再評価中');
     const second=await runSearch(sfen,{nodes:ADAPTIVE_RERANK_NODES,multiPV:1,searchmoves:tokens});
-    return{...second,info:{...second.info,adaptive:true,reranked:true,gapCp:gap,stage1Token:first.token,stage1Candidates:first.info?.candidates||[],stage1Nodes:ADAPTIVE_STAGE1_NODES,rerankNodes:ADAPTIVE_RERANK_NODES,totalTargetNodes:ADAPTIVE_STAGE1_NODES+ADAPTIVE_RERANK_NODES}};
+    return{...second,info:{...second.info,adaptive:true,reranked:true,gapCp:gap,moveNumber,stage1Token:first.token,stage1Candidates:first.info?.candidates||[],stage1Nodes:ADAPTIVE_STAGE1_NODES,rerankNodes:ADAPTIVE_RERANK_NODES,totalTargetNodes:ADAPTIVE_STAGE1_NODES+ADAPTIVE_RERANK_NODES}};
   }
-  return{...first,info:{...first.info,adaptive:true,reranked:false,gapCp:gap,stage1Token:first.token,stage1Candidates:first.info?.candidates||[],stage1Nodes:ADAPTIVE_STAGE1_NODES,rerankNodes:0,totalTargetNodes:ADAPTIVE_STAGE1_NODES}};
+  return{...first,info:{...first.info,adaptive:true,reranked:false,gapCp:gap,moveNumber,stage1Token:first.token,stage1Candidates:first.info?.candidates||[],stage1Nodes:ADAPTIVE_STAGE1_NODES,rerankNodes:0,totalTargetNodes:ADAPTIVE_STAGE1_NODES}};
 }
 self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
