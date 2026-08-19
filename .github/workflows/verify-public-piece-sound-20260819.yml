@@ -1,0 +1,40 @@
+name: Verify public piece sound deployment
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-public-piece-sound-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Playwright
+        run: |
+          mkdir -p /tmp/pub-sound && cd /tmp/pub-sound
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium firefox webkit >/dev/null
+      - name: Verify public site
+        shell: bash
+        run: |
+          cat > /tmp/pub-sound/test.mjs <<'NODE'
+          import{chromium,firefox,webkit}from'playwright';
+          const url='https://yo666ha-boop.github.io/-/shogi-v21528/';
+          const cases=[['iPhoneWebKit',webkit,{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'}],['Firefox',firefox,{}],['FireSilk',chromium,{userAgent:'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/537.36 Silk/132.3 like Chrome Safari/537.36'}]];
+          async function waitDeploy(){for(let i=1;i<=12;i++){const b=await webkit.launch({headless:true});const p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});let ok=false,ver='';try{await p.goto(url+'?deploy='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT?.characters===26,{timeout:60000});ok=await p.evaluate(()=>!!window.AI_SHOGI_PIECE_SOUND);ver=await p.evaluate(()=>window.AI_SHOGI_PIECE_SOUND?.version||'')}catch(e){}await b.close();console.log('DEPLOY_CHECK '+JSON.stringify({attempt:i,ok,ver}));if(ok)return;await new Promise(r=>setTimeout(r,15000))}throw Error('public sound deployment not visible')}
+          await waitDeploy();
+          for(const[name,type,ctxOpts]of cases){const b=await type.launch({headless:true});const p=await b.newPage(ctxOpts);const errors=[];p.on('pageerror',e=>errors.push(String(e)));await p.goto(url+'?verify='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_WEB_AUDIT?.characters===26,{timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_PIECE_SOUND?.audit?.().buttons===2,{timeout:60000});let a=await p.evaluate(()=>({sound:window.AI_SHOGI_PIECE_SOUND.audit(),ver:window.AI_SHOGI_PIECE_SOUND.version,coi:crossOriginIsolated,texts:[...document.querySelectorAll('[data-piece-sound-toggle="1"]')].map(x=>x.textContent)}));if(a.ver!=='21529a'||a.sound.buttons!==2)throw Error(name+' sound audit '+JSON.stringify(a));await p.click('#pieceSoundBtn');let off=await p.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND.enabled,stored:localStorage.getItem('aiShogiPieceSound21529')}));if(off.enabled||off.stored!=='0')throw Error(name+' off '+JSON.stringify(off));await p.reload({waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_PIECE_SOUND?.audit?.().buttons===2,{timeout:120000});off=await p.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND.enabled,stored:localStorage.getItem('aiShogiPieceSound21529')}));if(off.enabled||off.stored!=='0')throw Error(name+' persist '+JSON.stringify(off));await p.click('#pieceSoundBtn');await p.waitForTimeout(80);const on=await p.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND.enabled,stored:localStorage.getItem('aiShogiPieceSound21529'),play:window.AI_SHOGI_PIECE_SOUND.play(),ctx:window.AI_SHOGI_PIECE_SOUND.audit().context}));if(!on.enabled||on.stored!=='1'||!on.play||on.ctx==='none')throw Error(name+' on '+JSON.stringify(on));const before=await p.locator('#moves').textContent();await p.locator('#board .sq').nth(56).click();await p.locator('#board .sq').nth(47).click();await p.waitForTimeout(100);const after=await p.locator('#moves').textContent();if(after===before||!/1\./.test(after||''))throw Error(name+' move '+after);if(errors.length)throw Error(name+' pageerrors '+JSON.stringify(errors));console.log('PUBLIC_SOUND_PASS '+JSON.stringify({name,version:a.ver,coi:a.coi,context:on.ctx,buttons:a.sound.buttons,move:(after||'').trim().slice(0,80)}));await b.close()}
+          NODE
+          cd /tmp/pub-sound && node test.mjs 2>&1 | tee /tmp/pub-sound/result.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Public piece sound verification'; echo '```text'; grep -E '^(DEPLOY_CHECK|PUBLIC_SOUND_PASS|Error:)' /tmp/pub-sound/result.log || true; echo '```'; } >/tmp/pub-sound/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/pub-sound/report.md
