@@ -12,5 +12,4 @@ try{
  const budgets=[2000000,3000000,4000000,6000000];
  const refs=new Map();
  for(const t of targets){const r=await run(t.pos,8000000,3),top3=(r.candidates||[]).map(x=>x.token),best=(r.candidates||[]).find(x=>x.rank===1)?.token||r.token;refs.set(t.ply,{best,top3});console.log('NODE_REF '+JSON.stringify({ply:t.ply,best,top3,elapsed:r.elapsed,depth:r.info?.depth,nodes:r.info?.nodes,threads:r.info?.threads,hashMB:r.info?.hashMB,mobileWebKit:r.info?.mobileWebKit}));for(const nodes of budgets){for(let rep=1;rep<=2;rep++){const x=await run(t.pos,nodes,1),z={ply:t.ply,nodes,rep,token:x.token,best,exact:x.token===best,top3:top3.includes(x.token),elapsed:x.elapsed,depth:x.info?.depth,seenNodes:x.info?.nodes,cp:x.info?.cp};console.log('NODE_ROW '+JSON.stringify(z))}}}
- }
 }finally{await browser.close()}
