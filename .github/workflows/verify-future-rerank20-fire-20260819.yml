@@ -1,0 +1,40 @@
+name: Verify Future rerank20 Fire regression
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  fire:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-fire-candidate.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4203,'127.0.0.1');
+          NODE
+          node /tmp/coi-fire-candidate.mjs >/tmp/coi-fire-candidate.log 2>&1 &
+          sleep 1
+      - name: Run Fire candidate regression
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-future-rerank20-fire-20260819.mjs 2>&1 | tee /tmp/fire-candidate.log
+          grep -q '^PASS_FIRE_RERANK20 ' /tmp/fire-candidate.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Future rerank20 Fire regression'; echo '```text'; grep -E '^(FIRE_CANDIDATE|PASS_FIRE_RERANK20)' /tmp/fire-candidate.log || true; echo '```'; } >/tmp/fire-candidate-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/fire-candidate-report.md
