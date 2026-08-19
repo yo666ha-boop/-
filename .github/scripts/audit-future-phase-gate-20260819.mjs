@@ -3,8 +3,10 @@ import { webkit } from 'playwright';
 const R='abcdefghi';
 const INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
 const GAME=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h`.split(/\s+/);
-const PLIES=[];for(let p=5;p<=35;p+=2)PLIES.push(p);
-const THRESHOLDS=[5,9,13,17,19,21,25,29];
+// Actual app orientation is user=Sente / Future=Gote, so audit positions where Gote is to move.
+// Move 2 is already covered exhaustively by the all-30 first-reply audit; start at move 4 here.
+const PLIES=[];for(let p=4;p<=34;p+=2)PLIES.push(p);
+const THRESHOLDS=[4,8,12,16,18,20,24,28];
 
 function sfen(ms){
   const b=new Map(),h={b:{},w:{}};let rr=0;
@@ -17,6 +19,7 @@ function sfen(ms){
 }
 
 const cases=PLIES.map(ply=>({ply,pos:sfen(GAME.slice(0,ply-1))}));
+for(const c of cases){const side=c.pos.split(/\s+/)[1];if(side!=='w')throw Error('orientation regression ply '+c.ply+' side='+side+' '+c.pos)}
 const browser=await webkit.launch({headless:true});
 try{
   const page=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});
@@ -34,16 +37,16 @@ try{
     const ref=await run(c.pos,{ms:4000,nodes:6000000,multiPV:5,adaptive:false});
     const refCandidates=(ref.candidates||[]).map(x=>({rank:x.rank,token:x.token,cp:x.cp,depth:x.depth,nodes:x.nodes}));
     const refBest=refCandidates.find(x=>x.rank===1)?.token||ref.token,refSet=new Set(refCandidates.map(x=>x.token));
-    console.log('PHASE_REF '+JSON.stringify({ply:c.ply,best:refBest,candidates:refCandidates,elapsed:ref.elapsed}));
+    console.log('PHASE_REF '+JSON.stringify({orientation:'future-gote',ply:c.ply,best:refBest,candidates:refCandidates,elapsed:ref.elapsed}));
     for(let rep=1;rep<=2;rep++){
       const candidate=await run(c.pos,{ms:4000,multiPV:1});
       const baseline=await run(c.pos,{ms:4000,multiPV:1,adaptive:false});
-      const row={ply:c.ply,rep,refBest,candidate:candidate.token,baseline:baseline.token,candidateExact:candidate.token===refBest,baselineExact:baseline.token===refBest,candidateTop5:refSet.has(candidate.token),baselineTop5:refSet.has(baseline.token),reranked:!!candidate.info?.reranked,gapCp:candidate.info?.gapCp,candidateElapsed:candidate.elapsed,baselineElapsed:baseline.elapsed};
+      const row={orientation:'future-gote',ply:c.ply,rep,refBest,candidate:candidate.token,baseline:baseline.token,candidateExact:candidate.token===refBest,baselineExact:baseline.token===refBest,candidateTop5:refSet.has(candidate.token),baselineTop5:refSet.has(baseline.token),reranked:!!candidate.info?.reranked,gapCp:candidate.info?.gapCp,candidateElapsed:candidate.elapsed,baselineElapsed:baseline.elapsed};
       rows.push(row);console.log('PHASE_ROW '+JSON.stringify(row));
     }
   }
   const baseline={exact:0,top5:0,elapsed:0};for(const r of rows){baseline.exact+=r.baselineExact?1:0;baseline.top5+=r.baselineTop5?1:0;baseline.elapsed+=r.baselineElapsed}
   const gates={};
   for(const threshold of THRESHOLDS){let exact=0,top5=0,triggers=0,elapsed=0;for(const r of rows){const use=r.ply>=threshold;exact+=(use?r.candidateExact:r.baselineExact)?1:0;top5+=(use?r.candidateTop5:r.baselineTop5)?1:0;triggers+=use&&r.reranked?1:0;elapsed+=use?r.candidateElapsed:r.baselineElapsed}gates[threshold]={exact,top5,triggers,meanElapsed:Math.round(elapsed/rows.length)}}
-  console.log('PHASE_SUMMARY '+JSON.stringify({tests:rows.length,baselineExact:baseline.exact,baselineTop5:baseline.top5,baselineMeanElapsed:Math.round(baseline.elapsed/rows.length),gates}));
+  console.log('PHASE_SUMMARY '+JSON.stringify({orientation:'future-gote',tests:rows.length,baselineExact:baseline.exact,baselineTop5:baseline.top5,baselineMeanElapsed:Math.round(baseline.elapsed/rows.length),gates}));
 }finally{await browser.close()}
