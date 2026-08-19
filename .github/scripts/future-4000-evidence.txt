@@ -1,0 +1,1 @@
+Selection evidence retained from PR23: 4.0s 14/30 exact, 29/30 top3; 4.5s 14/30 exact, 27/30 top3 across all 30 legal first moves from Sente.
