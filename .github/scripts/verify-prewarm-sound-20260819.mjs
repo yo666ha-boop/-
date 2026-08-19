@@ -50,7 +50,7 @@ const afterReady=await page.evaluate(()=>({
 }));
 console.log('PREWARM '+JSON.stringify({prewarmMs,...afterReady}));
 if(!afterReady.engine.ready)throw new Error('prewarm did not reach ready');
-if(afterReady.moves)throw new Error('prewarm made a move before player: '+afterReady.moves);
+if(afterReady.moves&&afterReady.moves!=='まだ棋譜はありません')throw new Error('prewarm made a move before player: '+afterReady.moves);
 
 const soundPlay=await page.evaluate(async()=>{
   const ok=window.AI_SHOGI_PIECE_SOUND.play(1);
