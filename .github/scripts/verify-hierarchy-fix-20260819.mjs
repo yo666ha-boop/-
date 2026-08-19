@@ -1,5 +1,7 @@
 import { chromium } from 'playwright';
-const browser=await chromium.launch({headless:true});
+import fs from 'fs';
+const exe=['/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/usr/bin/chromium-browser'].find(fs.existsSync);if(!exe)throw Error('system Chrome/Chromium not found');
+const browser=await chromium.launch({headless:true,executablePath:exe});
 try{
   const page=await browser.newPage({userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36'});
   await page.goto('http://127.0.0.1:4215/shogi-v21528/index.html?hierfix='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
@@ -25,5 +27,5 @@ try{
   const stale=rows.filter(x=>x.i!==25&&/強さ1位・最強/.test(x.oppRank));if(stale.length)throw Error('stale overall strongest '+JSON.stringify(stale));
   const img=await page.evaluate(()=>({cards:document.querySelectorAll('#chars .ch').length,badImages:[...document.querySelectorAll('#chars .ch img')].filter(i=>!i.complete||i.naturalWidth<1).length,coi:crossOriginIsolated}));
   if(img.cards!==26||img.badImages!==0||!img.coi)throw Error('visual runtime '+JSON.stringify(img));
-  console.log('PASS_HIERARCHY_FIX '+JSON.stringify({rows,img}));
+  console.log('PASS_HIERARCHY_FIX '+JSON.stringify({exe,rows,img}));
 }finally{await browser.close()}
