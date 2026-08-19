@@ -20,3 +20,11 @@ html body #chars [data-future-mitsuki="1"] .chStyle,
 html body #chars [data-future-mitsuki="1"] .futureEngineState{display:none!important}
 html body #oppPortrait img[alt="未来からやってきたみつき"] + .oppFixed,
 html body #foppPortrait img[alt="未来からやってきたみつき"] + .oppFixed{display:none!important}
+
+/* v2.15.28o: iPhone focus mode must never widen beyond the visual viewport. */
+@media(max-width:720px){
+  html body #focus{min-width:0!important;overflow-x:hidden!important}
+  html body #focus>*{min-width:0!important;max-width:100%!important}
+  html body #focus .boardWrap{min-width:0!important;width:100%!important;max-width:100%!important;overflow:hidden!important}
+  html body #focus #fboard{width:min(100%,calc(100dvh - 128px))!important;max-width:100%!important;margin-left:auto!important;margin-right:auto!important}
+}
