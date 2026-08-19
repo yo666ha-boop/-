@@ -27,8 +27,10 @@ jobs:
           node /tmp/coi.mjs >/tmp/coi.log 2>&1 &
           sleep 1
       - name: Verify WebKit and Chromium runtime
+        shell: bash
         run: |
-          cat >/tmp/verify.mjs <<'NODE'
+          set -euo pipefail
+          cat >verify-future-4000.mjs <<'NODE'
           import { webkit, chromium } from 'playwright';
           for (const [name,browserType] of [['webkit',webkit],['chromium',chromium]]) {
             const browser=await browserType.launch({headless:true});
@@ -44,7 +46,9 @@ jobs:
             await browser.close();
           }
           NODE
-          node /tmp/verify.mjs 2>&1 | tee /tmp/verify.log
+          node verify-future-4000.mjs 2>&1 | tee /tmp/verify.log
+          grep -q '^PASS_WEBKIT ' /tmp/verify.log
+          grep -q '^PASS_CHROMIUM ' /tmp/verify.log
       - name: Report
         if: always()
         env:
