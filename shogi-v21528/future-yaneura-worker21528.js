@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528v970d4';
+const BUILD='21528v970d5';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const FIRE_SILK=/\bSilk\//i.test(UA);
