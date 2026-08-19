@@ -1,0 +1,40 @@
+name: Verify hierarchy fix
+on:
+  pull_request:
+    branches: [fix-strength-hierarchy-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  hierarchy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Chromium
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-hierfix.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4215,'127.0.0.1');
+          NODE
+          node /tmp/coi-hierfix.mjs >/tmp/coi-hierfix.log 2>&1 &
+          sleep 1
+      - name: Verify hierarchy labels
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-hierarchy-fix-20260819.mjs 2>&1 | tee /tmp/hierfix.log
+          grep -q '^PASS_HIERARCHY_FIX ' /tmp/hierfix.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Hierarchy correction'; echo '```text'; grep -E '^(PASS_HIERARCHY_FIX|Error:)' /tmp/hierfix.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
