@@ -11,7 +11,7 @@ try{
 }
 const JS='yaneuraou.halfkp.noeval.js';
 const EVAL='nn.bin';
-const BUILD='21528v970d4';
+const BUILD='21528v970d5';
 const UA=String(self.navigator&&self.navigator.userAgent||'');
 const MOBILE_WEBKIT=/iP(?:hone|ad|od)|Mobile.*AppleWebKit/i.test(UA);
 const FIRE_SILK=/\bSilk\//i.test(UA);
@@ -75,7 +75,7 @@ async function init(){
     if(typeof engine.addMessageListener!=='function')throw new Error('YaneuraOu addMessageListener unavailable');
     stage('⑤-2 Worker内 Wasm本体起動完了');
     stage('⑤-3 水匠5 64MB取得中');
-    const r=await fetch(BASE+EVAL+'?v='+BUILD,{cache:'no-store'});if(!r.ok)throw new Error('nn.bin '+r.status);
+    const r=await fetch(BASE+EVAL+'?v='+BUILD,{cache:'force-cache'});if(!r.ok)throw new Error('nn.bin '+r.status);
     const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.byteLength<10000000)throw new Error('nn.bin too small '+bytes.byteLength);
     stage('⑤-3 水匠5 '+Math.round(bytes.byteLength/1024/1024)+'MB 読込完了');
     try{engine.FS.unlink('/'+EVAL)}catch(e){}
