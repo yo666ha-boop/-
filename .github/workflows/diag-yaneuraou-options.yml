@@ -13,6 +13,10 @@ jobs:
     timeout-minutes: 16
     steps:
       - uses: actions/checkout@v4
+      - name: Mark probe start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment 16 --body 'QUIET_PROBE_START'
       - name: Prepare quiet worker
         shell: bash
         run: |
