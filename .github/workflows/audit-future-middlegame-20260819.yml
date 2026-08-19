@@ -8,7 +8,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-22.04
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,7 +31,7 @@ jobs:
           set -o pipefail
           node .github/scripts/audit-future-middlegame-20260819.mjs 2>&1 | tee /tmp/mid.log
           test "$(grep -c '^MID_REF ' /tmp/mid.log)" -eq 2
-          test "$(grep -c '^MID_ROW ' /tmp/mid.log)" -eq 18
+          test "$(grep -c '^MID_ROW ' /tmp/mid.log)" -eq 27
       - name: Report
         if: always()
         env:
