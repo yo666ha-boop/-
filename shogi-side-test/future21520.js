@@ -54,6 +54,22 @@
     try{if(ci===FUTURE_INDEX){const s=document.getElementById('status');if(s)s.textContent='未来みつき ENGINE：'+text}}catch(e){}
   }
 
+  /* 駒音: 外部音源なしで木駒の短い打音をWeb Audio生成。設定はlocalStorageに保存。 */
+  const PIECE_SOUND_KEY='aiShogiPieceSound21529';
+  let pieceSoundEnabled=true,pieceAudioCtx=null;
+  try{pieceSoundEnabled=localStorage.getItem(PIECE_SOUND_KEY)!=='0'}catch(e){}
+  function getPieceAudio(){if(!pieceSoundEnabled)return null;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;try{if(!pieceAudioCtx||pieceAudioCtx.state==='closed')pieceAudioCtx=new AC();if(pieceAudioCtx.state==='suspended')pieceAudioCtx.resume().catch(()=>{});return pieceAudioCtx}catch(e){return null}}
+  function playPieceSound(level=1){if(!pieceSoundEnabled)return false;const ac=getPieceAudio();if(!ac)return false;try{const t=ac.currentTime+.002,master=ac.createGain();master.gain.setValueAtTime(.24*Math.max(.5,Math.min(1.25,level)),t);master.gain.exponentialRampToValueAtTime(.0001,t+.065);master.connect(ac.destination);const osc=ac.createOscillator(),og=ac.createGain();osc.type='triangle';osc.frequency.setValueAtTime(760,t);osc.frequency.exponentialRampToValueAtTime(330,t+.042);og.gain.setValueAtTime(.44,t);og.gain.exponentialRampToValueAtTime(.0001,t+.05);osc.connect(og);og.connect(master);osc.start(t);osc.stop(t+.052);const n=Math.max(64,Math.floor(ac.sampleRate*.028)),buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.4);const src=ac.createBufferSource(),f=ac.createBiquadFilter(),ng=ac.createGain();f.type='bandpass';f.frequency.value=1450;f.Q.value=.75;ng.gain.setValueAtTime(.62,t);ng.gain.exponentialRampToValueAtTime(.0001,t+.035);src.buffer=buf;src.connect(f);f.connect(ng);ng.connect(master);src.start(t);src.stop(t+.036);return true}catch(e){return false}}
+  function unlockPieceSound(){if(pieceSoundEnabled)getPieceAudio()}
+  function updatePieceSoundButtons(){document.querySelectorAll('[data-piece-sound-toggle="1"]').forEach(b=>{b.textContent='駒音 '+(pieceSoundEnabled?'ON':'OFF');b.setAttribute('aria-pressed',pieceSoundEnabled?'true':'false');b.title='駒を指したときの音を'+(pieceSoundEnabled?'消す':'鳴らす')})}
+  function setPieceSound(v,preview=false){pieceSoundEnabled=!!v;try{localStorage.setItem(PIECE_SOUND_KEY,pieceSoundEnabled?'1':'0')}catch(e){}updatePieceSoundButtons();if(pieceSoundEnabled){unlockPieceSound();if(preview)setTimeout(()=>playPieceSound(1.05),0)}return pieceSoundEnabled}
+  function makePieceSoundButton(id){const b=document.createElement('button');b.className='btn';b.id=id;b.dataset.pieceSoundToggle='1';b.type='button';b.onclick=e=>{e.preventDefault();e.stopPropagation();setPieceSound(!pieceSoundEnabled,true)};return b}
+  function installPieceSoundUI(){const c=document.querySelector('.controls');if(c&&!document.getElementById('pieceSoundBtn'))c.appendChild(makePieceSoundButton('pieceSoundBtn'));const f=document.getElementById('fundoBtn')?.parentElement;if(f&&!document.getElementById('fpieceSoundBtn'))f.appendChild(makePieceSoundButton('fpieceSoundBtn'));updatePieceSoundButtons()}
+  document.addEventListener('pointerdown',unlockPieceSound,{capture:true,passive:true});
+  const pushPieceSoundBase=push;push=function(m,mark){const before=st&&st.log?st.log.length:0,r=pushPieceSoundBase(m,mark),after=st&&st.log?st.log.length:0;if(after>before)playPieceSound();return r};
+  installPieceSoundUI();
+  window.AI_SHOGI_PIECE_SOUND={version:'21529a',play:playPieceSound,setEnabled:setPieceSound,get enabled(){return pieceSoundEnabled},audit:()=>({enabled:pieceSoundEnabled,context:pieceAudioCtx?pieceAudioCtx.state:'none',buttons:document.querySelectorAll('[data-piece-sound-toggle="1"]').length})};
+
   function sfenPiece(p){if(!p)return'';const k=p.k||'',prom=k[0]==='+',base=prom?k.slice(1):k;const ch=p.o===S?base:base.toLowerCase();return(prom?'+':'')+ch}
   function handSfen(s){const order=['R','B','G','S','N','L','P'];let out='';for(const side of[S,G])for(const k of order){const n=s.h?.[side]?.[k]||0;if(!n)continue;const ch=side===S?k:k.toLowerCase();out+=(n>1?String(n):'')+ch}return out||'-'}
   function toSFEN(s){const rows=[];for(let y=0;y<9;y++){let row='',empty=0;for(let x=0;x<9;x++){const p=s.b[idx(x,y)];if(!p){empty++;continue}if(empty){row+=empty;empty=0}row+=sfenPiece(p)}if(empty)row+=empty;rows.push(row)}return rows.join('/')+' '+(s.t===S?'b':'w')+' '+handSfen(s)+' '+Math.max(1,(s.log?.length||0)+1)}
