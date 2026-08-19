@@ -1,0 +1,47 @@
+name: Audit Future runtime conditional rerank
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-runtime.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4202,'127.0.0.1');
+          NODE
+          node /tmp/coi-runtime.mjs >/tmp/coi-runtime.log 2>&1 &
+          sleep 1
+      - name: Run runtime rerank audit
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-future-runtime-rerank-20260819.mjs 2>&1 | tee /tmp/runtime-rerank.log
+          test "$(grep -c '^RUNTIME_REF ' /tmp/runtime-rerank.log)" -eq 8
+          test "$(grep -c '^RUNTIME_ROW ' /tmp/runtime-rerank.log)" -eq 16
+          test "$(grep -c '^RUNTIME_SUMMARY ' /tmp/runtime-rerank.log)" -eq 1
+          test "$(grep -c '^FIRE_ROW ' /tmp/runtime-rerank.log)" -eq 2
+          grep -q '"policy":"mobile-conditional-rerank-v1"' /tmp/runtime-rerank.log
+          grep -q '"threads":1' /tmp/runtime-rerank.log
+          grep -q '"hashMB":32' /tmp/runtime-rerank.log
+          grep -q '"hashMB":48' /tmp/runtime-rerank.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Future runtime conditional rerank audit'; echo '```text'; grep -E '^(RUNTIME_REF|RUNTIME_ROW|RUNTIME_SUMMARY|FIRE_ROW)' /tmp/runtime-rerank.log || true; echo '```'; } >/tmp/runtime-rerank-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/runtime-rerank-report.md
