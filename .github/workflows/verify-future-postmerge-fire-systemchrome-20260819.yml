@@ -1,0 +1,40 @@
+name: Verify Future post-merge Fire system Chrome
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  fire-fast:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright library
+        run: |
+          google-chrome --version || google-chrome-stable --version
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-firefast.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4216,'127.0.0.1');
+          NODE
+          node /tmp/coi-firefast.mjs >/tmp/coi-firefast.log 2>&1 &
+          sleep 1
+      - name: Verify merged Fire runtime
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-future-postmerge-fire-systemchrome-20260819.mjs 2>&1 | tee /tmp/firefast.log
+          grep -q '^PASS_POSTMERGE_FIRE_SYSTEM_CHROME ' /tmp/firefast.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Future post-merge Fire — system Chrome'; echo '```text'; grep -E '^(PASS_POSTMERGE_FIRE_SYSTEM_CHROME|Error:)' /tmp/firefast.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
