@@ -25,6 +25,10 @@ const TOP5_MPV_BY_MS=new Map([
   [2700,3],[4100,3],[1850,3],[3000,3],
   [2200,3],[3500,3],[1500,3],[2500,3]
 ]);
+const ADAPTIVE_MS=4000;
+const ADAPTIVE_STAGE1_NODES=1000000;
+const ADAPTIVE_RERANK_NODES=1500000;
+const ADAPTIVE_GAP_CP=20;
 let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};
 const stage=text=>self.postMessage({type:'stage',text});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -96,18 +100,45 @@ async function init(){
   })();
   try{return await initPromise}finally{if(!ready)initPromise=null}
 }
-async function bestmove(sfen,ms,multiPV=1){
+function collectCandidates(token){
+  const candidates=Object.keys(latestMultiPV).map(Number).sort((a,b)=>a-b).map(k=>latestMultiPV[k]).filter(x=>x&&x.token);
+  if(!candidates.some(x=>x.rank===1)&&token)candidates.unshift({rank:1,token,...latestInfo});
+  return candidates;
+}
+async function runSearch(sfen,{ms=6000,nodes=0,multiPV=1,searchmoves=[]}={}){
   await init();
-  const mp=Math.max(1,Math.min(MOBILE_SAFE?3:4,Math.round(Number(multiPV)||1)));
+  const mp=Math.max(1,Math.min(5,Math.round(Number(multiPV)||1)));
+  const nodeLimit=Math.max(0,Math.round(Number(nodes)||0));
+  const sm=Array.isArray(searchmoves)?searchmoves.map(x=>String(x||'').trim()).filter(Boolean).slice(0,8):[];
   latestInfo={};latestMultiPV={};
   await sendUSI('setoption name MultiPV value '+mp);
   await sendUSI('position sfen '+sfen);stage('⑥ 思考中 bestmove待ち');
-  const p=waitLine(x=>x.startsWith('bestmove '),ms+10000,'bestmove');await sendUSI('go movetime '+ms);const line=await p;stage('⑦ bestmove受信');
+  const timeout=nodeLimit>0?120000:ms+10000;
+  const p=waitLine(x=>x.startsWith('bestmove '),timeout,'bestmove');
+  const go=(nodeLimit>0?'go nodes '+nodeLimit:'go movetime '+ms)+(sm.length?' searchmoves '+sm.join(' '):'');
+  await sendUSI(go);const line=await p;stage('⑦ bestmove受信');
   const token=(line.split(/\s+/)[1]||'').trim();
-  const candidates=Object.keys(latestMultiPV).map(Number).sort((a,b)=>a-b).map(k=>latestMultiPV[k]).filter(x=>x&&x.token);
-  if(!candidates.some(x=>x.rank===1)&&token)candidates.unshift({rank:1,token,...latestInfo});
+  const candidates=collectCandidates(token);
   await sendUSI('setoption name MultiPV value 1');
-  return{token,candidates,info:{...latestInfo,ms,multiPV:mp,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu V9.70 HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}};
+  return{token,candidates,info:{...latestInfo,ms,nodesTarget:nodeLimit,multiPV:mp,searchmoves:sm,candidates:candidates.map(x=>({rank:x.rank,token:x.token,depth:x.depth,nodes:x.nodes,cp:x.cp,mate:x.mate})),engine:'YaneuraOu V9.70 HalfKP＋Suisho5',threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}};
+}
+async function bestmove(sfen,ms,multiPV=1,nodes=0,searchmoves=[],adaptive=true){
+  const nodeLimit=Math.max(0,Math.round(Number(nodes)||0));
+  const sm=Array.isArray(searchmoves)?searchmoves.map(x=>String(x||'').trim()).filter(Boolean):[];
+  const useAdaptive=adaptive!==false&&MOBILE_SAFE&&Number(ms)===ADAPTIVE_MS&&Number(multiPV||1)===1&&nodeLimit===0&&sm.length===0;
+  if(!useAdaptive)return runSearch(sfen,{ms,nodes:nodeLimit,multiPV,searchmoves:sm});
+  stage('⑥-1 候補5手を高速比較中');
+  const first=await runSearch(sfen,{nodes:ADAPTIVE_STAGE1_NODES,multiPV:5});
+  const c=first.candidates.slice().sort((a,b)=>(a.rank||99)-(b.rank||99));
+  const c1=c[0],c2=c[1];
+  const gap=Number.isFinite(c1?.cp)&&Number.isFinite(c2?.cp)?Math.abs(c1.cp-c2.cp):Infinity;
+  const tokens=c.map(x=>x.token).filter(Boolean).slice(0,5);
+  if(gap<=ADAPTIVE_GAP_CP&&tokens.length>=2){
+    stage('⑥-2 候補拮抗 '+gap+'cp / 上位候補を再評価中');
+    const second=await runSearch(sfen,{nodes:ADAPTIVE_RERANK_NODES,multiPV:1,searchmoves:tokens});
+    return{...second,info:{...second.info,adaptive:true,reranked:true,gapCp:gap,stage1Token:first.token,stage1Candidates:first.info?.candidates||[],stage1Nodes:ADAPTIVE_STAGE1_NODES,rerankNodes:ADAPTIVE_RERANK_NODES,totalTargetNodes:ADAPTIVE_STAGE1_NODES+ADAPTIVE_RERANK_NODES}};
+  }
+  return{...first,info:{...first.info,adaptive:true,reranked:false,gapCp:gap,stage1Token:first.token,stage1Candidates:first.info?.candidates||[],stage1Nodes:ADAPTIVE_STAGE1_NODES,rerankNodes:0,totalTargetNodes:ADAPTIVE_STAGE1_NODES}};
 }
 self.onmessage=async ev=>{
   const m=ev.data||{},id=m.id;
@@ -116,7 +147,7 @@ self.onmessage=async ev=>{
     if(m.type==='bestmove'){
       const ms=Number(m.ms)||6000;
       const inferred=m.multiPV==null?TOP5_MPV_BY_MS.get(ms):Number(m.multiPV);
-      const out=await bestmove(String(m.sfen||''),ms,inferred||1);
+      const out=await bestmove(String(m.sfen||''),ms,inferred||1,Math.max(0,Number(m.nodes)||0),Array.isArray(m.searchmoves)?m.searchmoves:[],m.adaptive!==false);
       self.postMessage({type:'result',id,ok:true,kind:'bestmove',...out});return;
     }
     if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}
