@@ -1,0 +1,9 @@
+Checkpoint 2026-08-19 JST
+- Main unchanged.
+- PR25 4.0s mobile default is already merged and verified.
+- PR26 Fire/Silk audit PASS and closed without merge.
+- PR28 SFEN/USI audit PASS and closed without merge.
+- PR27 historical middlegame audit: ply23 needs 8s for stable 3/3 exact on latest full run; ply35 needs 12s for stable 3/3 exact. 6s was not stable enough on latest rerun.
+- New adaptive diagnostic branch tests a position-complexity heuristic before any runtime change: fixed4 vs adaptive over historical plies 19/23/33/35 using fresh 15s MultiPV3 references and three fresh-engine reps each.
+- Proposed diagnostic heuristic only: mobile normal 4s; middlegame with tactical score >=3 uses 8s; score >=8 uses 12s; existing >=55-ply endgame remains 7s. tactical score = hand piece units + 2*promoted pieces.
+- Do not merge runtime until adaptive evidence and WebKit/Chromium/Fire/SFEN-USI/prewarm/sound regressions all PASS.
