@@ -1,0 +1,55 @@
+name: Dump V9.70 browser USI options
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diag-v970-usi-options-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  dump:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          mkdir -p /tmp/opts && cd /tmp/opts
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Create option-forwarding worker
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('shogi-v21528/future-yaneura-worker21528.js')
+          s=p.read_text()
+          needle="  if(line.startsWith('info string WASMDBG '))stage('DBG '+line.slice('info string WASMDBG '.length));"
+          assert needle in s
+          repl=needle+"\n  if(line.startsWith('option name '))stage('OPT '+line);"
+          Path('shogi-v21528/diag-options-worker.js').write_text(s.replace(needle,repl,1))
+          PY
+      - name: Start COOP COEP server
+        run: |
+          cat > /tmp/opts/server.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd();const mime={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((req,res)=>{const u=decodeURIComponent(req.url.split('?')[0]);const f=path.join(root,u);if(!f.startsWith(root)||!fs.existsSync(f)){res.writeHead(404);return res.end('404')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(res)}).listen(4181,'127.0.0.1');
+          NODE
+          node /tmp/opts/server.mjs >/tmp/opts/server.log 2>&1 & sleep 1
+      - name: Dump actual options
+        shell: bash
+        run: |
+          cat > /tmp/opts/run.mjs <<'NODE'
+          import{webkit}from'playwright';
+          const b=await webkit.launch({headless:true});const p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'});await p.goto('http://127.0.0.1:4181/shogi-v21528/index.html',{waitUntil:'domcontentloaded',timeout:120000}).catch(()=>{});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI false');const out=await p.evaluate(()=>new Promise((resolve,reject)=>{const w=new Worker('./diag-options-worker.js?v='+Date.now());const opts=[];let id=1;const t=setTimeout(()=>{w.terminate();reject(Error('timeout'))},90000);w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'&&String(m.text||'').startsWith('OPT option name '))opts.push(String(m.text).slice(4));if(m.type==='result'&&m.id===id){clearTimeout(t);w.terminate();m.ok?resolve({opts,profile:{threads:m.threads,hashMB:m.hashMB,mobileWebKit:m.mobileWebKit}}):reject(Error(m.error||'init failed'))}};w.postMessage({type:'init',id})}));console.log('OPT_PROFILE '+JSON.stringify(out.profile));for(const x of out.opts)console.log('USI_OPTION '+x);console.log('OPT_COUNT '+out.opts.length);await b.close();
+          NODE
+          cd /tmp/opts && node run.mjs 2>&1 | tee /tmp/opts/result.log
+          grep -q '^USI_OPTION ' /tmp/opts/result.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Actual V9.70 browser USI options'; echo '```text'; grep -E '^(OPT_PROFILE|USI_OPTION|OPT_COUNT)' /tmp/opts/result.log || true; echo '```'; } >/tmp/opts/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/opts/report.md
