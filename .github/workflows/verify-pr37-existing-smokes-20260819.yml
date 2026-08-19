@@ -1,0 +1,47 @@
+name: Verify PR37 existing smokes
+on:
+  pull_request:
+    branches: [future-safe-rerank12-threads1-20260819]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  existing-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax checks
+        run: |
+          node --check shogi-side-test/future21520.js
+          node --check shogi-side-test/future-yaneura-worker21528.js
+          node --check shogi-v21528/future-yaneura-worker21528.js
+          node --check shogi-side-test/top5-yaneura21529.js
+          node --check shogi-v21528/coi-serviceworker.js
+      - name: Install Firefox
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps firefox >/dev/null
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 >/tmp/shogi-server.log 2>&1 &
+          sleep 2
+      - name: Existing app smoke
+        run: |
+          set -o pipefail
+          node .github/scripts/shogi-v21528-smoke.js 2>&1 | tee /tmp/app-smoke.log
+      - name: Existing top5 + save resume smoke
+        run: |
+          set -o pipefail
+          node .github/scripts/shogi-top5-yaneura-smoke.js 2>&1 | tee /tmp/top5-smoke.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### PR37 existing Firefox smokes'; echo '```text'; grep -E '^(PASS|FAIL|TOP5_AUDIT|GAME_SAVE|TOP5_ENGINE_FROM_MOVE1)' /tmp/app-smoke.log /tmp/top5-smoke.log 2>/dev/null || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
