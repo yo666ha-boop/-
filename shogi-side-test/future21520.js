@@ -5,7 +5,7 @@
   const FUTURE_NAME='未来からやってきたみつき';
   const FUTURE_RATING=3400;
   const SIDE_BASE=new URL('../shogi-side-test/',location.href).href;
-  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528v970d5',location.href).href;
+  const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528v970d6',location.href).href;
 
   window.AI_SHOGI_FUNCTIONAL_AUDIT21520=window.AI_SHOGI_FUNCTIONAL_AUDIT21520||{future:true,version:VERSION};
 
