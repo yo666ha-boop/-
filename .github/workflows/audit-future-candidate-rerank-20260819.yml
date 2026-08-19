@@ -1,0 +1,42 @@
+name: Audit Future candidate rerank
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-rerank.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4200,'127.0.0.1');
+          NODE
+          node /tmp/coi-rerank.mjs >/tmp/coi-rerank.log 2>&1 &
+          sleep 1
+      - name: Run candidate rerank audit
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-future-candidate-rerank-20260819.mjs 2>&1 | tee /tmp/rerank.log
+          test "$(grep -c '^RERANK_REF ' /tmp/rerank.log)" -eq 4
+          test "$(grep -c '^RERANK_ROW ' /tmp/rerank.log)" -eq 8
+          test "$(grep -c '^RERANK_SUMMARY ' /tmp/rerank.log)" -eq 1
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Future two-stage candidate rerank audit'; echo '```text'; grep -E '^(RERANK_REF|RERANK_ROW|RERANK_SUMMARY)' /tmp/rerank.log || true; echo '```'; } >/tmp/rerank-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/rerank-report.md
