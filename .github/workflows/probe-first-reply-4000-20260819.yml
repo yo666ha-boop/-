@@ -1,0 +1,37 @@
+name: Future first reply 4.0 vs 4.5 all legal first moves
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  firstreply:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Prepare Playwright with runner Chrome
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          google-chrome --version
+      - name: Start COOP COEP static server
+        run: |
+          cat >/tmp/coi-fr.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4191,'127.0.0.1');
+          NODE
+          node /tmp/coi-fr.mjs >/tmp/fr-server.log 2>&1 &
+          sleep 1
+      - name: Compare first replies for all 30 legal Sente first moves
+        run: node .github/scripts/probe-first-reply-4000-20260819.mjs 2>&1 | tee /tmp/fr.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### First reply 4.0 vs 4.5 — all 30 legal first moves'; echo '```text'; grep -E '^(FR_PROFILE|FR_REF|FR_ROW|FR_SUMMARY)' /tmp/fr.log 2>/dev/null | tail -120 || true; echo '```'; } >/tmp/fr-report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/fr-report.md
