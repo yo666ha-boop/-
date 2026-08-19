@@ -8,17 +8,19 @@ permissions:
 jobs:
   iphone:
     runs-on: ubuntu-22.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+      options: --ipc=host
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Playwright WebKit only
+      - name: Install matching Playwright package
         run: |
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install webkit
       - name: Start COOP COEP server
         run: |
           cat >/tmp/coi-final.mjs <<'NODE'
