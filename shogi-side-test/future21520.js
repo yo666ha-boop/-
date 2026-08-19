@@ -23,6 +23,7 @@
 
   C[FUTURE_INDEX]=[FUTURE_NAME,FUTURE_RATING,'7g7f'];
   CHAR_META[FUTURE_INDEX]={style:'未来型・超深読み',feature:'やねうら王 V9.70 HalfKP＋水匠5 / Web Worker本格USIエンジン'};
+  if(CHAR_META[0]){CHAR_META[0]={...CHAR_META[0],style:'現代最強万能型・終盤最強級',feature:'みっちゃんが成長した現代最強形。攻め・受け・読み・寄せのすべてが現代最高水準。'}}
   STYLE[FUTURE_INDEX]={...(STYLE[0]||{atk:1,def:1,pos:1,end:1}),atk:1.16,def:1.18,pos:1.20,end:1.24};
   TEMP_DIALOGUES[FUTURE_INDEX-5]=FUTURE_DIALOGUE;
   if(stats&&Array.isArray(stats.chars)){while(stats.chars.length<C.length)stats.chars.push({w:0,l:0,d:0});try{saveStats()}catch(e){}}
@@ -37,7 +38,7 @@
     document.querySelectorAll('[data-future-mitsuki="1"] img,#chars img[alt="'+FUTURE_NAME+'"],#oppPortrait img[alt="'+FUTURE_NAME+'"],#foppPortrait img[alt="'+FUTURE_NAME+'"]').forEach(img=>{if(img.src!==src){img.onerror=null;img.src=src}});
   }
 
-  const rankTextBase=rankText;rankText=function(i){return i===FUTURE_INDEX?'未来・やねうら王V9.70':rankTextBase(i)};
+  const rankTextBase=rankText;const FUTURE_RANK_LABELS={25:'強さ1位・未来最強',0:'強さ2位・現代最強',1:'強さ3位',2:'強さ4位',3:'強さ5位',4:'強さ6位'};rankText=function(i){return FUTURE_RANK_LABELS[i]||rankTextBase(i)};
   const portraitHTMLBase=portraitHTML;portraitHTML=function(i,c){if(i===FUTURE_INDEX)return '<img alt="'+FUTURE_NAME+'" src="'+futureImage()+'" style="box-shadow:inset 0 0 0 3px #75e7ff,0 0 18px #4fd8ff88"><span class="oppFixed" style="background:#07526a;color:#d9fbff">FUTURE・V9.70</span>';return portraitHTMLBase(i,c)};
 
   function addFutureCard(){
@@ -47,6 +48,7 @@
     b.onclick=()=>{ci=FUTURE_INDEX;lastSpeech='';speechMood='start';newGame();ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}})};box.appendChild(b);
   }
   addFutureCard();ensureFutureImage().then(()=>{refreshFutureImages();try{renderOpponent(false)}catch(e){}});
+  const regularMitsukiCard=document.querySelectorAll('#chars .ch')[0];if(regularMitsukiCard){const style=regularMitsukiCard.querySelector('.chStyle');if(style)style.textContent=CHAR_META[0].style+'｜'+(typeof openingLabel==='function'?openingLabel(0):'万能・局面対応')}
 
   function setEngineState(text,ok=false){
     document.querySelectorAll('.futureEngineState').forEach(e=>{e.textContent='ENGINE：'+text;e.style.color=ok?'#7dffb2':'#72dff6'});
