@@ -1,23 +1,37 @@
-name: Shogi v2.15.28 WebKit Vercel proof
+name: Branch WebKit quiet V9.70 A-B
 on:
   push:
+    branches: [probe-standard-book-20260819]
     paths:
       - '.github/workflows/shogi-v21528-webkit-vercel.yml'
       - '.github/scripts/shogi-v21528-webkit-vercel.mjs'
-  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
 jobs:
   webkit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Mark start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment 16 --body 'QUIET_WEBKIT_AB_START'
       - name: Install Playwright WebKit
         run: |
-          npm init -y
-          npm install playwright@1.55.0
-          npx playwright install --with-deps webkit
-      - name: Prove Vercel real headers and YaneuraOu on WebKit
-        run: node .github/scripts/shogi-v21528-webkit-vercel.mjs
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Run V9.70 quiet A-B
+        run: node .github/scripts/shogi-v21528-webkit-vercel.mjs 2>&1 | tee /tmp/quiet-ab.log
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Quiet V9.70 WebKit A/B'; echo '```text'; grep -E '^(QUIET_ENV|QUIET_ROW|QUIET_SUMMARY)' /tmp/quiet-ab.log 2>/dev/null || true; echo '```'; } >/tmp/quiet-report.md
+          gh pr comment 16 --body-file /tmp/quiet-report.md
