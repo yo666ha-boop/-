@@ -1,0 +1,34 @@
+name: Inspect current Future WASM SIMD
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-current-wasm-simd-20260819.yml'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect wasm feature opcodes
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y wabt >/dev/null
+          W=shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm
+          wasm-objdump -x "$W" > /tmp/wasm-x.txt
+          wasm-objdump -d "$W" > /tmp/wasm-d.txt
+          echo "WASM_SIZE $(stat -c%s "$W")"
+          echo "SIMD_V128_COUNT $(grep -Eic 'v128|i(8|16|32|64)x[0-9]|f(32|64)x[0-9]' /tmp/wasm-d.txt || true)"
+          echo "ATOMIC_COUNT $(grep -Eic 'atomic|memory\.atomic' /tmp/wasm-d.txt || true)"
+          echo "FEATURE_LINES"
+          grep -Ei 'target_features|simd|atomics|bulk-memory|mutable-globals|sign-ext' /tmp/wasm-x.txt | head -50 || true
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Current V9.70 WASM feature inspection'; echo '```text'; grep -E '^(WASM_SIZE|SIMD_V128_COUNT|ATOMIC_COUNT|FEATURE_LINES)' /tmp/wasm-inspect.log 2>/dev/null || true; echo '--- direct ---'; W=shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm; echo "WASM_SIZE $(stat -c%s "$W")"; wasm-objdump -d "$W" 2>/dev/null | grep -Eic 'v128|i(8|16|32|64)x[0-9]|f(32|64)x[0-9]' | xargs echo SIMD_V128_COUNT; wasm-objdump -d "$W" 2>/dev/null | grep -Eic 'atomic|memory\.atomic' | xargs echo ATOMIC_COUNT; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
