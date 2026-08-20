@@ -1,0 +1,27 @@
+name: Audit public Pages ranks 13-18
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  pages:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          npm init -y
+          npm install playwright@1.55.0
+      - name: Run actual public Pages interaction
+        shell: bash
+        env:
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-public-pages-cohort13-18-20260820.mjs 2>&1 | tee /tmp/pages.log
+          grep -q '^PASS_PUBLIC_PAGES13_18 ' /tmp/pages.log
+      - if: always()
+        run: grep -E '^(PUBLIC_PAGES13_18|PASS_PUBLIC_PAGES13_18|Error:)' /tmp/pages.log || true
