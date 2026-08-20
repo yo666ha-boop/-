@@ -1,5 +1,8 @@
 name: Audit all 26 final integrity
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - audit-postmerge-supervisor21535-20260820
