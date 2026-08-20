@@ -31,6 +31,7 @@ jobs:
         shell: bash
         env:
           HOME: /root
+          PR76_STYLE_TUNE: v2
         run: |
           set -euo pipefail
           node .github/scripts/verify-pr76-cohort13-18-style-quality-20260820.mjs 2>&1 | tee /tmp/q76.log
