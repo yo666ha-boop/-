@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/cohort-audit.mjs <<'NODE'
+          cat > cohort-audit.mjs <<'NODE'
           import { webkit } from 'playwright';
           const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
           const browser=await webkit.launch({headless:true});
@@ -85,7 +85,7 @@ jobs:
           console.log('PASS_COHORT7_12_YANEURA_AUDIT '+JSON.stringify(sum));
           await browser.close();
           NODE
-          node /tmp/cohort-audit.mjs 2>&1 | tee /tmp/cohort.log
+          node cohort-audit.mjs 2>&1 | tee /tmp/cohort.log
           grep -q '^PASS_COHORT7_12_YANEURA_AUDIT ' /tmp/cohort.log
       - name: Report diagnostic result
         if: always()
