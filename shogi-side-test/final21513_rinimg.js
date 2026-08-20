@@ -15,3 +15,11 @@ setTimeout(async()=>{
     eval(await r.text());
   }catch(e){console.error('cohort7-12 yaneura patch load failed',e)}
 },20);
+/* v2.15.34: 強さ13〜18位を、さらに浅い共通やねうら王＋水匠5プロファイルへ段階化 */
+setTimeout(async()=>{
+  try{
+    const r=await fetch('../shogi-side-test/cohort13-18-yaneura21534.js?v=21534a',{cache:'no-store'});
+    if(!r.ok)throw new Error('cohort13-18-yaneura21534.js '+r.status);
+    eval(await r.text());
+  }catch(e){console.error('cohort13-18 yaneura patch load failed',e)}
+},40);
