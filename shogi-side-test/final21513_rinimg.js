@@ -23,3 +23,11 @@ setTimeout(async()=>{
     eval(await r.text());
   }catch(e){console.error('cohort13-18 yaneura patch load failed',e)}
 },40);
+/* v2.15.35: 強さ19〜26位は内蔵AIの棋風を維持し、強制詰みだけ共通YaneuraOu＋水匠5で救済 */
+setTimeout(async()=>{
+  try{
+    const r=await fetch('../shogi-side-test/cohort19-26-supervisor21535.js?v=21535a',{cache:'no-store'});
+    if(!r.ok)throw new Error('cohort19-26-supervisor21535.js '+r.status);
+    eval(await r.text());
+  }catch(e){console.error('cohort19-26 supervisor patch load failed',e)}
+},60);
