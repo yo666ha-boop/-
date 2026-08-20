@@ -1,0 +1,42 @@
+name: Audit post-merge ranks 7-12 quality
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright package
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+      - name: Build diagnostic page without changing production
+        run: |
+          node <<'NODE'
+          const fs=require('fs');const p='shogi-v21528/index.html';let s=fs.readFileSync(p,'utf8');const needle="'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,";if(!s.includes(needle))throw new Error('diagnostic injection point missing');const hook=`"window.__POST_COHORT_QUALITY={legal:(s)=>legal(s).map(usi),usi:(m)=>usi(m)};",`;s=s.replace(needle,"'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,"+hook);fs.writeFileSync('shogi-v21528/index-postmerge-cohort-quality.html',s);
+          NODE
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-post-quality.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4232,'127.0.0.1');
+          NODE
+          node /tmp/coi-post-quality.mjs >/tmp/coi-post-quality.log 2>&1 &
+          sleep 1
+      - name: Run post-merge cohort quality
+        shell: bash
+        env:
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-postmerge-cohort-quality-20260820.mjs 2>&1 | tee /tmp/post-cohort-quality.log
+          grep -q '^PASS_POSTMERGE_COHORT_QUALITY ' /tmp/post-cohort-quality.log
+      - name: Show actual result
+        if: always()
+        run: |
+          grep -E '^(POSTMERGE_COHORT_QUALITY|PASS_POSTMERGE_COHORT_QUALITY|Error:)' /tmp/post-cohort-quality.log || true
