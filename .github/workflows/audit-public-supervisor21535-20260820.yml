@@ -1,0 +1,34 @@
+name: Audit public supervisor21535
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  public:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+      - name: Run public Pages production audit
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-public-supervisor21535-20260820.mjs 2>&1 | tee /tmp/public21535.log
+          grep -q '^PASS_PUBLIC_SUPERVISOR21535 ' /tmp/public21535.log
+      - name: Show actual result
+        if: always()
+        run: grep -E '^(PUBLIC_SUPERVISOR21535|PASS_PUBLIC_SUPERVISOR21535|Error:)' /tmp/public21535.log || true
