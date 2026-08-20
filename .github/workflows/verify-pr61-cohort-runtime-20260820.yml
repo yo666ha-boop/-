@@ -10,8 +10,6 @@ jobs:
     timeout-minutes: 30
     container:
       image: mcr.microsoft.com/playwright:v1.55.0-jammy
-      env:
-        HOME: /root
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +31,7 @@ jobs:
         shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
+          HOME: /root
         run: |
           set -euo pipefail
           node .github/scripts/verify-pr61-cohort-runtime-20260820.mjs 2>&1 | tee /tmp/pr61.log
