@@ -1,0 +1,45 @@
+name: Diagnose Future browser parity on fresh collapse
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-future-browser-parity-20260821.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Chromium and WebKit
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fpar && cd /tmp/fpar
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Start local COI server
+        run: |
+          cat >/tmp/fpar/server.mjs <<'NODE'
+          import http from'node:http';import fs from'fs';import path from'path';const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4178,'127.0.0.1');
+          NODE
+          node /tmp/fpar/server.mjs >/tmp/fpar/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4178/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done; cat /tmp/fpar/server.log; exit 1
+      - name: Compare WebKit and Chromium exact positions
+        run: |
+          cat >/tmp/fpar/parity.mjs <<'NODE'
+          import{webkit,chromium,devices}from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`4i5h 3c3d 8g8f 8c8d 5i4i 8d8e 7g7f 8e8f 8h2b+ 3a2b 7f7e B*8g 5h6h 8g5d+ 7e7d 7c7d 6h7h 8f8g+ B*4f 6c6d 5g5f 8g7h 5f5e 5d6e 6i5h 8b8i+ 3i4h 7h7i 4i3h 7i7h 5h5i G*5h 2g2f 5h5i 3h2g 5i5h 4h5g 6e4g 1g1f S*3h`.split(/\s+/);
+          function sfen(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error('apply '+m+' missing '+a);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          async function open(kind){const browser=await(kind==='webkit'?webkit:chromium).launch({headless:true});const page=await browser.newPage(kind==='webkit'?{...devices['iPhone 14']}:{viewport:{width:390,height:844},userAgent:devices['iPhone 14'].userAgent});await page.goto('http://127.0.0.1:4178/shogi-v21528/index.html?parity='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await page.evaluate(()=>crossOriginIsolated))throw Error(kind+' no COI');const prof=await page.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=parity-'+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};window.__w=w;window.__c=(x)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('timeout')),190000);P.set(id,{r,j,t});w.postMessage({type:'bestmove',id,...x})});return await new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('init timeout')),120000);P.set(id,{r,j,t});w.postMessage({type:'init',id})})});return{browser,page,prof}}
+          const A=await open('webkit'),B=await open('chromium');console.log('FUTURE_BROWSER_PARITY_PROFILE '+JSON.stringify({webkit:A.prof,chromium:B.prof}));const plies=[21,25,29,31,33,35,37],rows=[];for(const ply of plies){const pos=sfen(M.slice(0,ply-1));const run=async X=>{const s1=await X.page.evaluate(pos=>window.__c({sfen:pos,nodes:1500000,multiPV:3,adaptive:false}),pos);const tok=(s1.candidates||[]).map(x=>x.token).filter(Boolean).slice(0,3);const h3=await X.page.evaluate(({pos,tok})=>window.__c({sfen:pos,nodes:1500000,multiPV:1,searchmoves:tok,adaptive:false}),{pos,tok});const deep=await X.page.evaluate(pos=>window.__c({sfen:pos,ms:15000,multiPV:5,adaptive:false}),pos);return{s1:{token:s1.token,cands:s1.candidates},h3:{token:h3.token,cp:h3.info?.cp,mate:h3.info?.mate},deep:{token:deep.token,cands:deep.candidates}}};const w=await run(A),c=await run(B);const row={ply,sfen:pos,webkit:w,chromium:c,h3Same:w.h3.token===c.h3.token,deepSame:w.deep.token===c.deep.token};rows.push(row);console.log('FUTURE_BROWSER_PARITY_ROW '+JSON.stringify(row))}const summary={positions:rows.length,h3Mismatch:rows.filter(x=>!x.h3Same).map(x=>x.ply),deepMismatch:rows.filter(x=>!x.deepSame).map(x=>x.ply),webkitProfile:A.prof,chromiumProfile:B.prof};console.log('FUTURE_BROWSER_PARITY_SUMMARY '+JSON.stringify(summary));console.log('PASS_FUTURE_BROWSER_PARITY_HARNESS');await A.page.evaluate(()=>window.__w?.terminate());await B.page.evaluate(()=>window.__w?.terminate());await A.browser.close();await B.browser.close();
+          NODE
+          cd /tmp/fpar && node parity.mjs 2>&1 | tee /tmp/fpar/parity.log
+          grep -F 'FUTURE_BROWSER_PARITY_SUMMARY ' /tmp/fpar/parity.log
+          grep -F 'PASS_FUTURE_BROWSER_PARITY_HARNESS' /tmp/fpar/parity.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FUTURE_BROWSER_PARITY_PROFILE|FUTURE_BROWSER_PARITY_ROW|FUTURE_BROWSER_PARITY_SUMMARY|PASS_FUTURE_BROWSER_PARITY_HARNESS)' /tmp/fpar/parity.log | tail -80 || true
