@@ -1,0 +1,39 @@
+name: Audit post-merge ranks 13-18 runtime
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          npm init -y
+          npm install playwright@1.55.0
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi-pm.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4235,'127.0.0.1');
+          NODE
+          node /tmp/coi-pm.mjs >/tmp/coi-pm.log 2>&1 &
+          sleep 1
+      - name: Run actual post-merge runtime
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-postmerge-cohort13-18-runtime-20260820.mjs 2>&1 | tee /tmp/pm.log
+          grep -q '^PASS_POSTMERGE13_18_RUNTIME ' /tmp/pm.log
+      - if: always()
+        run: grep -E '^(POSTMERGE13_18_RUNTIME|PASS_POSTMERGE13_18_RUNTIME|Error:)' /tmp/pm.log || true
