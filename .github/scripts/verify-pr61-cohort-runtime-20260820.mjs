@@ -1,0 +1,33 @@
+import {webkit,chromium,firefox} from 'playwright';
+const mode=process.env.PLATFORM||'iphone';
+const cfg={iphone:{browser:webkit,ua:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}},fire:{browser:chromium,ua:'Mozilla/5.0 (Linux; U; en-US; KFMAWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/124.5.3 like Chrome/124.0 Safari/535.19',viewport:{width:800,height:1280}},desktop:{browser:chromium,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36',viewport:{width:1440,height:900}},firefox:{browser:firefox,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0',viewport:{width:1440,height:900}}}[mode];
+if(!cfg)throw Error('bad platform '+mode);
+const browser=await cfg.browser.launch({headless:true}),page=await browser.newPage({userAgent:cfg.ua,viewport:cfg.viewport});
+const pageErrors=[],consoleErrors=[],badResponses=[],requestFailures=[];page.on('pageerror',e=>pageErrors.push(String(e.message||e)));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});page.on('response',r=>{if(r.status()>=400)badResponses.push({status:r.status(),url:r.url()})});page.on('requestfailed',r=>requestFailures.push({url:r.url(),failure:r.failure()?.errorText||''}));
+const text=sel=>page.locator(sel).textContent().then(v=>String(v||'').trim());
+async function realReply(index,label){
+  await page.locator('#chars .ch').nth(index).click();await page.selectOption('#sideSelect2157','sente');await page.click('#newBtn');await page.waitForTimeout(120);
+  const before=await text('#moves');await page.locator('#board').locator(':scope > *').nth(56).click();await page.waitForTimeout(60);await page.locator('#board').locator(':scope > *').nth(47).click();
+  await page.waitForFunction(b=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==b;},before,{timeout:5000});const human=await text('#moves');
+  await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},human,{timeout:45000});
+  const replied=await text('#moves'),status=await text('#status'),opp=await text('#oppName');if(replied===human)throw Error(label+' AI reply missing');if(!status.includes('やねうら王＋水匠5'))throw Error(label+' did not use cohort engine '+status);if(!opp.includes(label))throw Error(label+' opponent mismatch '+opp);return{human,replied,status,opp};
+}
+try{
+  await page.goto('http://127.0.0.1:4226/shogi-v21528/index.html?pr61='+mode+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE&&window.AI_SHOGI_YANEURAOU_TOP5&&window.AI_SHOGI_YANEURAOU_COHORT7_12&&window.AI_SHOGI_GAME_SAVE,{timeout:120000});await page.waitForTimeout(500);
+  const api=await page.evaluate(()=>{const c=window.AI_SHOGI_YANEURAOU_COHORT7_12,t=window.AI_SHOGI_YANEURAOU_TOP5,f=window.AI_SHOGI_YANEURAOU_FUTURE;return{cohort:{version:c.version,indices:c.indices,names:c.names,ratings:c.ratings,profiles:c.profiles,engine:c.engine,sharedWorker:c.sharedWorker},top5:{version:t.version,indices:t.indices,names:t.names,ratings:t.ratings,engine:t.engine,sharedWorker:t.sharedWorker},future:{version:f.version,name:f.name,rating:f.rating},coi:crossOriginIsolated}});
+  const expNames=['カヲル','ラオウ','サウザー','ケンシロウ','げんどー','シン'],expRatings=[2400,2250,2180,2100,2050,2000];
+  if(JSON.stringify(api.cohort.indices)!==JSON.stringify([24,23,21,5,17,19])||JSON.stringify(api.cohort.names)!==JSON.stringify(expNames)||JSON.stringify(api.cohort.ratings)!==JSON.stringify(expRatings))throw Error('cohort API mapping '+JSON.stringify(api));
+  if(api.cohort.engine!=='YaneuraOu HalfKP + Suisho5'||!api.cohort.sharedWorker||!api.coi)throw Error('cohort engine/coi '+JSON.stringify(api));
+  if(JSON.stringify(api.top5.indices)!==JSON.stringify([0,1,2,3,4])||api.top5.engine!=='YaneuraOu HalfKP + Suisho5'||!api.top5.sharedWorker)throw Error('top5 changed '+JSON.stringify(api.top5));
+  if(api.future.name!=='未来からやってきたみつき'||api.future.rating!==3400)throw Error('Future changed '+JSON.stringify(api.future));
+  const p=api.cohort.profiles;if(p['24'].minRank!==2||p['24'].maxLoss!==55||p['19'].minRank!==3||p['19'].maxLoss!==105)throw Error('profile mismatch '+JSON.stringify(p));
+  const kaworu=await realReply(24,'カヲル');
+  await page.click('#saveGameBtn21530');await page.waitForTimeout(80);const saved=await text('#moves');await page.click('#newBtn');await page.waitForTimeout(80);await page.click('#resumeGameBtn21530');await page.waitForTimeout(180);const resumed=await text('#moves');if(saved!==resumed)throw Error('save/resume mismatch');
+  const shin=await realReply(19,'シン');
+  const badImages=await page.evaluate(()=>[...document.querySelectorAll('#chars .ch img,#oppPortrait img')].filter(i=>!i.complete||i.naturalWidth<1).map(i=>i.alt||i.src));
+  const severeConsole=consoleErrors.filter(x=>!/favicon|Data URL decoding failed|ERR_INVALID_URL|Load request cancelled/i.test(x));const severeResponses=badResponses.filter(x=>!/favicon\.ico(?:\?|$)/i.test(x.url));const severeFailures=requestFailures.filter(x=>!/^data:/i.test(x.url)&&!/favicon\.ico(?:\?|$)/i.test(x.url)&&!/ERR_ABORTED|Load request cancelled/i.test(x.failure));
+  const out={platform:mode,api,kaworu,shin,saveResume:{saved,resumed},badImages,pageErrors,severeConsole,severeResponses,severeFailures};console.log('PR61_RUNTIME '+JSON.stringify(out));
+  if(pageErrors.length||severeConsole.length||severeResponses.length||severeFailures.length||badImages.length)throw Error('browser errors '+JSON.stringify(out));
+  console.log('PASS_PR61_COHORT_RUNTIME '+JSON.stringify({platform:mode,kaworu:kaworu.status,shin:shin.status,coi:api.coi,cohortVersion:api.cohort.version,top5Version:api.top5.version}));
+}finally{await browser.close()}
