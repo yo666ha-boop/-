@@ -7,7 +7,7 @@
   const EXPECTED={8:'直江兼続',13:'ユリア',10:'バット',7:'しんじ',22:'リン',6:'ジャギ'};
   for(const i of INDICES)if(C[i]?.[0]!==EXPECTED[i]){console.error('cohort19-24 identity mismatch',i,C[i]?.[0],EXPECTED[i]);return}
   const PROFILES={
-    8:{label:'R1700・義知略反撃',personality:'stable',multiPV:5,minRank:3,maxLoss:180,normal:280,endgame:460},
+    8:{label:'R1700・義知略反撃',personality:'stable',multiPV:5,minRank:4,maxLoss:180,normal:280,endgame:460},
     13:{label:'R1680・静穏安定',personality:'stable',multiPV:5,minRank:3,maxLoss:190,normal:255,endgame:430},
     10:{label:'R1600・ひらめき成長',personality:'balanced',multiPV:5,minRank:4,maxLoss:200,normal:230,endgame:400},
     7:{label:'R1550・相掛かり成長',personality:'balanced',multiPV:5,minRank:4,maxLoss:215,normal:210,endgame:370},
