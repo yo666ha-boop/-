@@ -12,7 +12,7 @@
     20:{label:'R1880・作戦持久',personality:'positional',multiPV:5,minRank:2,maxLoss:135,normal:430,endgame:700},
     18:{label:'R1820・傾奇突破',personality:'aggressive',multiPV:5,minRank:3,maxLoss:145,normal:380,endgame:640},
     9:{label:'R1800・精密静観',personality:'stable',multiPV:5,minRank:3,maxLoss:155,normal:340,endgame:580},
-    11:{label:'R1750・奇襲速攻',personality:'aggressive',multiPV:5,minRank:3,maxLoss:170,normal:300,endgame:520}
+    11:{label:'R1750・奇襲速攻',personality:'aggressive',multiPV:5,minRank:2,maxLoss:170,normal:300,endgame:520}
   };
   const NAMES=INDICES.map(i=>C[i][0]),RATINGS=INDICES.map(i=>C[i][1]);
   function profileMs(s,who){const p=PROFILES[who]||PROFILES[11];return (s.log?.length||0)>=55?p.endgame:p.normal}
@@ -26,15 +26,15 @@
   function moveFlags(s,m){
     const before=m.f!=null?s.b[m.f]:null,base=BASE(m.drop||before?.k||''),from=m.f!=null?xy(m.f):null,to=xy(m.to),fwd=s.t===S?-1:1;
     let capture=!!s.b[m.to],promote=!!m.prom,check=false,replyChecks=0;
-    const advance=from?(to[1]-from[1])*fwd:0,centerGain=from?(Math.abs(from[0]-4)+Math.abs(from[1]-4))-(Math.abs(to[0]-4)+Math.abs(to[1]-4)):0;
-    const develop=(base==='G'||base==='S')&&!!from,kingMove=base==='K',major=base==='R'||base==='B';
+    const advance=from?(to[1]-from[1])*fwd:0,step=from?Math.abs(to[1]-from[1]):0,centerGain=from?(Math.abs(from[0]-4)+Math.abs(from[1]-4))-(Math.abs(to[0]-4)+Math.abs(to[1]-4)):0;
+    const develop=(base==='G'||base==='S')&&!!from,kingMove=base==='K',major=base==='R'||base==='B',drop=!!m.drop;
     try{const n=apply(s,m);check=incheck(n,n.t);for(const r of legal(n).slice(0,80)){const nn=apply(n,r);if(incheck(nn,nn.t))replyChecks++}}catch(e){}
-    return{capture,promote,check,replyChecks,advance,centerGain,develop,kingMove,major,base};
+    return{capture,promote,check,replyChecks,advance,step,centerGain,develop,kingMove,major,drop,base};
   }
   function styleScore(p,f){
-    if(p.personality==='aggressive')return f.capture*28+f.promote*22+f.check*38+Math.max(0,f.advance)*8+Math.max(0,f.centerGain)*3+f.major*7-f.replyChecks*2;
-    if(p.personality==='stable')return f.capture*6-f.replyChecks*12-f.check*4+f.develop*28+f.kingMove*10+Math.max(0,f.centerGain)*2;
-    if(p.personality==='positional')return f.capture*4+f.develop*14+Math.max(0,f.centerGain)*4-f.replyChecks*8+f.kingMove*4+f.check*3;
+    if(p.personality==='aggressive')return f.capture*30+f.promote*24+f.check*42+Math.max(0,f.advance)*10+Math.max(0,f.centerGain)*3+f.major*9-f.kingMove*4-f.replyChecks*2;
+    if(p.personality==='stable')return f.capture*3-f.replyChecks*14-f.check*8+f.develop*20+f.kingMove*44+Math.max(0,f.centerGain)*3-f.step*12-f.major*8-f.drop*2;
+    if(p.personality==='positional')return f.capture*3+f.develop*42+Math.max(0,f.centerGain)*9-f.replyChecks*10+f.kingMove*16-f.check*2-f.step*4-f.major*4+f.drop*3;
     return 0;
   }
   function selectProfileMove(s,res,who){
