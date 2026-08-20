@@ -1,0 +1,96 @@
+name: Verify ranks 7-12 YaneuraOu migration
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Prepare Playwright
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Build diagnostic page without changing production
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const p='shogi-v21528/index.html';
+          let s=fs.readFileSync(p,'utf8');
+          const needle="'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,";
+          if(!s.includes(needle)) throw new Error('diagnostic injection point missing');
+          const hook=`"window.__COHORT_DIAG={info:()=>C.map((x,i)=>({i,name:x[0],rating:x[1],style:CHAR_META[i]?.style||'',feature:CHAR_META[i]?.feature||''})),state:()=>clone(st),choose:(s,i)=>chooseAI(clone(s),i),legal:(s)=>legal(s).map(usi),applyUsi:(s,u)=>{const m=legal(s).find(x=>usi(x)===u);if(!m)throw new Error('illegal '+u);return apply(s,m)},usi:(m)=>usi(m)};",`;
+          s=s.replace(needle,"'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,"+hook);
+          fs.writeFileSync('shogi-v21528/index-cohort-audit.html',s);
+          NODE
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4196,'127.0.0.1');
+          NODE
+          node /tmp/coi.mjs >/tmp/coi.log 2>&1 &
+          sleep 1
+      - name: Audit current internal AI vs shallow YaneuraOu
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/cohort-audit.mjs <<'NODE'
+          import { webkit } from 'playwright';
+          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+          const browser=await webkit.launch({headless:true});
+          const context=await browser.newContext({userAgent:ua,viewport:{width:390,height:844}});
+          const page=await context.newPage();
+          await page.goto('http://127.0.0.1:4196/shogi-v21528/index-cohort-audit.html?x='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+          await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.__COHORT_DIAG&&window.AI_SHOGI_YANEURAOU_FUTURE,{timeout:120000});
+          const meta=await page.evaluate(()=>window.__COHORT_DIAG.info());
+          const target=meta.filter(x=>x.i!==25&&x.i>4).sort((a,b)=>b.rating-a.rating).slice(0,6);
+          const expected=['月影 千景','里見 義景','山本 勘助','柳生 晴明','竹中 重治','明智 光秀'];
+          if(JSON.stringify(target.map(x=>x.name))!==JSON.stringify(expected)) throw new Error('target cohort mismatch '+JSON.stringify(target));
+          const msByIndex={24:1350,23:1100,21:950,5:800,17:700,19:600};
+          for(const x of target) console.log('COHORT_TARGET '+JSON.stringify({...x,candidateMs:msByIndex[x.i]}));
+          const seq=[
+            ['opening',['7g7f']],
+            ['early',['7g7f','3c3d','2g2f']],
+            ['mid19',['4i5h','8c8d','2h3h','8d8e','6g6f','8e8f','8g8f','8b8f','7g7f','8f8g+','6i7h','8g7f','P*7b','7a7b','5i4i','7f8e','3i4h','P*8f','6f6e']],
+            ['mid33',['4i5h','8c8d','2h3h','8d8e','6g6f','8e8f','8g8f','8b8f','7g7f','8f8g+','6i7h','8g7f','P*7b','7a7b','5i4i','7f8e','3i4h','P*8f','6f6e','8f8g+','8h5e','8e6e','7h6h','6e5e','5g5f','5e7e','6h6i','3c3d','9g9f','2b9i+','7i8h','9i8h','3h3i']]
+          ];
+          let rows=[];
+          for(const [label,moves] of seq){
+            const state=await page.evaluate((moves)=>{let s=window.__COHORT_DIAG.state();for(const u of moves)s=window.__COHORT_DIAG.applyUsi(s,u);return s},moves);
+            const ref=await page.evaluate(async(s)=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE;await a.init();return a.bestMove(s,{ms:4200,multiPV:5})},state);
+            const refToken=ref?.info?.bestmove||ref?.token||ref?.info?.candidates?.[0]?.token||null;
+            const refTop5=(ref?.info?.candidates||[]).map(c=>c.token).filter(Boolean).slice(0,5);
+            if(!refTop5.length&&ref?.move) refTop5.push(await page.evaluate(m=>window.__COHORT_DIAG.usi(m),ref.move));
+            for(const x of target){
+              const base=await page.evaluate(({s,i})=>{const t=performance.now();const r=window.__COHORT_DIAG.choose(s,i);return{token:r?.move?window.__COHORT_DIAG.usi(r.move):null,elapsed:Math.round(performance.now()-t),info:r?.info||{}}},{s:state,i:x.i});
+              const cand=await page.evaluate(async({s,ms})=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE;const t=performance.now();const r=await a.bestMove(s,{ms,multiPV:3});return{token:r?.move?window.__COHORT_DIAG.usi(r.move):(r?.info?.bestmove||null),elapsed:Math.round(performance.now()-t),info:r?.info||{}}},{s:state,ms:msByIndex[x.i]});
+              const legal=await page.evaluate(s=>window.__COHORT_DIAG.legal(s),state);
+              if(!legal.includes(base.token)||!legal.includes(cand.token)) throw new Error('illegal result '+JSON.stringify({label,x,base,cand}));
+              const row={case:label,index:x.i,name:x.name,rating:x.rating,baseline:base.token,candidate:cand.token,ref:refToken,baselineExact:base.token===refToken,candidateExact:cand.token===refToken,baselineTop5:refTop5.includes(base.token),candidateTop5:refTop5.includes(cand.token),baselineMs:base.elapsed,candidateMs:cand.elapsed,engineDepth:cand.info?.depth||0,threads:cand.info?.threads,hashMB:cand.info?.hashMB};
+              rows.push(row);console.log('COHORT_ROW '+JSON.stringify(row));
+            }
+          }
+          const sum={tests:rows.length,baselineExact:rows.filter(r=>r.baselineExact).length,candidateExact:rows.filter(r=>r.candidateExact).length,baselineTop5:rows.filter(r=>r.baselineTop5).length,candidateTop5:rows.filter(r=>r.candidateTop5).length,meanBaselineMs:Math.round(rows.reduce((a,r)=>a+r.baselineMs,0)/rows.length),meanCandidateMs:Math.round(rows.reduce((a,r)=>a+r.candidateMs,0)/rows.length),threads:[...new Set(rows.map(r=>r.threads))],hashMB:[...new Set(rows.map(r=>r.hashMB))]};
+          console.log('COHORT_SUMMARY '+JSON.stringify(sum));
+          if(sum.candidateTop5<Math.ceil(rows.length*0.75)) throw new Error('candidate quality too low '+JSON.stringify(sum));
+          if(!sum.threads.includes(1)) throw new Error('expected Threads=1 '+JSON.stringify(sum));
+          console.log('PASS_COHORT7_12_YANEURA_AUDIT '+JSON.stringify(sum));
+          await browser.close();
+          NODE
+          node /tmp/cohort-audit.mjs 2>&1 | tee /tmp/cohort.log
+          grep -q '^PASS_COHORT7_12_YANEURA_AUDIT ' /tmp/cohort.log
+      - name: Report diagnostic result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Ranks 7-12 YaneuraOu feasibility audit'; echo; echo 'Diagnostic only — do not merge this PR.'; echo '```text'; grep -E '^(COHORT_TARGET|COHORT_SUMMARY|PASS_|Error:)' /tmp/cohort.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
