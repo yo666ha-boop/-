@@ -31,10 +31,10 @@ jobs:
         shell: bash
         env:
           HOME: /root
-          PR76_STYLE_TUNE: v3
+          PR76_STYLE_TUNE: v4
         run: |
           set -euo pipefail
           node .github/scripts/verify-pr76-cohort13-18-style-quality-20260820.mjs 2>&1 | tee /tmp/q76.log
           grep -q '^PASS_PR76_COHORT_STYLE_QUALITY ' /tmp/q76.log
       - if: always()
-        run: grep -E '^(P76Q_REF|P76Q_ROW|P76Q_STYLE|PR76_STYLE_QUALITY|PASS_PR76_COHORT_STYLE_QUALITY|Error:)' /tmp/q76.log || true
+        run: grep -E '^(P76Q_PROFILE|P76Q_REF|P76Q_ROW|P76Q_LIVE_STYLE|P76Q_FIXTURE_STYLE|PR76_STYLE_QUALITY|PASS_PR76_COHORT_STYLE_QUALITY|Error:)' /tmp/q76.log || true
