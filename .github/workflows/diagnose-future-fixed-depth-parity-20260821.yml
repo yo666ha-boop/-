@@ -1,0 +1,55 @@
+name: Diagnose Future fixed-depth browser parity
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browsers
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fdepth && cd /tmp/fdepth
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >/tmp/fdepth/server.mjs <<'NODE'
+          import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+          const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4182,'127.0.0.1');
+          NODE
+          node /tmp/fdepth/server.mjs >/tmp/fdepth/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4182/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/fdepth/server.log; exit 1
+      - name: Compare fresh fixed-depth searches
+        run: |
+          cat >/tmp/fdepth/parity.mjs <<'NODE'
+          import {webkit,chromium,devices} from 'playwright';
+          const I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`4i5h 3c3d 8g8f 8c8d 5i4i 8d8e 7g7f 8e8f 8h2b+ 3a2b 7f7e B*8g 5h6h 8g5d+ 7e7d 7c7d 6h7h 8f8g+ B*4f 6c6d 5g5f 8g7h 5f5e 5d6e 6i5h 8b8i+ 3i4h 7h7i 4i3h 7i7h 5h5i G*5h 2g2f 5h5i 3h2g 5i5h 4h5g 6e4g 1g1f S*3h`.split(/\s+/);
+          function sfen(ms){const R='abcdefghi',b=new Map(),h={b:{},w:{}},rows0=I.split('/');for(let rr=0;rr<9;rr++){let f=9,pr=false;for(const c of rows0[rr]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error('apply '+m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          async function boot(kind){const browser=await(kind==='webkit'?webkit:chromium).launch({headless:true});const page=await browser.newPage(kind==='webkit'?{...devices['iPhone 14']}:{viewport:{width:390,height:844},userAgent:devices['iPhone 14'].userAgent});await page.goto('http://127.0.0.1:4182/shogi-v21528/index.html?depth='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await page.evaluate(()=>crossOriginIsolated))throw Error('no COI');return{browser,page}}
+          async function search(page,pos,depth){return await page.evaluate(async ({pos,depth})=>{const w=new Worker('./future-yaneura-worker21528.js?v=depth-'+Math.random());let seq=0,p=new Map();w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q||m.type!=='result')return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={})=>new Promise((r,j)=>{const id=++seq,t=setTimeout(()=>j(Error(type+' timeout')),180000);p.set(id,{r,j,t});w.postMessage({type,id,...data})});await call('init');const out=await call('rawusi',{commands:['setoption name MultiPV value 5','position sfen '+pos,'go depth '+depth],waitPrefix:'bestmove ',timeout:180000});w.terminate();return out}, {pos,depth})}
+          const plies=[29,33,35],depths=[12,14,16],positions=plies.map(p=>sfen(M.slice(0,p-1))),all={};
+          for(const kind of['webkit','chromium']){const X=await boot(kind);all[kind]=[];for(let i=0;i<positions.length;i++){for(const depth of depths){const r=await search(X.page,positions[i],depth);const row={browser:kind,ply:plies[i],depth,token:r.token,candidates:r.candidates||[],profile:r.profile||{}};all[kind].push(row);console.log('FUTURE_FIXED_DEPTH_ROW '+JSON.stringify(row))}}await X.browser.close()}
+          const mismatches=[];for(const ply of plies)for(const depth of depths){const a=all.webkit.find(x=>x.ply===ply&&x.depth===depth),b=all.chromium.find(x=>x.ply===ply&&x.depth===depth);if(a?.token!==b?.token)mismatches.push({ply,depth,webkit:a?.token,chromium:b?.token})}
+          console.log('FUTURE_FIXED_DEPTH_SUMMARY '+JSON.stringify({mismatches,webkit:all.webkit,chromium:all.chromium}));
+          console.log('PASS_FUTURE_FIXED_DEPTH_HARNESS');
+          NODE
+          cd /tmp/fdepth && node parity.mjs 2>&1 | tee /tmp/fdepth/parity.log
+          grep -F 'FUTURE_FIXED_DEPTH_SUMMARY ' /tmp/fdepth/parity.log
+          grep -F 'PASS_FUTURE_FIXED_DEPTH_HARNESS' /tmp/fdepth/parity.log
+      - name: Preserve evidence
+        if: always()
+        run: |
+          grep -E '^(FUTURE_FIXED_DEPTH_ROW|FUTURE_FIXED_DEPTH_SUMMARY|PASS_FUTURE_FIXED_DEPTH_HARNESS)' /tmp/fdepth/parity.log | tail -100 || true
