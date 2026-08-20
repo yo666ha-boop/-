@@ -23,19 +23,35 @@
     return out.sort((a,b)=>(a.rank||99)-(b.rank||99));
   }
   function cpLoss(best,c){if(Number.isFinite(best?.cp)&&Number.isFinite(c?.cp))return Math.max(0,best.cp-c.cp);return c===best?0:9999}
+  function moveFlags(s,m){
+    const before=m.f!=null?s.b[m.f]:null,base=BASE(m.drop||before?.k||''),from=m.f!=null?xy(m.f):null,to=xy(m.to),fwd=s.t===S?-1:1;
+    let capture=!!s.b[m.to],promote=!!m.prom,check=false,replyChecks=0;
+    const advance=from?(to[1]-from[1])*fwd:0,centerGain=from?(Math.abs(from[0]-4)+Math.abs(from[1]-4))-(Math.abs(to[0]-4)+Math.abs(to[1]-4)):0;
+    const develop=(base==='G'||base==='S')&&!!from,kingMove=base==='K',major=base==='R'||base==='B';
+    try{const n=apply(s,m);check=incheck(n,n.t);for(const r of legal(n).slice(0,80)){const nn=apply(n,r);if(incheck(nn,nn.t))replyChecks++}}catch(e){}
+    return{capture,promote,check,replyChecks,advance,centerGain,develop,kingMove,major,base};
+  }
+  function styleScore(p,f){
+    if(p.personality==='aggressive')return f.capture*28+f.promote*22+f.check*38+Math.max(0,f.advance)*8+Math.max(0,f.centerGain)*3+f.major*7-f.replyChecks*2;
+    if(p.personality==='stable')return f.capture*6-f.replyChecks*12-f.check*4+f.develop*28+f.kingMove*10+Math.max(0,f.centerGain)*2;
+    if(p.personality==='positional')return f.capture*4+f.develop*14+Math.max(0,f.centerGain)*4-f.replyChecks*8+f.kingMove*4+f.check*3;
+    return 0;
+  }
   function selectProfileMove(s,res,who){
     const p=PROFILES[who]||PROFILES[11],cands=candidateList(s,res),best=cands[0];
-    if(!best)return{move:res?.move,rank:1,loss:0,forced:true};
-    if(best.mate!==undefined&&best.mate!==null)return{move:best.move,rank:best.rank||1,loss:0,forced:true};
+    if(!best)return{move:res?.move,rank:1,loss:0,forced:true,reason:p.personality};
+    if(best.mate!==undefined&&best.mate!==null)return{move:best.move,rank:best.rank||1,loss:0,forced:true,reason:p.personality};
     const safe=cands.filter(c=>cpLoss(best,c)<=p.maxLoss&&!(c.mate!==undefined&&c.mate!==null&&c.mate<0));
-    const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),winner=preferred[0]||safe[0]||best;
-    return{move:winner.move,rank:winner.rank||1,loss:cpLoss(best,winner),forced:false};
+    const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),pool=preferred.length?preferred:(safe.length?safe:[best]);
+    let winner=pool[0],winnerScore=-1e12;
+    for(const c of pool){const loss=cpLoss(best,c),f=moveFlags(s,c.move),score=styleScore(p,f)-loss-(Math.max(1,c.rank||1)-1)*2;if(score>winnerScore){winnerScore=score;winner=c}}
+    return{move:winner.move,rank:winner.rank||1,loss:cpLoss(best,winner),forced:false,reason:p.personality};
   }
   async function profiledBest(s,who){
     const p=PROFILES[who]||PROFILES[11],targetMs=profileMs(s,who),res=await shared.bestMove(s,{ms:targetMs,multiPV:p.multiPV,adaptive:false});
     if(res?.resign||res?.declareWin||!res?.move)return{...res,profile:p,targetMs,selectedRank:1,cpLoss:0};
     const picked=selectProfileMove(s,res,who);
-    return{...res,move:picked.move,info:{...(res.info||{}),selectedRank:picked.rank,cpLoss:picked.loss,personality:p.personality,profileMultiPV:p.multiPV,cohort13_18:true,forcedBest:picked.forced},profile:p,targetMs,selectedRank:picked.rank,cpLoss:picked.loss};
+    return{...res,move:picked.move,info:{...(res.info||{}),selectedRank:picked.rank,cpLoss:picked.loss,personality:picked.reason||p.personality,profileMultiPV:p.multiPV,cohort13_18:true,forcedBest:picked.forced},profile:p,targetMs,selectedRank:picked.rank,cpLoss:picked.loss};
   }
   const aiMoveBaseCohort=aiMove;
   aiMove=function(){
