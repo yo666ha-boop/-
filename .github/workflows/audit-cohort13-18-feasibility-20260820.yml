@@ -1,0 +1,39 @@
+name: Audit ranks 13-18 feasibility
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  feasibility:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          npm init -y
+          npm install playwright@1.55.0
+      - name: Build diagnostic page
+        run: |
+          node <<'NODE'
+          const fs=require('fs');let s=fs.readFileSync('shogi-v21528/index.html','utf8');const n="'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,";if(!s.includes(n))throw Error('hook missing');const h=`"window.__B_DIAG={parse:(pos)=>{const [board,turn,hands,mn]=pos.split(/\\s+/),s=clone(st);s.b=Array(81).fill(null);let y=0;for(const row of board.split('/')){let x=0;for(const ch of row){if(/\\d/.test(ch)){x+=+ch;continue}const u=ch.toUpperCase();s.b[y*9+x]={k:u,o:ch===u?1:-1};x++}y++}s.h={'1':{R:0,B:0,G:0,S:0,N:0,L:0,P:0},'-1':{R:0,B:0,G:0,S:0,N:0,L:0,P:0}};s.t=turn==='b'?1:-1;s.log=Array(Math.max(0,(+mn||1)-1)).fill({audit:true});return s}};",`;s=s.replace(n,"'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,"+h);fs.writeFileSync('shogi-v21528/index-b-feasibility.html',s);
+          NODE
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/s.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.webp':'image/webp','.png':'image/png','.jpg':'image/jpeg'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4233,'127.0.0.1');
+          NODE
+          node /tmp/s.mjs &
+          sleep 1
+      - name: Run actual feasibility
+        shell: bash
+        env:
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-cohort13-18-feasibility-20260820.mjs 2>&1 | tee /tmp/b.log
+          grep -q '^PASS_COHORT13_18_FEASIBILITY ' /tmp/b.log
+      - if: always()
+        run: grep -E '^(COHORT13_18_FEASIBILITY|PASS_COHORT13_18_FEASIBILITY|Error:)' /tmp/b.log || true
