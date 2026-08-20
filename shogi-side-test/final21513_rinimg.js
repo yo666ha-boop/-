@@ -7,3 +7,11 @@ setTimeout(async()=>{
     eval(await r.text());
   }catch(e){console.error('top5 yaneura patch load failed',e)}
 },0);
+/* v2.15.33: 上位5人を壊さず、強さ7〜12位の段階別やねうら王パッチを追加 */
+setTimeout(async()=>{
+  try{
+    const r=await fetch('../shogi-side-test/cohort7-12-yaneura21533.js?v=21533a',{cache:'no-store'});
+    if(!r.ok)throw new Error('cohort7-12-yaneura21533.js '+r.status);
+    eval(await r.text());
+  }catch(e){console.error('cohort7-12 yaneura patch load failed',e)}
+},20);
