@@ -1,0 +1,55 @@
+name: Diagnose Future TT repeatability
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeatability:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browsers
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ftt && cd /tmp/ftt
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >/tmp/ftt/server.mjs <<'NODE'
+          import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+          const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4181,'127.0.0.1');
+          NODE
+          node /tmp/ftt/server.mjs >/tmp/ftt/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4181/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/ftt/server.log; exit 1
+      - name: Compare fresh and warm worker state
+        run: |
+          cat >/tmp/ftt/repeatability.mjs <<'NODE'
+          import {webkit,chromium,devices} from 'playwright';
+          const I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`4i5h 3c3d 8g8f 8c8d 5i4i 8d8e 7g7f 8e8f 8h2b+ 3a2b 7f7e B*8g 5h6h 8g5d+ 7e7d 7c7d 6h7h 8f8g+ B*4f 6c6d 5g5f 8g7h 5f5e 5d6e 6i5h 8b8i+ 3i4h 7h7i 4i3h 7i7h 5h5i G*5h 2g2f 5h5i 3h2g 5i5h 4h5g 6e4g 1g1f S*3h`.split(/\s+/);
+          function sfen(ms){const R='abcdefghi',b=new Map(),h={b:{},w:{}},rows0=I.split('/');for(let rr=0;rr<9;rr++){let f=9,pr=false;for(const c of rows0[rr]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error('apply '+m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          async function boot(kind){const browser=await(kind==='webkit'?webkit:chromium).launch({headless:true});const page=await browser.newPage(kind==='webkit'?{...devices['iPhone 14']}:{viewport:{width:390,height:844},userAgent:devices['iPhone 14'].userAgent});await page.goto('http://127.0.0.1:4181/shogi-v21528/index.html?tt='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await page.evaluate(()=>crossOriginIsolated))throw Error('no COI');return{browser,page}}
+          async function fresh(page,pos){return await page.evaluate(async pos=>{const w=new Worker('./future-yaneura-worker21528.js?v=fresh-'+Math.random());let n=0,p=new Map();w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q||m.type!=='result')return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=x=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('timeout')),180000);p.set(id,{r,j,t});w.postMessage({type:'bestmove',id,...x})});await new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('init timeout')),120000);p.set(id,{r,j,t});w.postMessage({type:'init',id})});const s1=await call({sfen:pos,nodes:1500000,multiPV:3,adaptive:false});const tok=(s1.candidates||[]).map(x=>x.token).filter(Boolean).slice(0,3);const h3=await call({sfen:pos,nodes:1500000,multiPV:1,searchmoves:tok,adaptive:false});const deep=await call({sfen:pos,nodes:6000000,multiPV:5,adaptive:false});w.terminate();return{profile:{hashMB:s1.info?.hashMB,threads:s1.info?.threads},s1:s1.token,h3:h3.token,deep:deep.token,deepTop:(deep.candidates||[]).slice(0,5).map(x=>x.token)}} ,pos)}
+          async function warm(page,positions){return await page.evaluate(async positions=>{const w=new Worker('./future-yaneura-worker21528.js?v=warm-'+Math.random());let n=0,p=new Map();w.onmessage=e=>{const m=e.data||{},q=p.get(m.id);if(!q||m.type!=='result')return;p.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=x=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('timeout')),180000);p.set(id,{r,j,t});w.postMessage({type:'bestmove',id,...x})});await new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error('init timeout')),120000);p.set(id,{r,j,t});w.postMessage({type:'init',id})});const out=[];for(const pos of positions){const s1=await call({sfen:pos,nodes:1500000,multiPV:3,adaptive:false});const tok=(s1.candidates||[]).map(x=>x.token).filter(Boolean).slice(0,3);const h3=await call({sfen:pos,nodes:1500000,multiPV:1,searchmoves:tok,adaptive:false});const deep=await call({sfen:pos,nodes:6000000,multiPV:5,adaptive:false});out.push({s1:s1.token,h3:h3.token,deep:deep.token})}w.terminate();return out},positions)}
+          const plies=[29,33,35],positions=plies.map(p=>sfen(M.slice(0,p-1))),summary={};
+          for(const kind of['webkit','chromium']){const X=await boot(kind);const freshRows=[];for(let i=0;i<positions.length;i++){const a=await fresh(X.page,positions[i]),b=await fresh(X.page,positions[i]);const row={ply:plies[i],a,b,freshH3Same:a.h3===b.h3,freshDeepSame:a.deep===b.deep};freshRows.push(row);console.log('FUTURE_TT_FRESH_ROW '+JSON.stringify({browser:kind,...row}))}const warmRows=await warm(X.page,positions);for(let i=0;i<warmRows.length;i++)console.log('FUTURE_TT_WARM_ROW '+JSON.stringify({browser:kind,ply:plies[i],...warmRows[i]}));summary[kind]={freshH3Mismatch:freshRows.filter(x=>!x.freshH3Same).map(x=>x.ply),freshDeepMismatch:freshRows.filter(x=>!x.freshDeepSame).map(x=>x.ply),warmRows};await X.browser.close()}
+          console.log('FUTURE_TT_REPEATABILITY_SUMMARY '+JSON.stringify(summary));
+          console.log('PASS_FUTURE_TT_REPEATABILITY_HARNESS');
+          NODE
+          cd /tmp/ftt && node repeatability.mjs 2>&1 | tee /tmp/ftt/repeatability.log
+          grep -F 'FUTURE_TT_REPEATABILITY_SUMMARY ' /tmp/ftt/repeatability.log
+          grep -F 'PASS_FUTURE_TT_REPEATABILITY_HARNESS' /tmp/ftt/repeatability.log
+      - name: Preserve evidence
+        if: always()
+        run: |
+          grep -E '^(FUTURE_TT_FRESH_ROW|FUTURE_TT_WARM_ROW|FUTURE_TT_REPEATABILITY_SUMMARY|PASS_FUTURE_TT_REPEATABILITY_HARNESS)' /tmp/ftt/repeatability.log | tail -80 || true
