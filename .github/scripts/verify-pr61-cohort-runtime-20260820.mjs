@@ -2,7 +2,9 @@ import {webkit,chromium,firefox} from 'playwright';
 const mode=process.env.PLATFORM||'iphone';
 const cfg={iphone:{browser:webkit,ua:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}},fire:{browser:chromium,ua:'Mozilla/5.0 (Linux; U; en-US; KFMAWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/124.5.3 like Chrome/124.0 Safari/535.19',viewport:{width:800,height:1280}},desktop:{browser:chromium,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36',viewport:{width:1440,height:900}},firefox:{browser:firefox,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0',viewport:{width:1440,height:900}}}[mode];
 if(!cfg)throw Error('bad platform '+mode);
-const browser=await cfg.browser.launch({headless:true}),page=await browser.newPage({userAgent:cfg.ua,viewport:cfg.viewport});
+if(mode==='firefox')process.env.HOME='/root';
+const launchOpts=mode==='firefox'?{headless:true,env:{...process.env,HOME:'/root'}}:{headless:true};
+const browser=await cfg.browser.launch(launchOpts),page=await browser.newPage({userAgent:cfg.ua,viewport:cfg.viewport});
 const pageErrors=[],consoleErrors=[],badResponses=[],requestFailures=[];page.on('pageerror',e=>pageErrors.push(String(e.message||e)));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});page.on('response',r=>{if(r.status()>=400)badResponses.push({status:r.status(),url:r.url()})});page.on('requestfailed',r=>requestFailures.push({url:r.url(),failure:r.failure()?.errorText||''}));
 const text=sel=>page.locator(sel).textContent().then(v=>String(v||'').trim());
 async function realReply(index,label){
