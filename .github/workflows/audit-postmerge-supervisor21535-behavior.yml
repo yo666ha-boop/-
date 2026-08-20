@@ -1,0 +1,41 @@
+name: Audit post-merge supervisor behavior
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  behavior:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+      - name: Build diagnostic page
+        run: |
+          node <<'NODE'
+          const fs=require('fs');let s=fs.readFileSync('shogi-v21528/index.html','utf8');const n="'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,";if(!s.includes(n))throw Error('hook missing');const h=`"window.__SUP35={builtin:(s,i)=>chooseAI(clone(s),i),usi:(m)=>usi(m),parse:(pos)=>{const [board,turn,hands,mn]=pos.trim().split(' '),s=clone(st),keys=['R','B','G','S','N','L','P'];s.b=Array(81).fill(null);let y=0;for(const row of board.split('/')){let x=0,prom=false;for(const ch of row){if(ch==='+'){prom=true;continue}if(ch>='1'&&ch<='9'){x+=Number(ch);continue}const u=ch.toUpperCase();s.b[y*9+x]={k:(prom?'+':'')+u,o:ch===u?1:-1};prom=false;x++}if(x!==9)throw new Error('bad row '+row+' '+x);y++}if(y!==9)throw new Error('bad rows '+y);s.h={'1':{},'-1':{}};for(const side of['1','-1'])for(const k of keys)s.h[side][k]=0;if(hands!=='-'){let num='';for(const ch of hands){if(ch>='0'&&ch<='9'){num+=ch;continue}const count=num?Number(num):1;num='';const side=ch===ch.toUpperCase()?'1':'-1';s.h[side][ch.toUpperCase()]=(s.h[side][ch.toUpperCase()]||0)+count}}s.t=turn==='b'?1:-1;s.log=Array(Math.max(0,(+mn||1)-1)).fill(0).map((_,i)=>({audit:true,ply:i+1}));return s}};",`;s=s.replace(n,"'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,"+h);fs.writeFileSync('shogi-v21528/index-postmerge-supervisor.html',s);
+          NODE
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/postsup.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4243,'127.0.0.1');
+          NODE
+          node /tmp/postsup.mjs >/tmp/postsup-server.log 2>&1 &
+          sleep 1
+      - name: Run actual post-merge behavior gate
+        shell: bash
+        env:
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-postmerge-supervisor21535-behavior.mjs 2>&1 | tee /tmp/postsup.log
+          grep -q '^PASS_POSTMERGE_SUPERVISOR ' /tmp/postsup.log
+      - name: Show actual result
+        if: always()
+        run: grep -E '^(POSTSUP_META|POSTSUP_ROW|POSTMERGE_SUPERVISOR|PASS_POSTMERGE_SUPERVISOR|Error:)' /tmp/postsup.log || true
