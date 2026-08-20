@@ -44,7 +44,7 @@
     const safe=cands.filter(c=>cpLoss(best,c)<=p.maxLoss&&!(c.mate!==undefined&&c.mate!==null&&c.mate<0));
     const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),pool=preferred.length?preferred:(safe.length?safe:[best]);
     let winner=pool[0],winnerScore=-1e12;
-    for(const c of pool){const loss=cpLoss(best,c),f=moveFlags(s,c.move),score=styleScore(p,f)-loss-(Math.max(1,c.rank||1)-1)*2;if(score>winnerScore){winnerScore=score;winner=c}}
+    for(const c of pool){const loss=cpLoss(best,c),f=moveFlags(s,c.move),rank=Math.max(1,c.rank||1),positionalDepthBias=p.personality==='positional'?Math.max(0,rank-p.minRank)*24:0,score=styleScore(p,f)+positionalDepthBias-loss-(rank-1)*2;if(score>winnerScore){winnerScore=score;winner=c}}
     return{move:winner.move,rank:winner.rank||1,loss:cpLoss(best,winner),forced:false,reason:p.personality};
   }
   async function profiledBest(s,who){
