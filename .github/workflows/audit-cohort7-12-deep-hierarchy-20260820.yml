@@ -1,0 +1,53 @@
+name: Audit ranks 7-12 deep hierarchy
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Prepare Playwright
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Build diagnostic page without changing production
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const p='shogi-v21528/index.html';
+          let s=fs.readFileSync(p,'utf8');
+          const needle="'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,";
+          if(!s.includes(needle)) throw new Error('diagnostic injection point missing');
+          const hook=`"window.__COHORT_DEEP_DIAG={info:()=>C.map((x,i)=>({i,name:x[0],rating:x[1],style:CHAR_META[i]?.style||'',feature:CHAR_META[i]?.feature||''})),state:()=>clone(st),legal:(s)=>legal(s).map(usi),applyUsi:(s,u)=>{const m=legal(s).find(x=>usi(x)===u);if(!m)throw new Error('illegal '+u);return apply(s,m)},usi:(m)=>usi(m),flags:(s,u)=>{const m=legal(s).find(x=>usi(x)===u);if(!m)return null;const before=m.f!=null?s.b[m.f]:null,base=BASE(m.drop||before?.k||''),from=m.f!=null?xy(m.f):null,to=xy(m.to),fwd=s.t===S?-1:1;let capture=!!s.b[m.to],promote=!!m.prom,check=false,replyChecks=0;const advance=from?(to[1]-from[1])*fwd:0,centerGain=from?(Math.abs(from[0]-4)+Math.abs(from[1]-4))-(Math.abs(to[0]-4)+Math.abs(to[1]-4)):0,develop=(base==='G'||base==='S')&&!!from,kingMove=base==='K',major=base==='R'||base==='B';try{const n=apply(s,m);check=incheck(n,n.t);for(const r of legal(n).slice(0,80)){const nn=apply(n,r);if(incheck(nn,nn.t))replyChecks++}}catch(e){}return{capture,promote,check,replyChecks,advance,centerGain,develop,kingMove,major,base}}};",`;
+          s=s.replace(needle,"'const AI_SHOGI_PRE_STRONG_21528=chooseAI;',strongPatch,"+hook);
+          fs.writeFileSync('shogi-v21528/index-cohort-deep-audit.html',s);
+          NODE
+      - name: Start COOP COEP server
+        run: |
+          cat >/tmp/coi.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4198,'127.0.0.1');
+          NODE
+          node /tmp/coi.mjs >/tmp/coi.log 2>&1 &
+          sleep 1
+      - name: Run deep hierarchy audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-cohort7-12-deep-hierarchy-20260820.mjs 2>&1 | tee /tmp/deep.log
+          grep -q '^PASS_COHORT7_12_DEEP_HIERARCHY ' /tmp/deep.log
+      - name: Report diagnostic result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Ranks 7-12 deep hierarchy audit'; echo; echo 'Diagnostic only — do not merge this PR.'; echo '```text'; grep -E '^(DEEP_REF|DEEP_MAMA|DEEP_SUMMARY|PASS_|Error:)' /tmp/deep.log || true; echo '```'; } >/tmp/report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
