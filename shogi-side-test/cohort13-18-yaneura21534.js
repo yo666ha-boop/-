@@ -8,11 +8,11 @@
   for(const i of INDICES)if(C[i]?.[0]!==EXPECTED[i]){console.error('cohort13-18 identity mismatch',i,C[i]?.[0],EXPECTED[i]);return}
   const PROFILES={
     15:{label:'R1950・自由猛攻',personality:'aggressive',multiPV:5,minRank:3,maxLoss:115,normal:520,endgame:820},
-    12:{label:'R1900・強気急戦',personality:'aggressive',multiPV:5,minRank:2,maxLoss:125,normal:470,endgame:760},
-    20:{label:'R1880・作戦持久',personality:'positional',multiPV:5,minRank:2,maxLoss:135,normal:430,endgame:700},
+    12:{label:'R1900・強気急戦',personality:'aggressive',multiPV:5,minRank:3,maxLoss:125,normal:470,endgame:760},
+    20:{label:'R1880・作戦持久',personality:'positional',multiPV:5,minRank:3,maxLoss:135,normal:430,endgame:700},
     18:{label:'R1820・傾奇突破',personality:'aggressive',multiPV:5,minRank:3,maxLoss:145,normal:380,endgame:640},
-    9:{label:'R1800・精密静観',personality:'stable',multiPV:5,minRank:3,maxLoss:155,normal:340,endgame:580},
-    11:{label:'R1750・奇襲速攻',personality:'aggressive',multiPV:5,minRank:2,maxLoss:170,normal:300,endgame:520}
+    9:{label:'R1800・精密静観',personality:'stable',multiPV:5,minRank:2,maxLoss:155,normal:340,endgame:580},
+    11:{label:'R1750・奇襲速攻',personality:'aggressive',multiPV:5,minRank:2,maxLoss:170,normal:260,endgame:450}
   };
   const NAMES=INDICES.map(i=>C[i][0]),RATINGS=INDICES.map(i=>C[i][1]);
   function profileMs(s,who){const p=PROFILES[who]||PROFILES[11];return (s.log?.length||0)>=55?p.endgame:p.normal}
@@ -34,7 +34,7 @@
   function styleScore(p,f){
     if(p.personality==='aggressive')return f.capture*30+f.promote*24+f.check*42+Math.max(0,f.advance)*10+Math.max(0,f.centerGain)*3+f.major*9-f.kingMove*4-f.replyChecks*2;
     if(p.personality==='stable')return f.capture*3-f.replyChecks*14-f.check*8+f.develop*20+f.kingMove*44+Math.max(0,f.centerGain)*3-f.step*12-f.major*8-f.drop*2;
-    if(p.personality==='positional')return f.capture*3+f.develop*42+Math.max(0,f.centerGain)*9-f.replyChecks*10+f.kingMove*16-f.check*2-f.step*4-f.major*4+f.drop*3;
+    if(p.personality==='positional')return f.capture*3+f.develop*42+Math.max(0,f.centerGain)*9-f.replyChecks*10+f.kingMove*16-f.check*2-f.step*4-f.major*4+f.drop*20;
     return 0;
   }
   function selectProfileMove(s,res,who){
