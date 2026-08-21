@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,6 +19,33 @@ jobs:
           npm init -y
           npm install playwright@1.55.0
           npx playwright install --with-deps webkit chromium
+      - name: Build diagnostic raw USI worker
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const src='shogi-v21528/future-yaneura-worker21528.js';
+          const dst='shogi-v21528/future-yaneura-worker-depthdiag.js';
+          let s=fs.readFileSync(src,'utf8');
+          const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          const insert=`    if(m.type==='rawusi'){
+              await init();
+              const commands=Array.isArray(m.commands)?m.commands.map(x=>String(x||'').trim()).filter(Boolean):[];
+              const waitPrefix=String(m.waitPrefix||'').trim(),timeout=Math.max(1000,Number(m.timeout)||180000);
+              latestInfo={};latestMultiPV={};let line='',pending=null;
+              for(const command of commands){
+                if(waitPrefix&&!pending&&/^go(?:\\s|$)/.test(command))pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');
+                await sendUSI(command,timeout);
+              }
+              if(waitPrefix){if(!pending)pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');line=await pending;}
+              const token=line.startsWith('bestmove ')?(line.split(/\\s+/)[1]||'').trim():'';
+              self.postMessage({type:'result',id,ok:true,kind:'rawusi',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
+            }
+`;
+          if(!s.includes(needle))throw new Error('rawusi insertion point not found');
+          fs.writeFileSync(dst,s.replace(needle,insert+needle));
+          console.log('DEPTH_DIAG_WORKER_READY');
+          NODE
       - name: Start COOP COEP server
         run: |
           cat >/tmp/coi.mjs <<'NODE'
@@ -62,10 +89,31 @@ jobs:
           node verify-future-4000.mjs 2>&1 | tee /tmp/verify.log
           grep -q '^PASS_WEBKIT ' /tmp/verify.log
           grep -q '^PASS_CHROMIUM ' /tmp/verify.log
+      - name: Fixed-depth MultiPV1 parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >fixed-depth-mpv1.mjs <<'NODE'
+          import {webkit,chromium} from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`4i5h 3c3d 8g8f 8c8d 5i4i 8d8e 7g7f 8e8f 8h2b+ 3a2b 7f7e B*8g 5h6h 8g5d+ 7e7d 7c7d 6h7h 8f8g+ B*4f 6c6d 5g5f 8g7h 5f5e 5d6e 6i5h 8b8i+ 3i4h 7h7i 4i3h 7i7h 5h5i G*5h 2g2f 5h5i 3h2g 5i5h 4h5g 6e4g 1g1f S*3h`.split(/\s+/);
+          function sfen(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error('apply '+m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||m.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const UA={webkit:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',chromium:'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/139 Safari/537.36'};
+          async function boot(kind){const type=kind==='webkit'?webkit:chromium,browser=await type.launch({headless:true}),context=await browser.newContext({userAgent:UA[kind]}),page=await context.newPage();await page.goto('http://127.0.0.1:4194/shogi-v21528/index.html?fd='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await page.evaluate(()=>crossOriginIsolated))throw Error(kind+' no COI');return{browser,page}}
+          async function one(page,pos,depth){return await page.evaluate(async({pos,depth})=>{const w=new Worker('./future-yaneura-worker-depthdiag.js?v='+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=240000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});await call('init',{},120000);const r=await call('rawusi',{commands:['setoption name MultiPV value 1','position sfen '+pos,'go depth '+depth],waitPrefix:'bestmove ',timeout:210000},225000);w.terminate();return r},{pos,depth})}
+          const plies=[29,33,35],depths=[12,14],all={webkit:[],chromium:[]};
+          for(const kind of['webkit','chromium']){const X=await boot(kind);for(const ply of plies){const pos=sfen(M.slice(0,ply-1));for(const depth of depths){const r=await one(X.page,pos,depth);const row={browser:kind,ply,depth,token:r.token,cp:r.info?.cp,mate:r.info?.mate,depthSeen:r.info?.depth,nodes:r.info?.nodes,profile:r.profile||{}};all[kind].push(row);console.log('FUTURE_FIXED_DEPTH_MPV1_ROW '+JSON.stringify(row))}}await X.browser.close()}
+          const mismatches=[];for(const ply of plies)for(const depth of depths){const a=all.webkit.find(x=>x.ply===ply&&x.depth===depth),b=all.chromium.find(x=>x.ply===ply&&x.depth===depth);if(a?.token!==b?.token)mismatches.push({ply,depth,webkit:a?.token,chromium:b?.token})}
+          console.log('FUTURE_FIXED_DEPTH_MPV1_SUMMARY '+JSON.stringify({mismatches,webkit:all.webkit,chromium:all.chromium}));
+          console.log('PASS_FUTURE_FIXED_DEPTH_MPV1_HARNESS');
+          NODE
+          node fixed-depth-mpv1.mjs 2>&1 | tee /tmp/fdepth.log
+          grep -F 'FUTURE_FIXED_DEPTH_MPV1_SUMMARY ' /tmp/fdepth.log
+          grep -F 'PASS_FUTURE_FIXED_DEPTH_MPV1_HARNESS' /tmp/fdepth.log
       - name: Report
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '### Future 4.0s runtime verification'; echo '```text'; grep '^PASS_' /tmp/verify.log || true; echo '```'; } >/tmp/report.md
+          { echo '### Future 4.0s runtime + fixed-depth MPV1 parity'; echo '```text'; grep '^PASS_' /tmp/verify.log || true; grep -E '^(FUTURE_FIXED_DEPTH_MPV1_ROW|FUTURE_FIXED_DEPTH_MPV1_SUMMARY|PASS_FUTURE_FIXED_DEPTH_MPV1_HARNESS)' /tmp/fdepth.log || true; echo '```'; } >/tmp/report.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/report.md
