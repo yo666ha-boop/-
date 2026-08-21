@@ -8,118 +8,51 @@ on:
 permissions:
   contents: read
 jobs:
-  rootcause:
+  fixed_depth_mpv1:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Verify production inputs
+      - name: Verify diagnostic inputs
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "const WORKER_URL=new URL('./future-yaneura-worker21528.js?v=21528v970d6'" shogi-side-test/future21520.js
+          test -f .github/scripts/verify-prewarm-sound-20260819.mjs
+          grep -F 'FUTURE_FIXED_DEPTH_MPV1_SUMMARY' .github/scripts/verify-prewarm-sound-20260819.mjs
           grep -F "const ADAPTIVE_MS=4000" shogi-v21528/future-yaneura-worker21528.js
-          grep -F "const ADAPTIVE_STAGE1_NODES=1000000" shogi-v21528/future-yaneura-worker21528.js
-          grep -F "const ADAPTIVE_RERANK_NODES=1500000" shogi-v21528/future-yaneura-worker21528.js
-          grep -F "const ADAPTIVE_GAP_CP=20" shogi-v21528/future-yaneura-worker21528.js
-          grep -F "const FUTURE_RATING=3400" shogi-side-test/future21520.js
-      - name: Install Playwright WebKit
+      - name: Install Playwright browsers
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/future-audit
-          cd /tmp/future-audit
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps webkit >/dev/null
-      - name: Start COI server
+          npx playwright install --with-deps webkit chromium >/dev/null
+      - name: Start local COI server
         shell: bash
         run: |
-          cat >/tmp/future-audit/server.mjs <<'NODE'
+          cat >/tmp/future-fixed-depth-server.mjs <<'NODE'
           import http from 'node:http';
           import fs from 'node:fs';
           import path from 'node:path';
           const root=process.env.GITHUB_WORKSPACE;
           const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};
-          const srv=http.createServer((req,res)=>{
-            let u=decodeURIComponent((req.url||'/').split('?')[0]); if(u==='/')u='/shogi-v21528/index.html';
-            const f=path.resolve(root,'.'+u); if(!f.startsWith(path.resolve(root))){res.writeHead(403);return res.end('forbidden')}
-            res.setHeader('Cross-Origin-Opener-Policy','same-origin');
-            res.setHeader('Cross-Origin-Embedder-Policy','require-corp');
-            res.setHeader('Cross-Origin-Resource-Policy','same-origin');
-            fs.readFile(f,(e,b)=>{if(e){res.writeHead(404);res.end('not found');return}res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');res.writeHead(200);res.end(b)});
-          });
+          const srv=http.createServer((req,res)=>{let u=decodeURIComponent((req.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){res.writeHead(403);return res.end('forbidden')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){res.writeHead(404);return res.end('not found')}res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');res.writeHead(200);res.end(b)})});
           srv.listen(4173,'127.0.0.1',()=>console.log('COI_SERVER_READY'));
           NODE
-          node /tmp/future-audit/server.mjs >/tmp/future-server.log 2>&1 &
-          echo $! >/tmp/future-server.pid
+          node /tmp/future-fixed-depth-server.mjs >/tmp/future-fixed-depth-server.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
-          cat /tmp/future-server.log
+          cat /tmp/future-fixed-depth-server.log
           exit 1
-      - name: Compare adaptive vs straight searches on practical collapse positions
+      - name: Run fixed-depth MPV1 browser parity through checked-out PR script
         shell: bash
         run: |
-          cat >/tmp/future-audit/audit.mjs <<'NODE'
-          import {webkit,devices} from 'playwright';
-          const R='abcdefghi';
-          const INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
-          // Exact practical Piyo Lv40 game prefix preserved from PR11; first major prior miss was ply23.
-          const M=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+ 4g4f 1i2i 3h3i 2i2h 3i3h 2h2g 4h3i N*2f 5h4h 8h8i 4h5g L*4g 5g4g 8i6g 6i5h 7e7i L*5i 2f3h+`.split(/\s+/);
-          function sfen(ms){
-            const b=new Map(),h={b:{},w:{}};let rr=0;
-            for(const row of INIT.split('/')){let f=9,p=false;for(const c of row){if(c==='+'){p=true;continue}if(/\d/.test(c)){f-=+c;continue}const s=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{s,k:c.toUpperCase(),p});p=false;f--}rr++}
-            let t='b';
-            for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0];h[t][k]=(h[t][k]||0)-1;b.set(m.slice(2),{s:t,k,p:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error('bad move '+m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,p:pc.p||m.endsWith('+')})}t=t==='b'?'w':'b'}
-            const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.p?'+':'')+(q.s==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}
-            let hand='';for(const s of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[s][k]||0;if(n>0)hand+=(n>1?n:'')+(s==='b'?k:k.toLowerCase())}
-            return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1);
-          }
-          const browser=await webkit.launch({headless:true});
-          const page=await browser.newPage({...devices['iPhone 14']});
-          const pageErrors=[];page.on('pageerror',e=>pageErrors.push(String(e)));
-          await page.goto('http://127.0.0.1:4173/shogi-v21528/index.html?futureRoot='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-          const coi=await page.evaluate(()=>crossOriginIsolated);
-          if(!coi)throw Error('crossOriginIsolated=false');
-          await page.evaluate(async()=>{
-            const w=new Worker('./future-yaneura-worker21528.js?v=rootcause-'+Date.now());let id=0,pending=new Map();
-            w.onmessage=e=>{const m=e.data||{},p=pending.get(m.id);if(!p||m.type!=='result')return;pending.delete(m.id);clearTimeout(p.t);m.ok?p.r(m):p.j(Error(m.error||'worker error'))};
-            window.__fw=w;window.__call=(type,data={})=>new Promise((r,j)=>{const x=++id,t=setTimeout(()=>{pending.delete(x);j(Error(type+' timeout'))},190000);pending.set(x,{r,j,t});w.postMessage({type,id:x,...data})});
-            await window.__call('init');
-          });
-          const go=(pos,o)=>page.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});
-          const plies=[19,23,33,35], rows=[];
-          for(const ply of plies){
-            const pos=sfen(M.slice(0,ply-1)), historical=M[ply-1];
-            const deep=await go(pos,{ms:20000,multiPV:5,adaptive:false});
-            const refs=(deep.candidates||[]).map(x=>({rank:x.rank,token:x.token,cp:x.cp,mate:x.mate,depth:x.depth,nodes:x.nodes}));
-            const best=refs.find(x=>x.rank===1)||refs[0]||{token:deep.token};
-            console.log('FUTURE_DEEP_REF '+JSON.stringify({ply,historical,sfen:pos,best:best.token,refs}));
-            const modes=[
-              ['currentAdaptive4s',{ms:4000,multiPV:1}],
-              ['straight4s',{ms:4000,multiPV:1,adaptive:false}],
-              ['straight7s',{ms:7000,multiPV:1,adaptive:false}],
-              ['straight10s',{ms:10000,multiPV:1,adaptive:false}]
-            ];
-            for(const [mode,opt] of modes){
-              const t=Date.now(),r=await go(pos,opt),elapsed=Date.now()-t,hit=refs.find(x=>x.token===r.token);
-              const loss=(Number.isFinite(best.cp)&&Number.isFinite(hit?.cp))?Math.max(0,best.cp-hit.cp):null;
-              const row={ply,mode,historical,token:r.token,deepBest:best.token,deepRank:hit?.rank??null,deepLossCp:loss,elapsed,adaptive:r.info?.adaptive,reranked:r.info?.reranked,gapCp:r.info?.gapCp,depth:r.info?.depth,nodes:r.info?.nodes,totalTargetNodes:r.info?.totalTargetNodes,threads:r.info?.threads,hashMB:r.info?.hashMB};
-              rows.push(row);console.log('FUTURE_STRENGTH_ROW '+JSON.stringify(row));
-            }
-          }
-          const crit=rows.filter(x=>x.ply===23),summary={positions:plies.length,rows:rows.length,criticalPly23:crit,pageErrors,coi,adaptiveOutsideTop5:rows.filter(x=>x.mode==='currentAdaptive4s'&&x.deepRank==null).length,straightOutsideTop5:rows.filter(x=>x.mode==='straight4s'&&x.deepRank==null).length,adaptiveBest:rows.filter(x=>x.mode==='currentAdaptive4s'&&x.token===x.deepBest).length,straight4Best:rows.filter(x=>x.mode==='straight4s'&&x.token===x.deepBest).length,straight7Best:rows.filter(x=>x.mode==='straight7s'&&x.token===x.deepBest).length,straight10Best:rows.filter(x=>x.mode==='straight10s'&&x.token===x.deepBest).length};
-          console.log('FUTURE_STRENGTH_SUMMARY '+JSON.stringify(summary));
-          if(pageErrors.length)throw Error('page errors '+JSON.stringify(pageErrors));
-          console.log('PASS_FUTURE_ROOTCAUSE_AUDIT');
-          await page.evaluate(()=>window.__fw?.terminate());await browser.close();
-          NODE
-          cd /tmp/future-audit
-          node audit.mjs 2>&1 | tee /tmp/future-rootcause.log
-          grep -F 'FUTURE_STRENGTH_SUMMARY ' /tmp/future-rootcause.log
-          grep -F 'PASS_FUTURE_ROOTCAUSE_AUDIT' /tmp/future-rootcause.log
+          set -euo pipefail
+          node .github/scripts/verify-prewarm-sound-20260819.mjs 2>&1 | tee /tmp/future-fixed-depth-mpv1.log
+          grep -F 'FUTURE_FIXED_DEPTH_MPV1_SUMMARY ' /tmp/future-fixed-depth-mpv1.log
+          grep -F 'PASS_FUTURE_FIXED_DEPTH_MPV1_HARNESS' /tmp/future-fixed-depth-mpv1.log
       - name: Preserve concise evidence
         if: always()
         shell: bash
         run: |
-          echo '=== FUTURE ROOT CAUSE EVIDENCE ==='
-          grep -E '^(FUTURE_DEEP_REF|FUTURE_STRENGTH_ROW|FUTURE_STRENGTH_SUMMARY|PASS_FUTURE_ROOTCAUSE_AUDIT)' /tmp/future-rootcause.log || true
+          echo '=== FUTURE FIXED DEPTH MPV1 EVIDENCE ==='
+          grep -E '^(FUTURE_FIXED_DEPTH_MPV1_ROW|FUTURE_FIXED_DEPTH_MPV1_SUMMARY|PASS_FUTURE_FIXED_DEPTH_MPV1_HARNESS)' /tmp/future-fixed-depth-mpv1.log || true
