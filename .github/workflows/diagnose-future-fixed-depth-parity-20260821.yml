@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   parity:
@@ -80,3 +82,27 @@ jobs:
         if: always()
         run: |
           grep -E '^(FUTURE_FIXED_DEPTH_ROW|FUTURE_FIXED_DEPTH_SUMMARY|PASS_FUTURE_FIXED_DEPTH_HARNESS)' /tmp/fdepth/parity.log | tail -100 || true
+      - name: Publish fixed-depth evidence to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            let text = '';
+            try { text = fs.readFileSync('/tmp/fdepth/parity.log','utf8'); } catch {}
+            const lines = text.split(/\r?\n/).filter(line => /^(FUTURE_FIXED_DEPTH_ROW|FUTURE_FIXED_DEPTH_SUMMARY|PASS_FUTURE_FIXED_DEPTH_HARNESS)/.test(line));
+            const body = [
+              '### Future fixed-depth browser parity',
+              'job_status=' + process.env.JOB_STATUS,
+              '```text',
+              ...lines.slice(-100),
+              '```'
+            ].join('\n').slice(0,60000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
