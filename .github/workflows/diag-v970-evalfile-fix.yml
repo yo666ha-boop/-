@@ -1,0 +1,62 @@
+name: Verify V9.70 WASM EvalFile fix
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Playwright
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/v970state && cd /tmp/v970state
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium >/dev/null
+      - name: Build raw-state worker from production worker
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');let s=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
+          const decl="let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};";if(!s.includes(decl))throw Error('decl marker');s=s.replace(decl,"let __diag=[];"+decl);
+          const ld="  const line=String(raw||'').trim();";if(!s.includes(ld))throw Error('line marker');s=s.replace(ld,ld+"\n  __diag.push(line);if(__diag.length>1200)__diag.shift();");
+          const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";if(!s.includes(needle))throw Error('handler marker');
+          const ins=`    if(m.type==='diagstate'){
+      await init();__diag=[];
+      let p=waitLine(x=>x==='usiok',20000,'diag usiok');await sendUSI('usi');await p;const usiLines=__diag.slice();__diag=[];
+      for(const c of ['setoption name EvalDir value .','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])await sendUSI(c,20000);
+      p=waitLine(x=>x==='readyok',60000,'diag readyok');await sendUSI('isready',60000);await p;const readyLines=__diag.slice();__diag=[];latestInfo={};latestMultiPV={};
+      const pos=String(m.sfen||'');const depth=Math.max(1,Number(m.depth)||12);await sendUSI('position sfen '+pos);p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');await sendUSI('go depth '+depth,180000);const best=await p;
+      self.postMessage({type:'result',id,ok:true,kind:'diagstate',usiLines,readyLines,bestmove:best,info:{...latestInfo},searchTail:__diag.slice(-40),profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
+    }
+`;
+          fs.writeFileSync('shogi-v21528/future-yaneura-worker-v970-state.js',s.replace(needle,ins+needle));
+          NODE
+      - name: Start COI server
+        run: |
+          cat >/tmp/v970state/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4199,'127.0.0.1');
+          NODE
+          node /tmp/v970state/server.mjs >/tmp/v970state/server.log 2>&1 &
+          sleep 1
+      - name: Inspect current production artifact
+        run: |
+          cat >/tmp/v970state/test.mjs <<'NODE'
+          import{webkit,chromium}from'playwright';const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',rows=[];
+          for(const [browserName,type] of [['webkit',webkit],['chromium',chromium]]){const b=await type.launch({headless:true}),ctx=await b.newContext({userAgent:ua}),p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(String(e)));await p.goto('http://127.0.0.1:4199/shogi-v21528/index.html?state='+browserName+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error(browserName+' no COI');const r=await p.evaluate(async({sfen})=>{const w=new Worker('./future-yaneura-worker-v970-state.js?v='+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=220000)=>new Promise((res,rej)=>{const id=++n,t=setTimeout(()=>{P.delete(id);rej(Error(type+' timeout'))},timeout);P.set(id,{r:res,j:rej,t});w.postMessage({type,id,...data})});const x=await call('diagstate',{sfen,depth:12});w.terminate();return x},{sfen});const opts=r.usiLines.filter(x=>x.startsWith('option name '));const row={browser:browserName,idName:r.usiLines.find(x=>x.startsWith('id name '))||'',hasEvalFile:opts.some(x=>x.startsWith('option name EvalFile ')),evalFileLine:opts.find(x=>x.startsWith('option name EvalFile '))||'',fvScaleLine:opts.find(x=>x.startsWith('option name FV_SCALE '))||'',readyNoSuch:r.readyLines.filter(x=>/No such option/i.test(x)),readyLoading:r.readyLines.filter(x=>/loading eval file/i.test(x)),bestmove:r.bestmove,token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,pageErrors:errors};rows.push(row);console.log('V970_PROD_STATE_ROW '+JSON.stringify(row));await b.close()}
+          const summary={nativeP29D12:{token:'5e5d',cp:-4054,nodes:5234},rows,tokenSame:rows[0]?.token===rows[1]?.token,webKitNativeMove:rows[0]?.token==='5e5d',chromiumNativeMove:rows[1]?.token==='5e5d'};console.log('V970_PROD_STATE_SUMMARY '+JSON.stringify(summary));if(rows.some(x=>x.pageErrors.length))throw Error('page errors');console.log('PASS_V970_PROD_STATE_HARNESS');
+          NODE
+          cd /tmp/v970state && node test.mjs 2>&1 | tee /tmp/v970state/state.log
+          grep -F 'V970_PROD_STATE_SUMMARY ' /tmp/v970state/state.log
+          grep -F 'PASS_V970_PROD_STATE_HARNESS' /tmp/v970state/state.log
+      - name: Report PR80
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs');let t='';try{t=fs.readFileSync('/tmp/v970state/state.log','utf8')}catch{}const lines=t.split(/\r?\n/).filter(x=>/^(V970_PROD_STATE_ROW|V970_PROD_STATE_SUMMARY|PASS_V970_PROD_STATE_HARNESS)/.test(x));const body=['### V9.70 production artifact state parity','```text',...(lines.length?lines:['NO_STATE_EVIDENCE']),'```'].join('\n').slice(0,60000);await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:80,body});
