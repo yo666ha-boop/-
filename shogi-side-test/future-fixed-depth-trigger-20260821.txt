@@ -1,0 +1,2 @@
+Diagnostic synchronize trigger for PR80 fixed-depth browser parity workflows.
+Created 2026-08-21 JST. No production effect; PR80 is diagnostic-only and must never be merged.
