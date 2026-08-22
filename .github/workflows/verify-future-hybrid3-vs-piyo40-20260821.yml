@@ -7,6 +7,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 jobs:
   reconstruct:
     runs-on: ubuntu-22.04
@@ -98,8 +100,23 @@ jobs:
           [ "$PROD_JS" = "$RECON_JS" ] && JS_MATCH=true
           [ "$PROD_WORKER" = "$RECON_WORKER" ] && WORKER_MATCH=true
           [ "$PROD_WASM" = "$RECON_WASM" ] && WASM_MATCH=true
-          printf 'FUTURE_RECON_HASH_SUMMARY {"source":"76d58ef2e4cf64116784f41fd4816425ab6817ee","emscripten":"3.1.43","prodJS":"%s","reconJS":"%s","jsMatch":%s,"prodWorker":"%s","reconWorker":"%s","workerMatch":%s,"prodWasm":"%s","reconWasm":"%s","wasmMatch":%s}\n' "$PROD_JS" "$RECON_JS" "$JS_MATCH" "$PROD_WORKER" "$RECON_WORKER" "$WORKER_MATCH" "$PROD_WASM" "$RECON_WASM" "$WASM_MATCH"
+          SUMMARY=$(printf 'FUTURE_RECON_HASH_SUMMARY {"source":"76d58ef2e4cf64116784f41fd4816425ab6817ee","emscripten":"3.1.43","prodJS":"%s","reconJS":"%s","jsMatch":%s,"prodWorker":"%s","reconWorker":"%s","workerMatch":%s,"prodWasm":"%s","reconWasm":"%s","wasmMatch":%s}' "$PROD_JS" "$RECON_JS" "$JS_MATCH" "$PROD_WORKER" "$RECON_WORKER" "$WORKER_MATCH" "$PROD_WASM" "$RECON_WASM" "$WASM_MATCH")
+          echo "$SUMMARY"
+          printf '%s\nPASS_FUTURE_RECONSTRUCTION_HARNESS\n' "$SUMMARY" > /tmp/recon-summary.txt
           echo PASS_FUTURE_RECONSTRUCTION_HARNESS
+      - name: Report reconstruction actual to diagnostic PR
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -s /tmp/recon-summary.txt ]; then
+            { echo '### Future production-patch reconstruction actual'; echo '```text'; cat /tmp/recon-summary.txt; echo '```'; } > /tmp/recon-comment.md
+          else
+            printf '### Future production-patch reconstruction actual\nreconstruction failed before hash summary; inspect run `%s`.\n' "${{ github.run_id }}" > /tmp/recon-comment.md
+          fi
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/recon-comment.md
       - name: Preserve build tail
         if: always()
         shell: bash
