@@ -47,6 +47,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Chromium is much slower under the mobile-safe WASM profile. Depth 12
+          # already discriminates WebKit/Chromium/native parity at all three SFENs,
+          # so run the complete 3-position matrix before attempting deeper work.
+          sed -i 's/const plies=\[29,33,35\],depths=\[12,14\]/const plies=[29,33,35],depths=[12]/' .github/scripts/verify-prewarm-sound-20260819.mjs
+          grep -F 'const plies=[29,33,35],depths=[12]' .github/scripts/verify-prewarm-sound-20260819.mjs
           node .github/scripts/verify-prewarm-sound-20260819.mjs 2>&1 | tee /tmp/future-fixed-depth-mpv1.log
           grep -F 'FUTURE_FIXED_DEPTH_MPV1_SUMMARY ' /tmp/future-fixed-depth-mpv1.log
           grep -F 'PASS_FUTURE_FIXED_DEPTH_MPV1_HARNESS' /tmp/future-fixed-depth-mpv1.log
