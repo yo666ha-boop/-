@@ -1,17 +1,14 @@
 name: Diagnose Future native fixed-depth parity
-
 on:
   push:
     branches: [diag-future-native-parity-20260821]
     paths:
       - '.github/workflows/diagnose-future-native-fixed-depth-20260821.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
   issues: write
   pull-requests: write
-
 jobs:
   native:
     runs-on: ubuntu-22.04
@@ -23,110 +20,95 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
           path: YaneuraOu
-      - name: Build actual-production-source native HalfKP engine
+      - name: Build tournament native matching WASM build target
+        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq clang lld
           mkdir -p /tmp/native
           cp shogi-v21528/yaneuraou/nn.bin /tmp/native/nn.bin
-          test "$(stat -c%s /tmp/native/nn.bin)" -gt 60000000
           cd YaneuraOu/source
-          make -j2 normal TARGET_CPU=AVX2 YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE COMPILER=clang++ TARGET=/tmp/native/yaneuraou
+          make -j2 tournament TARGET_CPU=AVX2 YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE COMPILER=clang++ TARGET=/tmp/native/yaneuraou
           test -x /tmp/native/yaneuraou
-          echo 'NATIVE_BUILD_READY source=76d58ef2e4cf64116784f41fd4816425ab6817ee edition=YANEURAOU_ENGINE_NNUE target=AVX2 eval=shogi-v21528/yaneuraou/nn.bin'
-      - name: Run native fixed-depth MultiPV1 rows
+          echo 'NATIVE_TOURNAMENT_BUILD_READY source=76d58ef2e4cf64116784f41fd4816425ab6817ee edition=YANEURAOU_ENGINE_NNUE target=AVX2 build=tournament'
+      - name: Run tournament native depth12 parity rows
+        shell: bash
         run: |
           cat >/tmp/native/parity.py <<'PY'
-          import subprocess, json, re, time
+          import subprocess,json,re,time
           INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL'
           MOVES='4i5h 3c3d 8g8f 8c8d 5i4i 8d8e 7g7f 8e8f 8h2b+ 3a2b 7f7e B*8g 5h6h 8g5d+ 7e7d 7c7d 6h7h 8f8g+ B*4f 6c6d 5g5f 8g7h 5f5e 5d6e 6i5h 8b8i+ 3i4h 7h7i 4i3h 7i7h 5h5i G*5h 2g2f 5h5i 3h2g 5i5h 4h5g 6e4g 1g1f S*3h'.split()
           R='abcdefghi'
           def sfen(ms):
-              b={}; h={'b':{},'w':{}}; rr=0
-              for row in INIT.split('/'):
-                  f=9; pr=False
-                  for c in row:
-                      if c=='+': pr=True; continue
-                      if c.isdigit(): f-=int(c); continue
-                      side='b' if c.isupper() else 'w'; b[str(f)+R[rr]]={'side':side,'k':c.upper(),'pr':pr}; pr=False; f-=1
-                  rr+=1
-              t='b'
-              for m in ms:
-                  if re.match(r'^[PLNSGBR]\*',m):
-                      k,d=m[0],m[2:]; h[t][k]=h[t].get(k,0)-1; b[d]={'side':t,'k':k,'pr':False}
-                  else:
-                      a,d=m[:2],m[2:4]; pc=b.get(a)
-                      if not pc: raise RuntimeError('apply '+m+' missing '+a)
-                      cap=b.get(d)
-                      if cap: h[t][cap['k']]=h[t].get(cap['k'],0)+1
-                      del b[a]; b[d]={**pc,'pr':pc['pr'] or m.endswith('+')}
-                  t='w' if t=='b' else 'b'
-              rows=[]
-              for r in range(9):
-                  x=''; e=0
-                  for f in range(9,0,-1):
-                      q=b.get(str(f)+R[r])
-                      if not q: e+=1; continue
-                      if e: x+=str(e); e=0
-                      x+=('+' if q['pr'] else '')+(q['k'] if q['side']=='b' else q['k'].lower())
-                  if e: x+=str(e)
-                  rows.append(x)
-              hand=''
-              for side in ('b','w'):
-                  for k in ('R','B','G','S','N','L','P'):
-                      n=h[side].get(k,0)
-                      if n>0: hand+=(str(n) if n>1 else '')+(k if side=='b' else k.lower())
-              return '/'.join(rows)+' '+t+' '+(hand or '-')+' '+str(len(ms)+1)
-          def read_until(p,pred,timeout=120):
-              end=time.time()+timeout; lines=[]
-              while time.time()<end:
-                  line=p.stdout.readline()
-                  if line=='':
-                      if p.poll() is not None: raise RuntimeError('engine exited '+str(p.returncode)+' '+repr(lines[-10:]))
-                      time.sleep(.01); continue
-                  line=line.rstrip('\r\n'); lines.append(line)
-                  if pred(line): return line,lines
-              raise TimeoutError('wait timeout '+repr(lines[-20:]))
-          def run(pos,depth):
-              p=subprocess.Popen(['/tmp/native/yaneuraou'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,cwd='/tmp/native')
-              def send(x): p.stdin.write(x+'\n'); p.stdin.flush()
-              send('usi'); _,usi=read_until(p,lambda x:x=='usiok',60)
-              options=[x for x in usi if x.startswith('option name ')]
-              has_fv=any(x.startswith('option name FV_SCALE ') for x in options)
-              id_name=next((x for x in usi if x.startswith('id name ')),'')
-              for cmd in ['setoption name EvalDir value /tmp/native','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1']:
-                  send(cmd)
-              send('isready'); _,ready_lines=read_until(p,lambda x:x=='readyok',120)
-              send('usinewgame'); send('position sfen '+pos); send('go depth '+str(depth))
-              best,lines=read_until(p,lambda x:x.startswith('bestmove '),180)
-              info=[x for x in lines if x.startswith('info ') and ' pv ' in x]; last=info[-1] if info else ''
-              cp=re.search(r'\bscore cp (-?\d+)',last); mate=re.search(r'\bscore mate (-?\d+)',last); dep=re.search(r'\bdepth (\d+)',last); nodes=re.search(r'\bnodes (\d+)',last)
-              token=best.split()[1] if len(best.split())>1 else ''
-              send('quit')
-              try:p.wait(timeout=10)
-              except: p.kill()
-              return {'token':token,'depth':int(dep.group(1)) if dep else None,'cp':int(cp.group(1)) if cp else None,'mate':int(mate.group(1)) if mate else None,'nodes':int(nodes.group(1)) if nodes else None,'hasFVScale':has_fv,'idName':id_name,'readyTail':ready_lines[-8:],'lastInfo':last}
+            b={};h={'b':{},'w':{}}
+            for rr,row in enumerate(INIT.split('/')):
+              f=9;pr=False
+              for c in row:
+                if c=='+':pr=True;continue
+                if c.isdigit():f-=int(c);continue
+                side='b' if c.isupper() else 'w';b[str(f)+R[rr]]={'side':side,'k':c.upper(),'pr':pr};pr=False;f-=1
+            t='b'
+            for m in ms:
+              if re.match(r'^[PLNSGBR]\*',m):
+                k,d=m[0],m[2:];h[t][k]=h[t].get(k,0)-1;b[d]={'side':t,'k':k,'pr':False}
+              else:
+                a,d=m[:2],m[2:4];pc=b[a];cap=b.get(d)
+                if cap:h[t][cap['k']]=h[t].get(cap['k'],0)+1
+                del b[a];b[d]={**pc,'pr':pc['pr'] or m.endswith('+')}
+              t='w' if t=='b' else 'b'
+            rows=[]
+            for r in range(9):
+              x='';e=0
+              for f in range(9,0,-1):
+                q=b.get(str(f)+R[r])
+                if not q:e+=1;continue
+                if e:x+=str(e);e=0
+                x+=('+' if q['pr'] else '')+(q['k'] if q['side']=='b' else q['k'].lower())
+              if e:x+=str(e)
+              rows.append(x)
+            hand=''
+            for side in ('b','w'):
+              for k in ('R','B','G','S','N','L','P'):
+                n=h[side].get(k,0)
+                if n>0:hand+=(str(n) if n>1 else '')+(k if side=='b' else k.lower())
+            return '/'.join(rows)+' '+t+' '+(hand or '-')+' '+str(len(ms)+1)
+          def until(p,pred,timeout=120):
+            end=time.time()+timeout;lines=[]
+            while time.time()<end:
+              line=p.stdout.readline()
+              if line=='':
+                if p.poll() is not None:raise RuntimeError('engine exit')
+                continue
+              line=line.rstrip();lines.append(line)
+              if pred(line):return line,lines
+            raise TimeoutError(lines[-20:])
+          def run(pos):
+            p=subprocess.Popen(['/tmp/native/yaneuraou'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1,cwd='/tmp/native')
+            def send(x):p.stdin.write(x+'\n');p.stdin.flush()
+            send('usi');_,usi=until(p,lambda x:x=='usiok',60)
+            for cmd in ['setoption name EvalDir value /tmp/native','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1']:send(cmd)
+            send('isready');_,ready=until(p,lambda x:x=='readyok',120)
+            send('usinewgame');send('position sfen '+pos);send('go depth 12');best,lines=until(p,lambda x:x.startswith('bestmove '),180)
+            infos=[x for x in lines if x.startswith('info ') and ' pv ' in x];last=infos[-1] if infos else ''
+            def val(pat):
+              m=re.search(pat,last);return int(m.group(1)) if m else None
+            row={'sfen':pos,'token':best.split()[1],'depth':val(r'\bdepth (\d+)'),'cp':val(r'\bscore cp (-?\d+)'),'mate':val(r'\bscore mate (-?\d+)'),'nodes':val(r'\bnodes (\d+)'),'readyNoSuch':[x for x in ready if 'No such option' in x],'readyLoading':[x for x in ready if 'loading eval file' in x],'idName':next((x for x in usi if x.startswith('id name ')),'')}
+            send('quit');return row
           rows=[]
           for ply in (29,33,35):
-              pos=sfen(MOVES[:ply-1])
-              for depth in (12,14):
-                  r=run(pos,depth); row={'ply':ply,'requestedDepth':depth,'sfen':pos,**r}; rows.append(row); print('FUTURE_NATIVE_FIXED_DEPTH_ROW '+json.dumps(row,separators=(',',':')),flush=True)
-          print('FUTURE_NATIVE_FIXED_DEPTH_SUMMARY '+json.dumps({'source':'76d58ef2e4cf64116784f41fd4816425ab6817ee','edition':'YANEURAOU_ENGINE_NNUE','targetCPU':'AVX2','eval':'production shogi-v21528/yaneuraou/nn.bin','FV_SCALE':24,'threads':1,'hashMB':32,'rows':rows},separators=(',',':')),flush=True)
-          print('PASS_FUTURE_NATIVE_FIXED_DEPTH_HARNESS',flush=True)
+            pos=sfen(MOVES[:ply-1]);r=run(pos);r={'ply':ply,**r};rows.append(r);print('FUTURE_NATIVE_TOURNAMENT_ROW '+json.dumps(r,separators=(',',':')),flush=True)
+          print('FUTURE_NATIVE_TOURNAMENT_SUMMARY '+json.dumps({'source':'76d58ef2e4cf64116784f41fd4816425ab6817ee','build':'tournament','rows':rows},separators=(',',':')),flush=True)
+          print('PASS_FUTURE_NATIVE_TOURNAMENT_HARNESS',flush=True)
           PY
           python3 /tmp/native/parity.py 2>&1 | tee /tmp/native/parity.log
-          grep -F 'FUTURE_NATIVE_FIXED_DEPTH_SUMMARY ' /tmp/native/parity.log
-          grep -F 'PASS_FUTURE_NATIVE_FIXED_DEPTH_HARNESS' /tmp/native/parity.log
-      - name: Publish native evidence to PR80
+          grep -F 'FUTURE_NATIVE_TOURNAMENT_SUMMARY ' /tmp/native/parity.log
+          grep -F 'PASS_FUTURE_NATIVE_TOURNAMENT_HARNESS' /tmp/native/parity.log
+      - name: Publish tournament native evidence to PR80
         if: always()
         uses: actions/github-script@v7
         env:
           JOB_STATUS: ${{ job.status }}
         with:
           script: |
-            const fs=require('node:fs');let text='';
-            try{text=fs.readFileSync('/tmp/native/parity.log','utf8')}catch{}
-            const lines=text.split(/\r?\n/).filter(l=>/^(NATIVE_BUILD_READY|FUTURE_NATIVE_FIXED_DEPTH_ROW|FUTURE_NATIVE_FIXED_DEPTH_SUMMARY|PASS_FUTURE_NATIVE_FIXED_DEPTH_HARNESS)/.test(l));
-            const body=['### Future ACTUAL-production-source native fixed-depth parity','job_status='+process.env.JOB_STATUS,'```text',...lines.slice(-80),'```'].join('\n').slice(0,60000);
-            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:80,body});
+            const fs=require('node:fs');let t='';try{t=fs.readFileSync('/tmp/native/parity.log','utf8')}catch{}const lines=t.split(/\r?\n/).filter(x=>/^(FUTURE_NATIVE_TOURNAMENT_ROW|FUTURE_NATIVE_TOURNAMENT_SUMMARY|PASS_FUTURE_NATIVE_TOURNAMENT_HARNESS)/.test(x));const body=['### Future native tournament parity','job_status='+process.env.JOB_STATUS,'```text',...(lines.length?lines:['NO_EVIDENCE']),'```'].join('\n').slice(0,60000);await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:80,body});
