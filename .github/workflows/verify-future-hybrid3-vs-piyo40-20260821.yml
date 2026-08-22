@@ -80,13 +80,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          JS=YaneuraOu/source/YaneuraOu-by-gcc.js
-          WORKER=YaneuraOu/source/YaneuraOu-by-gcc.worker.js
-          WASM=YaneuraOu/source/YaneuraOu-by-gcc.wasm
+          JS=YaneuraOu/source/yaneuraou.js
+          WORKER=YaneuraOu/source/yaneuraou.worker.js
+          WASM=YaneuraOu/source/yaneuraou.wasm
+          printf 'FUTURE_RECON_FILES '; ls -l "$JS" "$WORKER" "$WASM"
           test -s "$JS"; test -s "$WORKER"; test -s "$WASM"
           node - <<'NODE'
           const fs=require('fs');
-          const p='YaneuraOu/source/YaneuraOu-by-gcc.wasm';
+          const p='YaneuraOu/source/yaneuraou.wasm';
           const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
           console.log('FUTURE_RECON_EXPORTS',JSON.stringify(ex.filter(x=>/usi/i.test(x))));
           if(!ex.includes('usi_command'))throw Error('usi_command missing');
