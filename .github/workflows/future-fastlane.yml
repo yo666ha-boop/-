@@ -6,12 +6,17 @@ on:
       - '.github/workflows/future-fastlane.yml'
 permissions:
   contents: read
+  issues: write
 jobs:
   fastlane:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Report run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="FASTLANE_RUN ${{ github.run_id }} ${{ github.sha }}"
       - name: Install WebKit
         run: |
           set -euo pipefail
