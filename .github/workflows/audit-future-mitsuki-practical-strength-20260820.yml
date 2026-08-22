@@ -1,4 +1,4 @@
-# diagnostic trigger: standard-USI parity on exact production/side artifacts
+# diagnostic trigger: direct-bridge production-vs-side artifact parity
 name: Future Mitsuki practical-strength root-cause audit
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 jobs:
-  standard_usi_compare:
+  direct_artifact_compare:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -19,44 +19,51 @@ jobs:
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Create standard-USI diagnostic workers
+      - name: Derive direct-bridge diagnostic workers from production worker
         run: |
-          cat >shogi-v21528/standard-usi-diag.js <<'JS'
-          'use strict';
-          const cfg=new URL(self.location.href).searchParams.get('artifact')||'prod';
-          const BASE=cfg==='side'?new URL('../shogi-side-test/yaneuraou/',self.location.href).href:new URL('./yaneuraou/',self.location.href).href;
-          importScripts(BASE+'yaneuraou.halfkp.noeval.js?v=std');
-          const factory=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;
-          let eng,lines=[],wait=[];
-          function onLine(x){x=String(x||'').trim();lines.push(x);for(const q of wait.slice())if(q.p(x)){wait=wait.filter(z=>z!==q);clearTimeout(q.t);q.r(x)}}
-          function wl(p,ms,l){return new Promise((r,j)=>{const q={p,r,j,t:setTimeout(()=>{wait=wait.filter(z=>z!==q);j(Error(l+' timeout'))},ms)};wait.push(q)})}
-          async function cmd(c,expect=null,ms=120000){let p=expect?wl(expect,ms,c):null;eng.postMessage(c);return p?await p:null}
-          self.onmessage=async e=>{const m=e.data||{},id=m.id;try{
-            eng=await factory({locateFile:p=>BASE+String(p).split('/').pop()});eng.addMessageListener(onLine);
-            const rr=await fetch(BASE+'nn.bin',{cache:'no-store'});const bytes=new Uint8Array(await rr.arrayBuffer());try{eng.FS.mkdir('/eval')}catch{}eng.FS.writeFile('/nn.bin',bytes);eng.FS.writeFile('/eval/nn.bin',bytes);
-            await cmd('usi',x=>x==='usiok',30000);const opts=lines.filter(x=>x.startsWith('option name ')),hasEval=opts.some(x=>x.startsWith('option name EvalFile '));
-            eng.postMessage('setoption name EvalDir value '+(hasEval?'.':'eval'));if(hasEval)eng.postMessage('setoption name EvalFile value nn.bin');eng.postMessage('setoption name FV_SCALE value 24');eng.postMessage('setoption name USI_Hash value 32');eng.postMessage('setoption name Threads value 1');eng.postMessage('setoption name MultiPV value 1');
-            await cmd('isready',x=>x==='readyok',90000);eng.postMessage('usinewgame');const initLines=lines.slice();lines=[];
-            eng.postMessage('position sfen '+String(m.sfen||''));const best=await cmd('go depth '+Math.max(1,Number(m.depth)||10),x=>x.startsWith('bestmove '),180000);const info=[...lines].reverse().find(x=>x.startsWith('info ')&&/\bmultipv 1\b/.test(x))||[...lines].reverse().find(x=>x.startsWith('info '))||'';
-            const cp=/\bscore cp (-?\d+)/.exec(info),mate=/\bscore mate (-?\d+)/.exec(info),d=/\bdepth (\d+)/.exec(info),n=/\bnodes (\d+)/.exec(info);
-            self.postMessage({type:'result',id,ok:true,artifact:cfg,hasEvalFile:hasEval,idName:initLines.find(x=>x.startsWith('id name '))||'',loading:initLines.filter(x=>/loading eval file/i.test(x)),errors:initLines.filter(x=>/No such option|failed to read|Error!/i.test(x)),bestmove:best,token:(best.split(/\s+/)[1]||''),cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:null,nodes:n?+n[1]:null,info});
-          }catch(err){self.postMessage({type:'result',id,ok:false,error:String(err&&err.message||err),artifact:cfg,lines:lines.slice(-100)})}}
-          JS
+          node <<'NODE'
+          const fs=require('node:fs');
+          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
+          const marker="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          if(!src.includes(marker))throw new Error('worker handler marker missing');
+          const diag=`    if(m.type==='rawdepth'){
+            await init();
+            latestInfo={};latestMultiPV={};
+            await sendUSI('setoption name MultiPV value 1');
+            await sendUSI('position sfen '+String(m.sfen||''));
+            const p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');
+            await sendUSI('go depth '+Math.max(1,Number(m.depth)||10),180000);const line=await p;
+            const token=(line.split(/\\s+/)[1]||'').trim();
+            self.postMessage({type:'result',id,ok:true,kind:'rawdepth',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
+          }\n`;
+          const prod=src.replace(marker,diag+marker);
+          const baseLine="BASE=new URL('./yaneuraou/',self.location.href).href;";
+          if(!prod.includes(baseLine))throw new Error('BASE marker missing');
+          const side=prod.replace(baseLine,"BASE=new URL('../shogi-side-test/yaneuraou/',self.location.href).href;");
+          fs.writeFileSync('shogi-v21528/future-yaneura-worker-direct-prod.js',prod);
+          fs.writeFileSync('shogi-v21528/future-yaneura-worker-direct-side.js',side);
+          NODE
       - name: Start COI server
         run: |
-          cat >/tmp/std-server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4205,'127.0.0.1');
+          cat >/tmp/direct-server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4211,'127.0.0.1');
           NODE
-          node /tmp/std-server.mjs >/tmp/std-server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4205/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;exit 1
-      - name: Compare standard wrapper on production and side artifact
+          node /tmp/direct-server.mjs >/tmp/direct-server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4211/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;cat /tmp/direct-server.log;exit 1
+      - name: Compare direct bridge on production and side artifacts
         run: |
-          cat >standard-usi-test.mjs <<'NODE'
-          import{webkit}from'playwright';const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4205/shogi-v21528/index.html?std='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});async function one(artifact){return p.evaluate(async({artifact,sfen})=>{const w=new Worker('./standard-usi-diag.js?artifact='+artifact+'&v='+Date.now());return await new Promise((r,j)=>{const t=setTimeout(()=>j(Error('timeout')),240000);w.onmessage=e=>{const m=e.data||{};if(m.type==='result'&&m.id===1){clearTimeout(t);w.terminate();r(m)}};w.postMessage({id:1,sfen,depth:10})})},{artifact,sfen})}const rows=[];for(const a of['prod','side']){const r=await one(a);rows.push(r);console.log('FUTURE_STANDARD_USI_ROW '+JSON.stringify(r))}console.log('FUTURE_STANDARD_USI_SUMMARY '+JSON.stringify({sfen,native:{token:'5e5d',cp:-4054},rows}));console.log('PASS_FUTURE_STANDARD_USI_HARNESS');await b.close();
+          cat >direct-artifact-test.mjs <<'NODE'
+          import{webkit}from'playwright';
+          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+          const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
+          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4211/shogi-v21528/index.html?direct='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('no COI');
+          async function one(artifact){return p.evaluate(async({artifact,sfen})=>{const file=artifact==='prod'?'future-yaneura-worker-direct-prod.js':'future-yaneura-worker-direct-side.js';const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let n=0,P=new Map(),stages=[];w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}const q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=210000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});try{const init=await call('init',{},90000);const r=await call('rawdepth',{sfen,depth:10},190000);return{artifact,init,token:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,stageTail:stages.slice(-20)}}finally{w.terminate()}},{artifact,sfen})}
+          const rows=[];for(const a of['prod','side']){try{const r=await one(a);rows.push(r);console.log('FUTURE_DIRECT_ARTIFACT_ROW '+JSON.stringify(r))}catch(e){const r={artifact:a,error:String(e&&e.message||e)};rows.push(r);console.log('FUTURE_DIRECT_ARTIFACT_ROW '+JSON.stringify(r))}}
+          console.log('FUTURE_DIRECT_ARTIFACT_SUMMARY '+JSON.stringify({sfen,native:{token:'3g3f',cp:-3712,depth:10},rows}));console.log('PASS_FUTURE_DIRECT_ARTIFACT_HARNESS');await b.close();
           NODE
-          node standard-usi-test.mjs 2>&1 | tee /tmp/std.log
-          grep -F 'FUTURE_STANDARD_USI_SUMMARY ' /tmp/std.log
-          grep -F 'PASS_FUTURE_STANDARD_USI_HARNESS' /tmp/std.log
+          node direct-artifact-test.mjs 2>&1 | tee /tmp/direct-artifact.log
+          grep -F 'FUTURE_DIRECT_ARTIFACT_SUMMARY ' /tmp/direct-artifact.log
+          grep -F 'PASS_FUTURE_DIRECT_ARTIFACT_HARNESS' /tmp/direct-artifact.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(FUTURE_STANDARD_USI_ROW|FUTURE_STANDARD_USI_SUMMARY|PASS_FUTURE_STANDARD_USI_HARNESS)' /tmp/std.log || true
+        run: grep -E '^(FUTURE_DIRECT_ARTIFACT_ROW|FUTURE_DIRECT_ARTIFACT_SUMMARY|PASS_FUTURE_DIRECT_ARTIFACT_HARNESS)' /tmp/direct-artifact.log || true
