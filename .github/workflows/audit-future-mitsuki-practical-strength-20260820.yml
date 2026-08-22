@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 jobs:
-  wasm_artifact_compare:
+  standard_usi_compare:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -18,52 +18,44 @@ jobs:
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Build diagnostic workers
+      - name: Create standard-USI diagnostic workers
         run: |
-          node <<'NODE'
-          const fs=require('node:fs');
-          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
-          function build(name,baseExpr){
-            let s=src.replace("new URL('./yaneuraou/',self.location.href).href",baseExpr);
-            const decl="let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};";
-            s=s.replace(decl,"let __all=[];"+decl);
-            const ld="  const line=String(raw||'').trim();";s=s.replace(ld,ld+"\n  __all.push(line);if(__all.length>2000)__all.shift();");
-            const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
-            const ins=`    if(m.type==='diagcompare'){
-              let initError='';try{await init()}catch(e){initError=String(e&&e.message||e)}
-              const lines=__all.slice(), opts=lines.filter(x=>x.startsWith('option name '));
-              if(initError){self.postMessage({type:'result',id,ok:true,kind:'diagcompare',initError,lines,opts});return}
-              latestInfo={};latestMultiPV={};const pos=String(m.sfen||'');const depth=Math.max(1,Number(m.depth)||10);
-              await sendUSI('position sfen '+pos);const p=waitLine(x=>x.startsWith('bestmove '),180000,'cmp bestmove');await sendUSI('go depth '+depth,180000);const best=await p;
-              self.postMessage({type:'result',id,ok:true,kind:'diagcompare',initError:'',lines,opts,bestmove:best,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}});return;
-            }\n`;
-            if(!s.includes(needle))throw Error('marker');
-            fs.writeFileSync('shogi-v21528/'+name,s.replace(needle,ins+needle));
-          }
-          build('future-prod-compare.js',"new URL('./yaneuraou/',self.location.href).href");
-          build('future-side-compare.js',"new URL('../shogi-side-test/yaneuraou/',self.location.href).href");
-          NODE
+          cat >shogi-v21528/standard-usi-diag.js <<'JS'
+          'use strict';
+          const cfg=new URL(self.location.href).searchParams.get('artifact')||'prod';
+          const BASE=cfg==='side'?new URL('../shogi-side-test/yaneuraou/',self.location.href).href:new URL('./yaneuraou/',self.location.href).href;
+          importScripts(BASE+'yaneuraou.halfkp.noeval.js?v=std');
+          const factory=self.YaneuraOu_HalfKP_noeval||YaneuraOu_HalfKP_noeval;
+          let eng,lines=[],wait=[];
+          function onLine(x){x=String(x||'').trim();lines.push(x);for(const q of wait.slice())if(q.p(x)){wait=wait.filter(z=>z!==q);clearTimeout(q.t);q.r(x)}}
+          function wl(p,ms,l){return new Promise((r,j)=>{const q={p,r,j,t:setTimeout(()=>{wait=wait.filter(z=>z!==q);j(Error(l+' timeout'))},ms)};wait.push(q)})}
+          async function cmd(c,expect=null,ms=120000){let p=expect?wl(expect,ms,c):null;eng.postMessage(c);return p?await p:null}
+          self.onmessage=async e=>{const m=e.data||{},id=m.id;try{
+            eng=await factory({locateFile:p=>BASE+String(p).split('/').pop()});eng.addMessageListener(onLine);
+            const rr=await fetch(BASE+'nn.bin',{cache:'no-store'});const bytes=new Uint8Array(await rr.arrayBuffer());try{eng.FS.mkdir('/eval')}catch{}eng.FS.writeFile('/nn.bin',bytes);eng.FS.writeFile('/eval/nn.bin',bytes);
+            await cmd('usi',x=>x==='usiok',30000);const opts=lines.filter(x=>x.startsWith('option name ')),hasEval=opts.some(x=>x.startsWith('option name EvalFile '));
+            eng.postMessage('setoption name EvalDir value '+(hasEval?'.':'eval'));if(hasEval)eng.postMessage('setoption name EvalFile value nn.bin');eng.postMessage('setoption name FV_SCALE value 24');eng.postMessage('setoption name USI_Hash value 32');eng.postMessage('setoption name Threads value 1');eng.postMessage('setoption name MultiPV value 1');
+            await cmd('isready',x=>x==='readyok',90000);eng.postMessage('usinewgame');const initLines=lines.slice();lines=[];
+            eng.postMessage('position sfen '+String(m.sfen||''));const best=await cmd('go depth '+Math.max(1,Number(m.depth)||10),x=>x.startsWith('bestmove '),180000);const info=[...lines].reverse().find(x=>x.startsWith('info ')&&/\bmultipv 1\b/.test(x))||[...lines].reverse().find(x=>x.startsWith('info '))||'';
+            const cp=/\bscore cp (-?\d+)/.exec(info),mate=/\bscore mate (-?\d+)/.exec(info),d=/\bdepth (\d+)/.exec(info),n=/\bnodes (\d+)/.exec(info);
+            self.postMessage({type:'result',id,ok:true,artifact:cfg,hasEvalFile:hasEval,idName:initLines.find(x=>x.startsWith('id name '))||'',loading:initLines.filter(x=>/loading eval file/i.test(x)),errors:initLines.filter(x=>/No such option|failed to read|Error!/i.test(x)),bestmove:best,token:(best.split(/\s+/)[1]||''),cp:cp?+cp[1]:null,mate:mate?+mate[1]:null,depth:d?+d[1]:null,nodes:n?+n[1]:null,info});
+          }catch(err){self.postMessage({type:'result',id,ok:false,error:String(err&&err.message||err),artifact:cfg,lines:lines.slice(-100)})}}
+          JS
       - name: Start COI server
         run: |
-          cat >/tmp/cmp-server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4203,'127.0.0.1');
+          cat >/tmp/std-server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4205,'127.0.0.1');
           NODE
-          node /tmp/cmp-server.mjs >/tmp/cmp-server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4203/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;exit 1
-      - name: Compare artifacts on exact collapse SFEN
+          node /tmp/std-server.mjs >/tmp/std-server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4205/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;exit 1
+      - name: Compare standard wrapper on production and side artifact
         run: |
-          cat >future-artifact-compare.mjs <<'NODE'
-          import{webkit}from'playwright';
-          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
-          const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
-          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4203/shogi-v21528/index.html?cmp='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-          async function run(file){return p.evaluate(async({file,sfen})=>{const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let id=1;return await new Promise((res,rej)=>{const t=setTimeout(()=>rej(Error('timeout')),220000);w.onmessage=e=>{const m=e.data||{};if(m.type==='result'&&m.id===id){clearTimeout(t);w.terminate();m.ok?res(m):rej(Error(m.error||'worker'))}};w.postMessage({type:'diagcompare',id,sfen,depth:10})})},{file,sfen})}
-          const out=[];for(const [artifact,file] of[['production76d','future-prod-compare.js'],['side33cc','future-side-compare.js']]){let r;try{r=await run(file)}catch(e){r={initError:String(e&&e.message||e),lines:[],opts:[]}}const row={artifact,initError:r.initError||'',idName:(r.lines||[]).find(x=>x.startsWith('id name '))||'',hasEvalFile:(r.opts||[]).some(x=>x.startsWith('option name EvalFile ')),loading:(r.lines||[]).filter(x=>/loading eval file/i.test(x)),evalErrors:(r.lines||[]).filter(x=>/eval|nn\.bin|No such option|failed to read/i.test(x)),token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null};out.push(row);console.log('FUTURE_WASM_ARTIFACT_ROW '+JSON.stringify(row))}
-          console.log('FUTURE_WASM_ARTIFACT_SUMMARY '+JSON.stringify({sfen,native:{token:'5e5d',cp:-4054},rows:out}));console.log('PASS_FUTURE_WASM_ARTIFACT_HARNESS');await b.close();
+          cat >standard-usi-test.mjs <<'NODE'
+          import{webkit}from'playwright';const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4205/shogi-v21528/index.html?std='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});async function one(artifact){return p.evaluate(async({artifact,sfen})=>{const w=new Worker('./standard-usi-diag.js?artifact='+artifact+'&v='+Date.now());return await new Promise((r,j)=>{const t=setTimeout(()=>j(Error('timeout')),240000);w.onmessage=e=>{const m=e.data||{};if(m.type==='result'&&m.id===1){clearTimeout(t);w.terminate();r(m)}};w.postMessage({id:1,sfen,depth:10})})},{artifact,sfen})}const rows=[];for(const a of['prod','side']){const r=await one(a);rows.push(r);console.log('FUTURE_STANDARD_USI_ROW '+JSON.stringify(r))}console.log('FUTURE_STANDARD_USI_SUMMARY '+JSON.stringify({sfen,native:{token:'5e5d',cp:-4054},rows}));console.log('PASS_FUTURE_STANDARD_USI_HARNESS');await b.close();
           NODE
-          node future-artifact-compare.mjs 2>&1 | tee /tmp/artifact.log
-          grep -F 'FUTURE_WASM_ARTIFACT_SUMMARY ' /tmp/artifact.log
-          grep -F 'PASS_FUTURE_WASM_ARTIFACT_HARNESS' /tmp/artifact.log
+          node standard-usi-test.mjs 2>&1 | tee /tmp/std.log
+          grep -F 'FUTURE_STANDARD_USI_SUMMARY ' /tmp/std.log
+          grep -F 'PASS_FUTURE_STANDARD_USI_HARNESS' /tmp/std.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(FUTURE_WASM_ARTIFACT_ROW|FUTURE_WASM_ARTIFACT_SUMMARY|PASS_FUTURE_WASM_ARTIFACT_HARNESS)' /tmp/artifact.log || true
+        run: grep -E '^(FUTURE_STANDARD_USI_ROW|FUTURE_STANDARD_USI_SUMMARY|PASS_FUTURE_STANDARD_USI_HARNESS)' /tmp/std.log || true
