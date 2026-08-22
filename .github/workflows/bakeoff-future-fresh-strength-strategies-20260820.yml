@@ -1,0 +1,46 @@
+name: Bake off Future fresh strength strategies
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/bakeoff-future-fresh-strength-strategies-20260820.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bakeoff:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fbake && cd /tmp/fbake
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start local COI server
+        run: |
+          cat >/tmp/fbake/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4175,'127.0.0.1');
+          NODE
+          node /tmp/fbake/server.mjs >/tmp/fbake/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4175/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done; cat /tmp/fbake/server.log; exit 1
+      - name: Compare candidate search policies
+        run: |
+          cat >/tmp/fbake/a.mjs <<'NODE'
+          import{webkit,devices}from'playwright';const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',M=`4i5h 3c3d 6g6f 2b6f 5i4i 3a2b 2h3h 8c8d 8g8f 8d8e 6i7h 8e8f 9i9h 8f8g+ 7h8g 8b8g+ 4g4f 8g9h P*6d 6c6d 5h6g 6f3c 3i4h`.split(/\s+/);
+          const REF={1:['7g7f','8g8f','6g6f','2h3h','4i5h'],7:['9g9f','2h3h','7i6h','9i9h','2h1h'],9:['5h6g','9g9f','8g8f','6i6h','9i9h'],11:['7g7f','1i1h','9g9f','8f8e','6i7h'],13:['7g7f','5h6g','1g1f','3g3f','1i1h'],23:['6g6h','6g6f','7g7f','3i4h','1i1h']};
+          function S(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error(m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||m.endsWith('+')})}t=t==='b'?'w':'b'}let rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const br=await webkit.launch({headless:true}),p=await br.newPage({...devices['iPhone 14']});const errs=[];p.on('pageerror',e=>errs.push(String(e)));await p.goto('http://127.0.0.1:4175/shogi-v21528/index.html?bake='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const prof=await p.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=bake-'+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};window.__c=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});window.__w=w;return window.__c('init')});console.log('FUTURE_BAKE_PROFILE '+JSON.stringify(prof));const go=(pos,o)=>p.evaluate(({pos,o})=>window.__c('bestmove',{sfen:pos,...o}),{pos,o});
+          async function one(pos,name){const t=Date.now();let r;if(name==='current')r=await go(pos,{ms:4000,multiPV:1});else if(name==='straight7')r=await go(pos,{ms:7000,multiPV:1,adaptive:false});else if(name==='straight10')r=await go(pos,{ms:10000,multiPV:1,adaptive:false});else if(name==='hybrid3'){const a=await go(pos,{nodes:1500000,multiPV:3,adaptive:false}),tok=(a.candidates||[]).map(x=>x.token).filter(Boolean).slice(0,3);r=await go(pos,{nodes:1500000,multiPV:1,searchmoves:tok,adaptive:false});r.info={...r.info,stage1:tok}}else if(name==='hybrid5'){const a=await go(pos,{nodes:2000000,multiPV:5,adaptive:false}),tok=(a.candidates||[]).map(x=>x.token).filter(Boolean).slice(0,5);r=await go(pos,{nodes:1500000,multiPV:1,searchmoves:tok,adaptive:false});r.info={...r.info,stage1:tok}}return{token:r.token,elapsed:Date.now()-t,depth:r.info?.depth,nodes:r.info?.nodes,cp:r.info?.cp,mate:r.info?.mate,stage1:r.info?.stage1||null}}
+          const names=['current','straight7','straight10','hybrid3','hybrid5'],rows=[];for(const ply of[1,7,9,11,13,23]){const pos=S(M.slice(0,ply-1)),ref=REF[ply];for(const name of names){const x=await one(pos,name),row={ply,name,...x,deepBest:ref[0],deepRank:ref.indexOf(x.token)>=0?ref.indexOf(x.token)+1:null,insideDeepTop5:ref.includes(x.token)};rows.push(row);console.log('FUTURE_BAKE_ROW '+JSON.stringify(row))}}
+          const summary={positions:6,strategies:names.map(name=>{const r=rows.filter(x=>x.name===name);return{name,best:r.filter(x=>x.deepRank===1).length,insideTop5:r.filter(x=>x.insideDeepTop5).length,outsideTop5:r.filter(x=>!x.insideDeepTop5).length,avgElapsedMs:Math.round(r.reduce((a,x)=>a+x.elapsed,0)/r.length),ply13:r.find(x=>x.ply===13)?.token,ply23:r.find(x=>x.ply===23)?.token}}),pageErrors:errs};console.log('FUTURE_BAKE_SUMMARY '+JSON.stringify(summary));if(errs.length)throw Error(JSON.stringify(errs));console.log('PASS_FUTURE_BAKEOFF');await p.evaluate(()=>window.__w?.terminate());await br.close();
+          NODE
+          cd /tmp/fbake && node a.mjs 2>&1 | tee /tmp/fbake/a.log
+          grep -F 'FUTURE_BAKE_SUMMARY ' /tmp/fbake/a.log
+          grep -F 'PASS_FUTURE_BAKEOFF' /tmp/fbake/a.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FUTURE_BAKE_PROFILE|FUTURE_BAKE_ROW|FUTURE_BAKE_SUMMARY|PASS_FUTURE_BAKEOFF)' /tmp/fbake/a.log | tail -80 || true

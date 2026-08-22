@@ -1,0 +1,3 @@
+Diagnostic synchronize trigger for PR80 fixed-depth browser parity workflows.
+Created 2026-08-21 JST. No production effect; PR80 is diagnostic-only and must never be merged.
+Retrigger 2026-08-21 latest run: force pull_request synchronize so the updated fixed_depth_mpv1 job executes and self-reports actual evidence.

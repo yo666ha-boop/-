@@ -1,0 +1,46 @@
+name: Diagnose Future fresh-per-move state
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          mkdir -p /tmp/ffresh && cd /tmp/ffresh
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >/tmp/ffresh/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4183,'127.0.0.1');
+          NODE
+          node /tmp/ffresh/server.mjs >/tmp/ffresh/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4183/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done; exit 1
+      - name: Replay actual collapse warm vs fresh
+        run: |
+          cat >/tmp/ffresh/a.mjs <<'NODE'
+          import{webkit,devices}from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',M=`4i5h 8c8d 5i4i 8d8e 7g7f 8e8f 7f7e 8f8g+ 8h5e P*8h 7e7d 8b8e 5e4f 8h8i+ 2h3h 8i7i 7d7c+ 7i6i 7c7d 8g7g 3h4h 8e8h+ 4i3h 7g6h P*8i 8h7h 5h6h 6i6h P*7i 7h6i 3h2h 6h5h 4h3h S*4i 1g1f 4i3h+ 3i3h G*4h 3h4i 6i4i 7d6c 4i3h 2h1g S*2h 1g2f N*1d 2f3f 3h4g`.split(/\s+/);
+          function S(ms){const b=new Map(),h={b:{},w:{}};for(let r=0;r<9;r++){let f=9,pr=false;for(const c of I.split('/')[r]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[r],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const x of ms){if(/^[PLNSGBR]\*/.test(x)){const k=x[0],d=x.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=x.slice(0,2),d=x.slice(2,4),q=b.get(a),c=b.get(d);if(!q)throw Error(x);if(c)h[t][c.k]=(h[t][c.k]||0)+1;b.delete(a);b.set(d,{...q,pr:q.pr||x.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let z='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){z+=e;e=0}z+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)z+=e;rows.push(z)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const b=await webkit.launch({headless:true}),p=await b.newPage({...devices['iPhone 14']});await p.goto('http://127.0.0.1:4183/shogi-v21528/index.html?fresh='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');
+          const make=()=>p.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v='+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});const profile=await call('init');const key='w'+Math.random();window[key]={w,call};return{key,profile}});
+          const call=(key,pos,o)=>p.evaluate(({key,pos,o})=>window[key].call('bestmove',{sfen:pos,...o}),{key,pos,o});const kill=key=>p.evaluate(key=>{window[key].w.terminate();delete window[key]},key);const targets=Array.from({length:14},(_,i)=>23+i*2),all=Array.from({length:25},(_,i)=>1+i*2),rows=[];
+          const W=await make();console.log('FUTURE_FRESH_PROFILE '+JSON.stringify(W.profile));for(const ply of all){const pos=S(M.slice(0,ply-1)),t=Date.now(),r=await call(W.key,pos,{ms:4000,multiPV:1});if(targets.includes(ply))rows.push({ply,mode:'warm',token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,adaptive:r.info?.adaptive,elapsedMs:Date.now()-t});}await kill(W.key);
+          for(const ply of targets){const pos=S(M.slice(0,ply-1)),F=await make(),t=Date.now(),r=await call(F.key,pos,{ms:4000,multiPV:1});await kill(F.key);rows.push({ply,mode:'fresh',token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,adaptive:r.info?.adaptive,elapsedMs:Date.now()-t});}
+          for(const ply of targets){const pos=S(M.slice(0,ply-1)),F=await make(),t=Date.now(),r=await call(F.key,pos,{ms:15000,multiPV:5,adaptive:false}),cs=r.candidates||[];await kill(F.key);rows.push({ply,mode:'deepFresh',token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,elapsedMs:Date.now()-t,top5:cs.slice(0,5).map(x=>({token:x.token,cp:x.cp,mate:x.mate}))});}
+          for(const x of rows)console.log('FUTURE_FRESH_ROW '+JSON.stringify(x));const out=targets.map(ply=>{const w=rows.find(x=>x.ply===ply&&x.mode==='warm'),f=rows.find(x=>x.ply===ply&&x.mode==='fresh'),d=rows.find(x=>x.ply===ply&&x.mode==='deepFresh'),rank=x=>(d.top5||[]).findIndex(q=>q.token===x)+1;return{ply,warm:w.token,warmCp:w.cp,warmMate:w.mate??null,fresh:f.token,freshCp:f.cp,freshMate:f.mate??null,deep:d.token,deepCp:d.cp,deepMate:d.mate??null,warmRank:rank(w.token)||null,freshRank:rank(f.token)||null,warmFreshSame:w.token===f.token}});console.log('FUTURE_FRESH_PER_MOVE_SUMMARY '+JSON.stringify(out));console.log('FUTURE_FRESH_DELTA '+JSON.stringify({moveDelta:out.filter(x=>!x.warmFreshSame).map(x=>x.ply),warmOutsideDeep5:out.filter(x=>x.warmRank==null).map(x=>x.ply),freshOutsideDeep5:out.filter(x=>x.freshRank==null).map(x=>x.ply),warmNegativeMate:out.filter(x=>Number.isFinite(x.warmMate)&&x.warmMate<0).map(x=>x.ply),freshNegativeMate:out.filter(x=>Number.isFinite(x.freshMate)&&x.freshMate<0).map(x=>x.ply)}));console.log('PASS_FUTURE_FRESH_PER_MOVE_HARNESS');await b.close();
+          NODE
+          cd /tmp/ffresh && node a.mjs 2>&1 | tee /tmp/ffresh/a.log
+          grep -F 'FUTURE_FRESH_DELTA ' /tmp/ffresh/a.log
+          grep -F 'PASS_FUTURE_FRESH_PER_MOVE_HARNESS' /tmp/ffresh/a.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FUTURE_FRESH_PROFILE|FUTURE_FRESH_ROW|FUTURE_FRESH_PER_MOVE_SUMMARY|FUTURE_FRESH_DELTA|PASS_FUTURE_FRESH_PER_MOVE_HARNESS)' /tmp/ffresh/a.log | tail -120 || true

@@ -1,0 +1,46 @@
+name: Diagnose fresh Future Piyo40 collapse
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/analyze-future-piyo40-attempt1-collapse-20260820.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fdiag && cd /tmp/fdiag
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start local COI server
+        run: |
+          cat >/tmp/fdiag/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4174,'127.0.0.1');
+          NODE
+          node /tmp/fdiag/server.mjs >/tmp/fdiag/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4174/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done; cat /tmp/fdiag/server.log; exit 1
+      - name: Deep-audit exact fresh losing line
+        run: |
+          cat >/tmp/fdiag/a.mjs <<'NODE'
+          import{webkit,devices}from'playwright';const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`4i5h 3c3d 6g6f 2b6f 5i4i 3a2b 2h3h 8c8d 8g8f 8d8e 6i7h 8e8f 9i9h 8f8g+ 7h8g 8b8g+ 4g4f 8g9h P*6d 6c6d 5h6g 6f3c 3i4h P*8g 7g7f 8g8h+ 7i6h 9h8i 6h5i L*6e 6g5f 6e6h+ 4i3i 6h5i 3i2h B*4i 9g9f 4i3h+ 2h3h S*4i 3h4g 4i5h 4g3h G*4g 4h4g 5h4g+ 3h4g S*3h 4g3h 8i7h S*6h 7h6h S*4h 6h4h 3h4h R*4i 4h3h`.split(/\s+/);
+          const chosen=new Map();for(let p=1;p<=57;p+=2)chosen.set(p,M[p-1]);
+          function S(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of I.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),pc=b.get(a),cap=b.get(d);if(!pc)throw Error('apply '+m);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||m.endsWith('+')})}t=t==='b'?'w':'b'}let rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){x+=e;e=0}x+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const br=await webkit.launch({headless:true}),p=await br.newPage({...devices['iPhone 14']});const errs=[];p.on('pageerror',e=>errs.push(String(e)));await p.goto('http://127.0.0.1:4174/shogi-v21528/index.html?freshcollapse='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const prof=await p.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=freshcollapse-'+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};window.__c=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});window.__w=w;return window.__c('init')});console.log('FRESH_COLLAPSE_PROFILE '+JSON.stringify(prof));const go=(pos,o={})=>p.evaluate(({pos,o})=>window.__c('bestmove',{sfen:pos,...o}),{pos,o});
+          const target=[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35],rows=[];for(const ply of target){const pos=S(M.slice(0,ply-1)),u=chosen.get(ply),r=await go(pos,{ms:15000,multiPV:5,adaptive:false}),cs=r.candidates||[],best=cs.find(x=>x.rank===1)||cs[0],hit=cs.find(x=>x.token===u);let cv=hit?.cp??null,cm=hit?.mate??null,after=null;if(!hit){after=await go(S(M.slice(0,ply)),7000,1,false);if(Number.isFinite(after.info?.cp))cv=-after.info.cp;if(Number.isFinite(after.info?.mate))cm=-after.info.mate}let loss=null;if(Number.isFinite(best?.cp)&&Number.isFinite(cv))loss=Math.max(0,best.cp-cv);const row={ply,chosen:u,best:best?.token,bestCp:best?.cp,bestMate:best?.mate,chosenRank:hit?.rank??null,chosenCp:cv,chosenMate:cm,lossCp:loss,top5:cs.map(x=>({rank:x.rank,token:x.token,cp:x.cp,mate:x.mate,depth:x.depth})),afterChosen:after?{cp:after.info?.cp,mate:after.info?.mate,token:after.token}:null};rows.push(row);console.log('FRESH_COLLAPSE_ROW '+JSON.stringify(row))}
+          const known=rows.map(x=>x.lossCp).filter(Number.isFinite),summary={positions:rows.length,bestMatches:rows.filter(x=>x.chosen===x.best).length,outsideTop5:rows.filter(x=>x.chosenRank==null).length,maxKnownLossCp:known.length?Math.max(...known):null,lossOver100:rows.filter(x=>Number.isFinite(x.lossCp)&&x.lossCp>=100),firstOutsideTop5:rows.find(x=>x.chosenRank==null)||null,pageErrors:errs};console.log('FRESH_COLLAPSE_SUMMARY '+JSON.stringify(summary));if(errs.length)throw Error(JSON.stringify(errs));console.log('PASS_FRESH_COLLAPSE_DIAG');await p.evaluate(()=>window.__w?.terminate());await br.close();
+          NODE
+          cd /tmp/fdiag && node a.mjs 2>&1 | tee /tmp/fdiag/a.log
+          grep -F 'FRESH_COLLAPSE_SUMMARY ' /tmp/fdiag/a.log
+          grep -F 'PASS_FRESH_COLLAPSE_DIAG' /tmp/fdiag/a.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FRESH_COLLAPSE_PROFILE|FRESH_COLLAPSE_ROW|FRESH_COLLAPSE_SUMMARY|PASS_FRESH_COLLAPSE_DIAG)' /tmp/fdiag/a.log | tail -80 || true

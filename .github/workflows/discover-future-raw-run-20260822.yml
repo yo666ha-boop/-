@@ -1,0 +1,29 @@
+name: Discover Future raw MultiPV run
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/discover-future-raw-run-20260822.yml'
+permissions:
+  actions: read
+  issues: write
+  pull-requests: write
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Discover all runs for current raw diagnostic head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          TARGET_SHA: 040042029026d8b5c44a569091cf19f1ffba15d9
+        run: |
+          set -euo pipefail
+          json=$(gh api "repos/${REPO}/actions/runs?head_sha=${TARGET_SHA}&per_page=100")
+          echo "$json" | jq -r '.workflow_runs[] | [.id,.name,.status,(.conclusion//""),.head_sha,.event] | @tsv' | tee /tmp/runs.tsv
+          raw=$(grep -i 'raw MultiPV' /tmp/runs.tsv || true)
+          if [ -z "$raw" ]; then raw=$(grep -i 'raw.*score\|score.*raw' /tmp/runs.tsv || true); fi
+          printf '### RAW_RUN_DISCOVERY_V2\n```text\n%s\n```\n' "${raw:-NOT_FOUND}" > /tmp/comment.md
+          gh pr comment "$PR" --repo "$REPO" --body-file /tmp/comment.md

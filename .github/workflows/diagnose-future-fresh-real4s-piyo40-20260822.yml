@@ -1,0 +1,62 @@
+name: Diagnose Future fresh worker plus real4s vs Piyo Lv40
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-future-fresh-real4s-piyo40-20260822.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  practical:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Chromium and WebKit
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ffr4 && cd /tmp/ffr4
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Start local COI server
+        run: |
+          cat >/tmp/ffr4/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){s.writeHead(403);return s.end('forbidden')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){s.writeHead(404);return s.end('not found')}s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');s.writeHead(200);s.end(b)})}).listen(4173,'127.0.0.1');
+          NODE
+          node /tmp/ffr4/server.mjs >/tmp/ffr4/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4173/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/ffr4/server.log;exit 1
+      - name: Derive exact practical harness with fresh real4s search
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text()
+          a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n"
+          i=src.index(a)+len(a); j=src.index("\n          NODE\n",i)
+          js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
+          old="const search=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});"
+          new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=fresh-real4s-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
+          if old not in js: raise SystemExit('search marker missing')
+          js=js.replace(old,new,1)
+          old2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:1}),u=String(r.token||'');"
+          new2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:5,adaptive:false}),u=String(r.token||'');"
+          if old2 not in js: raise SystemExit('move search marker missing')
+          js=js.replace(old2,new2,1)
+          js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_FRESH_REAL4S_PROFILE').replace('FUTURE_CURRENT_MOVE','FUTURE_FRESH_REAL4S_MOVE').replace('FUTURE_CURRENT_AUDIT','FUTURE_FRESH_REAL4S_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_FRESH_REAL4S_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_FRESH_REAL4S_PIYO40_HARNESS')
+          Path('/tmp/ffr4/match.mjs').write_text(js)
+          PY
+          grep -F "fresh-real4s" /tmp/ffr4/match.mjs
+          grep -F "multiPV:5,adaptive:false" /tmp/ffr4/match.mjs
+      - name: Run fresh real4s practical match
+        env:
+          ATTEMPT: 1
+        run: |
+          cd /tmp/ffr4
+          node match.mjs 2>&1 | tee /tmp/ffr4/match.log
+          grep -F 'FUTURE_FRESH_REAL4S_PRACTICAL_SUMMARY ' /tmp/ffr4/match.log
+          grep -F 'PASS_FUTURE_FRESH_REAL4S_PIYO40_HARNESS' /tmp/ffr4/match.log
+      - name: Preserve evidence
+        if: always()
+        run: |
+          grep -E '^(PIYO40_PROFILE|FUTURE_FRESH_REAL4S_PROFILE|FUTURE_FRESH_REAL4S_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FUTURE_FRESH_REAL4S_AUDIT|FUTURE_FRESH_REAL4S_PRACTICAL_SUMMARY|PASS_FUTURE_FRESH_REAL4S_PIYO40_HARNESS)' /tmp/ffr4/match.log | tail -260 || true
