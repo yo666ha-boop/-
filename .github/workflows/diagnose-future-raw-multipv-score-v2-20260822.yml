@@ -33,7 +33,7 @@ jobs:
           s=s.replace(old2,old2+"\n  if(Array.isArray(rawDiagLines))rawDiagLines.push(line);",1)
           handler="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}"
           lines=[
-            "    if(m.type==='rawdiag'){","
+            "    if(m.type==='rawdiag'){",
             "      await init();",
             "      const pos=String(m.sfen||'');",
             "      const depth=Math.max(1,Math.min(80,Math.round(Number(m.depth)||21)));",
