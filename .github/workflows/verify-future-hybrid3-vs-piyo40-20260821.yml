@@ -20,17 +20,17 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
           path: YaneuraOu
-      - name: Record production artifact hashes
+      - name: Record production hashes and build metadata
         shell: bash
         run: |
           set -euo pipefail
           sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js | tee /tmp/prod-js.sha
           sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js | tee /tmp/prod-worker.sha
           sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm | tee /tmp/prod-wasm.sha
-          echo 'PRODUCTION_BUILD_INFO_BEGIN'
+          echo PRODUCTION_BUILD_INFO_BEGIN
           cat shogi-v21528/yaneuraou/build-info.txt
-          echo 'PRODUCTION_BUILD_INFO_END'
-      - name: Recover and apply exact historical V9.70 thread lifecycle + live USI bridge patch
+          echo PRODUCTION_BUILD_INFO_END
+      - name: Recover and apply exact historical V9.70 lifecycle plus bridge patch
         shell: bash
         run: |
           set -euo pipefail
@@ -41,12 +41,10 @@ jobs:
           import textwrap
           yml=Path('/tmp/threadfix.yml').read_text()
           key="python3 - <<'PY'"
-          if key not in yml:
-              raise SystemExit('threadfix python block not found')
+          if key not in yml: raise SystemExit('threadfix python block not found')
           block=yml.split(key,1)[1]
           end='\n          PY'
-          if end not in block:
-              raise SystemExit('threadfix terminator not found')
+          if end not in block: raise SystemExit('threadfix terminator not found')
           script=textwrap.dedent(block.split(end,1)[0].lstrip('\n'))
           Path('/tmp/v970-threadfix.py').write_text(script)
           PY
@@ -65,43 +63,36 @@ jobs:
           s=p.read_text()
           needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
           repl=needle+'''#if defined(__EMSCRIPTEN__)\n    // V9.70 regression fix: load_eval() reads Options["EvalFile"] on WASM.\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n'''
-          if 'Options.add("EvalFile"' in s:
-              raise SystemExit('EvalFile unexpectedly already exists')
-          if needle not in s:
-              raise SystemExit('EvalDir option block not found')
+          if 'Options.add("EvalFile"' in s: raise SystemExit('EvalFile unexpectedly already exists')
+          if needle not in s: raise SystemExit('EvalDir option block not found')
           p.write_text(s.replace(needle,repl,1))
           PY
           grep -n -A3 -B2 'Options.add("EvalFile"' YaneuraOu/source/eval/nnue/evaluate_nnue.cpp
-      - name: Build exact source with production historical toolchain
+      - name: Build with historically successful V9.70 WASM command
         shell: bash
         run: |
           set -euo pipefail
           docker pull emscripten/emsdk:3.1.43 >/dev/null
-          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
           docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src/source emscripten/emsdk:3.1.43 \
-            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' \
+            bash -lc 'make clean && make -j2 ARCH=wasm COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE tournament' \
             2>&1 | tee /tmp/reconstruct-build.log
       - name: Verify exports and compare byte hashes
         shell: bash
         run: |
           set -euo pipefail
-          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
-          test -s "$LIB/yaneuraou.halfkp.noeval.js"
-          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
-          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          JS=YaneuraOu/source/YaneuraOu-by-gcc.js
+          WORKER=YaneuraOu/source/YaneuraOu-by-gcc.worker.js
+          WASM=YaneuraOu/source/YaneuraOu-by-gcc.wasm
+          test -s "$JS"; test -s "$WORKER"; test -s "$WASM"
           node - <<'NODE'
           const fs=require('fs');
-          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const p='YaneuraOu/source/YaneuraOu-by-gcc.wasm';
           const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
           console.log('FUTURE_RECON_EXPORTS',JSON.stringify(ex.filter(x=>/usi/i.test(x))));
           if(!ex.includes('usi_command'))throw Error('usi_command missing');
           NODE
-          PROD_JS=$(cut -d' ' -f1 /tmp/prod-js.sha)
-          PROD_WORKER=$(cut -d' ' -f1 /tmp/prod-worker.sha)
-          PROD_WASM=$(cut -d' ' -f1 /tmp/prod-wasm.sha)
-          RECON_JS=$(sha256sum "$LIB/yaneuraou.halfkp.noeval.js" | cut -d' ' -f1)
-          RECON_WORKER=$(sha256sum "$LIB/yaneuraou.halfkp.noeval.worker.js" | cut -d' ' -f1)
-          RECON_WASM=$(sha256sum "$LIB/yaneuraou.halfkp.noeval.wasm" | cut -d' ' -f1)
+          PROD_JS=$(cut -d' ' -f1 /tmp/prod-js.sha); PROD_WORKER=$(cut -d' ' -f1 /tmp/prod-worker.sha); PROD_WASM=$(cut -d' ' -f1 /tmp/prod-wasm.sha)
+          RECON_JS=$(sha256sum "$JS"|cut -d' ' -f1); RECON_WORKER=$(sha256sum "$WORKER"|cut -d' ' -f1); RECON_WASM=$(sha256sum "$WASM"|cut -d' ' -f1)
           JS_MATCH=false; WORKER_MATCH=false; WASM_MATCH=false
           [ "$PROD_JS" = "$RECON_JS" ] && JS_MATCH=true
           [ "$PROD_WORKER" = "$RECON_WORKER" ] && WORKER_MATCH=true
@@ -113,4 +104,4 @@ jobs:
         shell: bash
         run: |
           echo '=== RECONSTRUCTION BUILD TAIL ==='
-          tail -120 /tmp/reconstruct-build.log 2>/dev/null || true
+          tail -140 /tmp/reconstruct-build.log 2>/dev/null || true
