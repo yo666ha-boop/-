@@ -4,6 +4,7 @@ on:
     branches: [audit-future-mitsuki-strength-20260820]
     paths:
       - '.github/workflows/diagnose-future-production-wasm-state-20260821.yml'
+  workflow_dispatch:
 permissions:
   contents: read
   issues: write
@@ -49,7 +50,7 @@ jobs:
       await sendUSI('setoption name MultiPV value 1');await sendUSI('position sfen '+pos);
       p=waitLine(x=>x.startsWith('bestmove '),150000,'diag bestmove');await sendUSI('go depth '+depth,150000);const best=await p;
       const searchLines=diagLines.slice();
-      self.postMessage({type:'result',id,ok:true,kind:'diagstate',usiLines,readyLines,bestmove:best,info:{...latestInfo},searchTail:searchLines.slice(-30),profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
+      self.postMessage({type:'result',id,ok:true,kind:'diagstate',sfen:pos,usiLines,readyLines,bestmove:best,info:{...latestInfo},searchTail:searchLines.slice(-30),profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
     }
 `;
           fs.writeFileSync(dst,s.replace(needle,insert+needle));
@@ -74,7 +75,7 @@ jobs:
             if(!await p.evaluate(()=>crossOriginIsolated))throw Error(name+' no COI');
             const r=await p.evaluate(async({sfen})=>{const w=new Worker('./future-yaneura-worker-state-diag.js?v='+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=220000)=>new Promise((res,rej)=>{const id=++n,t=setTimeout(()=>{P.delete(id);rej(Error(type+' timeout'))},timeout);P.set(id,{r:res,j:rej,t});w.postMessage({type,id,...data})});const out=await call('diagstate',{sfen,depth:12},210000);w.terminate();return out},{sfen});
             const options=r.usiLines.filter(x=>x.startsWith('option name '));
-            const row={browser:name,idName:r.usiLines.find(x=>x.startsWith('id name '))||'',evalFileOption:options.some(x=>x.startsWith('option name EvalFile ')),fvScaleOption:options.find(x=>x.startsWith('option name FV_SCALE '))||'',evalDirOption:options.find(x=>x.startsWith('option name EvalDir '))||'',readyNoSuch:r.readyLines.filter(x=>/No such option/i.test(x)),readyLoading:r.readyLines.filter(x=>/loading eval file/i.test(x)),bestmove:r.bestmove,token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,pageErrors:errs};rows.push(row);console.log('FUTURE_WASM_STATE_ROW '+JSON.stringify(row));await b.close();
+            const row={browser:name,sfen:r.sfen||sfen,idName:r.usiLines.find(x=>x.startsWith('id name '))||'',evalFileOption:options.some(x=>x.startsWith('option name EvalFile ')),fvScaleOption:options.find(x=>x.startsWith('option name FV_SCALE '))||'',evalDirOption:options.find(x=>x.startsWith('option name EvalDir '))||'',readyNoSuch:r.readyLines.filter(x=>/No such option/i.test(x)),readyLoading:r.readyLines.filter(x=>/loading eval file/i.test(x)),bestmove:r.bestmove,token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,pageErrors:errs};rows.push(row);console.log('FUTURE_WASM_STATE_ROW '+JSON.stringify(row));await b.close();
           }
           const summary={rows,tokenSame:rows[0]?.token===rows[1]?.token,cpDelta:(Number.isFinite(rows[0]?.cp)&&Number.isFinite(rows[1]?.cp))?rows[0].cp-rows[1].cp:null};console.log('FUTURE_WASM_STATE_SUMMARY '+JSON.stringify(summary));if(rows.some(x=>x.pageErrors.length))throw Error('page errors');console.log('PASS_FUTURE_WASM_STATE_HARNESS');
           NODE
