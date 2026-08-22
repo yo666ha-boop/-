@@ -1,4 +1,4 @@
-name: Audit Future PATCHED-clean V9.70 vs Piyo Lv40
+name: Audit Future exact production-patch V9.70 reconstruction
 on:
   pull_request:
     branches: [main]
@@ -8,98 +8,109 @@ on:
 permissions:
   contents: read
 jobs:
-  practical:
-    strategy:
-      fail-fast: false
-      matrix:
-        attempt: [1, 2]
+  reconstruct:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - uses: actions/checkout@v4
         with:
           repository: yaneurao/YaneuraOu
           ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
-          path: YaneuraOu-clean
-      - name: Patch exact-source live USI bridge and build core WASM
+          path: YaneuraOu
+      - name: Record production artifact hashes
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== PRODUCTION ARTIFACT BEFORE ==='
-          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm}
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          root=Path('YaneuraOu-clean/source')
-          makefile=root/'Makefile'
-          s=makefile.read_text()
-          if '-s PTHREAD_POOL_SIZE=32' not in s: raise SystemExit('pthread marker missing')
-          makefile.write_text(s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
-
-          h=root/'usi.h'; hs=h.read_text(); marker='\tvoid loop();\n'
-          bridge='''\tvoid loop();\n\n#if defined(__EMSCRIPTEN__) && !STOCKFISH\n\tbool wasm_command(const std::string& cmd) { return usi_cmdexec(cmd); }\n#endif\n'''
-          if marker not in hs: raise SystemExit('USIEngine::loop marker missing')
-          h.write_text(hs.replace(marker,bridge,1))
-
-          p=root/'engine/yaneuraou-engine/yaneuraou-search.cpp'; ys=p.read_text()
-          tail='using namespace YaneuraOu;\nnamespace {'
-          live='''using namespace YaneuraOu;\n\n#if defined(__EMSCRIPTEN__)\n#include <emscripten/emscripten.h>\nstatic std::unique_ptr<YaneuraOuEngine> wasm_engine;\nstatic std::unique_ptr<USIEngine> wasm_usi;\nextern "C" EMSCRIPTEN_KEEPALIVE int usi_command(const char* cmd) {\n    if (!cmd || !wasm_usi) return 1;\n    wasm_usi->wasm_command(std::string(cmd));\n    return 0;\n}\n#endif\n\nnamespace {'''
-          if tail not in ys: raise SystemExit('engine entry tail marker missing')
-          ys=ys.replace(tail,live,1)
-          pattern=re.compile(r'void engine_main\(\) \{.*?\n\}',re.S); matches=list(pattern.finditer(ys))
-          if len(matches)!=1: raise SystemExit(f'engine_main match count={len(matches)}')
-          replacement='''void engine_main() {\n#if defined(__EMSCRIPTEN__)\n    wasm_engine = std::make_unique<YaneuraOuEngine>();\n    wasm_usi = std::make_unique<USIEngine>();\n    wasm_usi->set_engine(*wasm_engine);\n    wasm_usi->enqueue_startup_commands(CommandLine::g);\n    wasm_usi->loop();\n#else\n    auto engine = std::make_unique<YaneuraOuEngine>();\n    auto usi = std::make_unique<USIEngine>();\n    usi->set_engine(*engine);\n    usi->enqueue_startup_commands(CommandLine::g);\n    usi->loop();\n#endif\n}'''
-          p.write_text(pattern.sub(replacement,ys,count=1))
-          PY
-          grep -F 'bool wasm_command' YaneuraOu-clean/source/usi.h
-          grep -F 'EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu-clean/source/engine/yaneuraou-engine/yaneuraou-search.cpp
-          docker pull emscripten/emsdk:3.1.43 >/dev/null
-          docker run --rm -v "${{ github.workspace }}/YaneuraOu-clean:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/patched-clean-build.log 2>&1
-          LIB=YaneuraOu-clean/build/wasm/halfkp.noeval/lib
-          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
-          cp "$LIB/yaneuraou.halfkp.noeval.wasm" shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm
-          echo '=== PRODUCTION PATCHED JS GLUE + PATCHED-CLEAN CORE WASM ==='
-          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm}
-      - name: Install Chromium and WebKit
+          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js | tee /tmp/prod-js.sha
+          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js | tee /tmp/prod-worker.sha
+          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm | tee /tmp/prod-wasm.sha
+          echo 'PRODUCTION_BUILD_INFO_BEGIN'
+          cat shogi-v21528/yaneuraou/build-info.txt
+          echo 'PRODUCTION_BUILD_INFO_END'
+      - name: Recover and apply exact historical V9.70 thread lifecycle + live USI bridge patch
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/fclean && cd /tmp/fclean
-          npm init -y >/dev/null
-          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps chromium webkit >/dev/null
-      - name: Start local COI server
+          git fetch --no-tags --depth=1 origin 2fbda43b3ac86c38f7760e589ce4c52c15c65141
+          git show 2fbda43b3ac86c38f7760e589ce4c52c15c65141:.github/workflows/diag-yaneuraou-v970-threadfix.yml > /tmp/threadfix.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          yml=Path('/tmp/threadfix.yml').read_text()
+          key="python3 - <<'PY'"
+          if key not in yml:
+              raise SystemExit('threadfix python block not found')
+          block=yml.split(key,1)[1]
+          end='\n          PY'
+          if end not in block:
+              raise SystemExit('threadfix terminator not found')
+          script=textwrap.dedent(block.split(end,1)[0].lstrip('\n'))
+          Path('/tmp/v970-threadfix.py').write_text(script)
+          PY
+          python3 /tmp/v970-threadfix.py
+          grep -F 'wasmNativeStarted' YaneuraOu/source/thread.cpp
+          grep -F 'wasmWorkerReady' YaneuraOu/source/thread.cpp
+          grep -F 'all_threads_started' YaneuraOu/source/thread.cpp
+          grep -F 'EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu/source/engine/yaneuraou-engine/yaneuraou-search.cpp
+      - name: Apply exact historical WASM EvalFile option fix
+        shell: bash
         run: |
-          cat >/tmp/fclean/server.mjs <<'NODE'
-          import http from 'node:http';import fs from 'node:fs';import path from 'node:path';
-          const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};
-          const srv=http.createServer((req,res)=>{let u=decodeURIComponent((req.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){res.writeHead(403);return res.end('forbidden')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){res.writeHead(404);return res.end('not found')}res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');res.writeHead(200);res.end(b)})});srv.listen(4177,'127.0.0.1',()=>console.log('COI_SERVER_READY'));
-          NODE
-          node /tmp/fclean/server.mjs >/tmp/fclean/server.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4177/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
-          cat /tmp/fclean/server.log; exit 1
-      - name: Run patched-clean current-policy practical match
-        env:
-          ATTEMPT: ${{ matrix.attempt }}
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu/source/eval/nnue/evaluate_nnue.cpp')
+          s=p.read_text()
+          needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
+          repl=needle+'''#if defined(__EMSCRIPTEN__)\n    // V9.70 regression fix: load_eval() reads Options["EvalFile"] on WASM.\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n'''
+          if 'Options.add("EvalFile"' in s:
+              raise SystemExit('EvalFile unexpectedly already exists')
+          if needle not in s:
+              raise SystemExit('EvalDir option block not found')
+          p.write_text(s.replace(needle,repl,1))
+          PY
+          grep -n -A3 -B2 'Options.add("EvalFile"' YaneuraOu/source/eval/nnue/evaluate_nnue.cpp
+      - name: Build exact source with production historical toolchain
+        shell: bash
         run: |
-          cat >/tmp/fclean/match.mjs <<'NODE'
-          import{chromium,webkit,devices}from'playwright';
-          const MAX=80,R='abcdefghi',INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',attempt=Number(process.env.ATTEMPT||1),policy='patched-clean76d-production-glue-current-adaptive';
-          function sfen(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of INIT.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),p=m.endsWith('+'),pc=b.get(a);if(!pc)throw Error('apply '+m+' missing '+a);const cap=b.get(d);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||p})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const pc=b.get(''+f+R[r]);if(!pc){e++;continue}if(e){x+=e;e=0}x+=(pc.pr?'+':'')+(pc.side==='b'?pc.k:pc.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
-          const pb=await chromium.launch({headless:true}),p=await pb.newPage({viewport:{width:1280,height:1000}});await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1500);await p.click('#btnNewGame');await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0);await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote1');const lv=await p.evaluate(()=>{const s=document.querySelector('#selectLevelGote'),o=[...s.options].find(o=>/^\s*Lv40\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return o.textContent.trim()});if(!lv||!lv.includes('R2610'))throw Error('not Lv40 '+lv);await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});await p.click('#btnDialogGameStart');await p.waitForTimeout(700);console.log('FUTURE_PATCHED_PIYO '+JSON.stringify({attempt,level:lv}));
-          const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
-          async function exportMoves(){await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(80);await p.click('#menuKifu');await p.waitForTimeout(80);await p.check('#dialogKifType2');await p.waitForTimeout(50);const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]}
-          async function play(u){if(/^[PLNSGBR]\*/.test(u)){const jp={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'}[u[0]],pt=await p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt.trim(),x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height}}).find(x=>x.w&&x.h&&x.alt===jp)||null,jp);if(!pt)throw Error('hand '+u);await p.mouse.click(pt.x,pt.y);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);return}const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(60);await p.mouse.click(d.x,d.y);await p.waitForTimeout(180);const dlg=p.locator('#dialogNari'),visible=await dlg.isVisible().catch(()=>false);if(u.endsWith('+')){if(visible){await p.getByRole('button',{name:'成る',exact:true}).click({force:true});await p.waitForTimeout(120)}}else if(visible){await p.getByRole('button',{name:'成らない',exact:true}).click({force:true});await p.waitForTimeout(120)}}
-          const fb=await webkit.launch({headless:true}),f=await fb.newPage({...devices['iPhone 14']});const errs=[];f.on('pageerror',e=>errs.push(String(e)));await f.goto('http://127.0.0.1:4177/shogi-v21528/index.html?patched='+attempt+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await f.evaluate(()=>crossOriginIsolated))throw Error('COI');const prof=await f.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=patched-'+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});window.__w=w;window.__call=call;return call('init')});console.log('FUTURE_PATCHED_PROFILE '+JSON.stringify({attempt,prof}));if(prof.threads!==1||prof.hashMB!==32||!prof.mobileWebKit)throw Error('profile '+JSON.stringify(prof));const call=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});
-          let ms=[],result='MAX_REACHED';const dec=[];while(ms.length<MAX){if(ms.length%2)throw Error('turn '+ms.length);const ply=ms.length+1,pos=sfen(ms),r=await call(pos,{ms:4000,multiPV:1,adaptive:true}),u=String(r.token||'');dec.push({ply,pos,u,info:r.info||{}});console.log('FUTURE_PATCHED_MOVE '+JSON.stringify({attempt,ply,u,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,adaptive:r.info?.adaptive,reranked:r.info?.reranked,gapCp:r.info?.gapCp}));if(u==='resign'||u==='win'){result='FUTURE_'+u;break}const before=ms.length;await play(u);let got=null,last='';const st=Date.now();while(Date.now()-st<50000){const opts=await p.locator('#select_kifu option').allTextContents();last=(opts.at(-1)||'').trim();const x=await exportMoves();if(x.length>=before+2||/投了|詰み|反則|千日手|持将棋|中断|勝ち|負け/.test(last)){got=x;break}await p.waitForTimeout(300)}if(!got){got=await exportMoves().catch(()=>[]);result='PIYO_NO_REPLY';ms=got;console.log('FUTURE_PATCHED_STOP '+JSON.stringify({attempt,ply,last,plies:ms.length,tail:ms.slice(-8)}));break}if(got[before]!==u)throw Error('USI DIVERGENCE '+ply+' future='+u+' actual='+got[before]);ms=got;console.log('FUTURE_PATCHED_REPLY '+JSON.stringify({attempt,plies:ms.length,last,tail:ms.slice(-4)}));if(/投了|詰み|反則|千日手|持将棋|中断|勝ち|負け/.test(last)||ms.length%2){result=last||'ENDED';break}}
-          const cps=dec.map(x=>x.info?.cp).filter(Number.isFinite),negMate=dec.filter(x=>Number.isFinite(x.info?.mate)&&x.info.mate<0),summary={policy,attempt,piyo:lv,plies:ms.length,result,futureMoves:dec.length,minCp:cps.length?Math.min(...cps):null,lastCp:cps.length?cps.at(-1):null,negativeMateCount:negMate.length,firstNegativeMatePly:negMate[0]?.ply??null,pageErrors:errs,tail:ms.slice(-14)};console.log('FUTURE_PATCHED_SUMMARY '+JSON.stringify(summary));if(errs.length)throw Error('page errors '+JSON.stringify(errs));console.log('PASS_FUTURE_PATCHED_PRACTICAL_HARNESS');await f.evaluate(()=>window.__w?.terminate());await fb.close();await pb.close();
+          set -euo pipefail
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          mkdir -p YaneuraOu/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu:/src" -w /src/source emscripten/emsdk:3.1.43 \
+            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' \
+            2>&1 | tee /tmp/reconstruct-build.log
+      - name: Verify exports and compare byte hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIB=YaneuraOu/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='YaneuraOu/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
+          console.log('FUTURE_RECON_EXPORTS',JSON.stringify(ex.filter(x=>/usi/i.test(x))));
+          if(!ex.includes('usi_command'))throw Error('usi_command missing');
           NODE
-          cd /tmp/fclean
-          node match.mjs 2>&1 | tee /tmp/fclean/patched-${ATTEMPT}.log
-          grep -F 'FUTURE_PATCHED_SUMMARY ' /tmp/fclean/patched-${ATTEMPT}.log
-          grep -F 'PASS_FUTURE_PATCHED_PRACTICAL_HARNESS' /tmp/fclean/patched-${ATTEMPT}.log
-      - name: Preserve evidence
+          PROD_JS=$(cut -d' ' -f1 /tmp/prod-js.sha)
+          PROD_WORKER=$(cut -d' ' -f1 /tmp/prod-worker.sha)
+          PROD_WASM=$(cut -d' ' -f1 /tmp/prod-wasm.sha)
+          RECON_JS=$(sha256sum "$LIB/yaneuraou.halfkp.noeval.js" | cut -d' ' -f1)
+          RECON_WORKER=$(sha256sum "$LIB/yaneuraou.halfkp.noeval.worker.js" | cut -d' ' -f1)
+          RECON_WASM=$(sha256sum "$LIB/yaneuraou.halfkp.noeval.wasm" | cut -d' ' -f1)
+          JS_MATCH=false; WORKER_MATCH=false; WASM_MATCH=false
+          [ "$PROD_JS" = "$RECON_JS" ] && JS_MATCH=true
+          [ "$PROD_WORKER" = "$RECON_WORKER" ] && WORKER_MATCH=true
+          [ "$PROD_WASM" = "$RECON_WASM" ] && WASM_MATCH=true
+          printf 'FUTURE_RECON_HASH_SUMMARY {"source":"76d58ef2e4cf64116784f41fd4816425ab6817ee","emscripten":"3.1.43","prodJS":"%s","reconJS":"%s","jsMatch":%s,"prodWorker":"%s","reconWorker":"%s","workerMatch":%s,"prodWasm":"%s","reconWasm":"%s","wasmMatch":%s}\n' "$PROD_JS" "$RECON_JS" "$JS_MATCH" "$PROD_WORKER" "$RECON_WORKER" "$WORKER_MATCH" "$PROD_WASM" "$RECON_WASM" "$WASM_MATCH"
+          echo PASS_FUTURE_RECONSTRUCTION_HARNESS
+      - name: Preserve build tail
         if: always()
+        shell: bash
         run: |
-          echo '=== FUTURE PATCHED-CLEAN V9.70 VS PIYO40 ==='
-          grep -E '^(FUTURE_PATCHED_PIYO|FUTURE_PATCHED_PROFILE|FUTURE_PATCHED_MOVE|FUTURE_PATCHED_REPLY|FUTURE_PATCHED_STOP|FUTURE_PATCHED_SUMMARY|PASS_FUTURE_PATCHED_PRACTICAL_HARNESS)' /tmp/fclean/patched-${{ matrix.attempt }}.log | tail -220 || true
+          echo '=== RECONSTRUCTION BUILD TAIL ==='
+          tail -120 /tmp/reconstruct-build.log 2>/dev/null || true
