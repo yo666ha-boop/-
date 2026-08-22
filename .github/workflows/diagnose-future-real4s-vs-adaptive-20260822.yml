@@ -1,0 +1,48 @@
+name: Diagnose Future real 4s vs adaptive cap
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-future-real4s-vs-adaptive-20260822.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          mkdir -p /tmp/f4s && cd /tmp/f4s
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >/tmp/f4s/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4185,'127.0.0.1');
+          NODE
+          node /tmp/f4s/server.mjs >/tmp/f4s/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4185/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done; exit 1
+      - name: Compare current adaptive to real 4s MultiPV5
+        run: |
+          cat >/tmp/f4s/a.mjs <<'NODE'
+          import{webkit,devices}from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`4i5h 3c3d 6g6f 2b6f 5i4i 3a4b 8g8f 8c8d 9i9h 8d8e 2h3h 8e8f 1g1f 8f8g+ 5h6g 6f4d 6g5f 8g9h 5f4e 4d6f 7g7f 9h8h 3h6h 8h7i 6h6f 7i6i 6f6c+ L*6b 6c6b 7a6b 4g4f R*5i 4i3h 8b8h+ L*4h S*4g 3h4g B*5h 4g5f 5h6g+`.split(/\s+/);
+          function S(ms){const b=new Map(),h={b:{},w:{}};for(let r=0;r<9;r++){let f=9,pr=false;for(const c of I.split('/')[r]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[r],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const x of ms){if(/^[PLNSGBR]\*/.test(x)){const k=x[0],d=x.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=x.slice(0,2),d=x.slice(2,4),q=b.get(a),c=b.get(d);if(!q)throw Error(x);if(c)h[t][c.k]=(h[t][c.k]||0)+1;b.delete(a);b.set(d,{...q,pr:q.pr||x.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let z='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){z+=e;e=0}z+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)z+=e;rows.push(z)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const b=await webkit.launch({headless:true}),p=await b.newPage({...devices['iPhone 14']});await p.goto('http://127.0.0.1:4185/shogi-v21528/index.html?x='+Date.now(),{waitUntil:'domcontentloaded'});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');
+          async function make(){return p.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v='+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});const profile=await call('init');const key='w'+Math.random();window[key]={w,call};return{key,profile}})}
+          const call=(key,pos,o)=>p.evaluate(({key,pos,o})=>window[key].call('bestmove',{sfen:pos,...o}),{key,pos,o});const kill=key=>p.evaluate(key=>{window[key].w.terminate();delete window[key]},key);
+          const targets=[13,15,17,19,21,23,25,27,29,31,33,35,37,39,41],rows=[];
+          for(const ply of targets){const pos=S(M.slice(0,ply-1));for(const [mode,opt] of [['adaptive',{ms:4000,multiPV:1,adaptive:true}],['real4s',{ms:4000,multiPV:5,adaptive:false}],['real8s',{ms:8000,multiPV:5,adaptive:false}]]){const W=await make(),t=Date.now(),r=await call(W.key,pos,opt),cs=r.candidates||[];await kill(W.key);rows.push({ply,mode,token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,elapsedMs:Date.now()-t,top5:cs.slice(0,5).map(x=>({token:x.token,cp:x.cp,mate:x.mate}))});console.log('FUTURE_REAL4S_ROW '+JSON.stringify(rows.at(-1)))}}
+          const out=targets.map(ply=>{const a=rows.find(x=>x.ply===ply&&x.mode==='adaptive'),r=rows.find(x=>x.ply===ply&&x.mode==='real4s'),e=rows.find(x=>x.ply===ply&&x.mode==='real8s');return{ply,adaptive:a.token,aCp:a.cp,aMate:a.mate??null,aNodes:a.nodes,real4s:r.token,rCp:r.cp,rMate:r.mate??null,rNodes:r.nodes,real8s:e.token,eCp:e.cp,eMate:e.mate??null,eNodes:e.nodes,sameA4:a.token===r.token,same48:r.token===e.token}});console.log('FUTURE_REAL4S_SUMMARY '+JSON.stringify(out));console.log('FUTURE_REAL4S_DELTA '+JSON.stringify({adaptiveVs4:out.filter(x=>!x.sameA4).map(x=>x.ply),fourVs8:out.filter(x=>!x.same48).map(x=>x.ply),adaptiveNegMate:out.filter(x=>Number.isFinite(x.aMate)&&x.aMate<0).map(x=>x.ply),real4NegMate:out.filter(x=>Number.isFinite(x.rMate)&&x.rMate<0).map(x=>x.ply),real8NegMate:out.filter(x=>Number.isFinite(x.eMate)&&x.eMate<0).map(x=>x.ply)}));console.log('PASS_FUTURE_REAL4S_DIAGNOSTIC');await b.close();
+          NODE
+          cd /tmp/f4s && node a.mjs 2>&1 | tee /tmp/f4s/a.log
+          grep -F 'FUTURE_REAL4S_DELTA ' /tmp/f4s/a.log
+          grep -F 'PASS_FUTURE_REAL4S_DIAGNOSTIC' /tmp/f4s/a.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FUTURE_REAL4S_ROW|FUTURE_REAL4S_SUMMARY|FUTURE_REAL4S_DELTA|PASS_FUTURE_REAL4S_DIAGNOSTIC)' /tmp/f4s/a.log | tail -100 || true
