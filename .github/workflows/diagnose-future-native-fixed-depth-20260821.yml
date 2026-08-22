@@ -32,7 +32,7 @@ jobs:
           make -j2 tournament TARGET_CPU=AVX2 YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE COMPILER=clang++ TARGET=/tmp/native/yaneuraou
           test -x /tmp/native/yaneuraou
           echo 'NATIVE_TOURNAMENT_BUILD_READY source=76d58ef2e4cf64116784f41fd4816425ab6817ee edition=YANEURAOU_ENGINE_NNUE target=AVX2 build=tournament'
-      - name: Run tournament native depth12 parity rows
+      - name: Run native static-eval plus depth12 rows
         shell: bash
         run: |
           cat >/tmp/native/parity.py <<'PY'
@@ -50,8 +50,7 @@ jobs:
                 side='b' if c.isupper() else 'w';b[str(f)+R[rr]]={'side':side,'k':c.upper(),'pr':pr};pr=False;f-=1
             t='b'
             for m in ms:
-              if re.match(r'^[PLNSGBR]\*',m):
-                k,d=m[0],m[2:];h[t][k]=h[t].get(k,0)-1;b[d]={'side':t,'k':k,'pr':False}
+              if re.match(r'^[PLNSGBR]\*',m):k,d=m[0],m[2:];h[t][k]=h[t].get(k,0)-1;b[d]={'side':t,'k':k,'pr':False}
               else:
                 a,d=m[:2],m[2:4];pc=b[a];cap=b.get(d)
                 if cap:h[t][cap['k']]=h[t].get(cap['k'],0)+1
@@ -88,27 +87,25 @@ jobs:
             def send(x):p.stdin.write(x+'\n');p.stdin.flush()
             send('usi');_,usi=until(p,lambda x:x=='usiok',60)
             for cmd in ['setoption name EvalDir value /tmp/native','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1']:send(cmd)
-            send('isready');_,ready=until(p,lambda x:x=='readyok',120)
-            send('usinewgame');send('position sfen '+pos);send('go depth 12');best,lines=until(p,lambda x:x.startswith('bestmove '),180)
+            send('isready');_,ready=until(p,lambda x:x=='readyok',120);send('usinewgame');send('position sfen '+pos)
+            send('eval');send('isready');_,eval_lines=until(p,lambda x:x=='readyok',120)
+            send('position sfen '+pos);send('go depth 12');best,lines=until(p,lambda x:x.startswith('bestmove '),180)
             infos=[x for x in lines if x.startswith('info ') and ' pv ' in x];last=infos[-1] if infos else ''
-            def val(pat):
-              m=re.search(pat,last);return int(m.group(1)) if m else None
-            row={'sfen':pos,'token':best.split()[1],'depth':val(r'\bdepth (\d+)'),'cp':val(r'\bscore cp (-?\d+)'),'mate':val(r'\bscore mate (-?\d+)'),'nodes':val(r'\bnodes (\d+)'),'readyNoSuch':[x for x in ready if 'No such option' in x],'readyLoading':[x for x in ready if 'loading eval file' in x],'idName':next((x for x in usi if x.startswith('id name ')),'')}
+            def val(pat):m=re.search(pat,last);return int(m.group(1)) if m else None
+            row={'sfen':pos,'token':best.split()[1],'depth':val(r'\bdepth (\d+)'),'cp':val(r'\bscore cp (-?\d+)'),'mate':val(r'\bscore mate (-?\d+)'),'nodes':val(r'\bnodes (\d+)'),'evalTail':eval_lines[-40:],'readyNoSuch':[x for x in ready if 'No such option' in x],'readyLoading':[x for x in ready if 'loading eval file' in x],'idName':next((x for x in usi if x.startswith('id name ')),'')}
             send('quit');return row
           rows=[]
           for ply in (29,33,35):
-            pos=sfen(MOVES[:ply-1]);r=run(pos);r={'ply':ply,**r};rows.append(r);print('FUTURE_NATIVE_TOURNAMENT_ROW '+json.dumps(r,separators=(',',':')),flush=True)
-          print('FUTURE_NATIVE_TOURNAMENT_SUMMARY '+json.dumps({'source':'76d58ef2e4cf64116784f41fd4816425ab6817ee','build':'tournament','rows':rows},separators=(',',':')),flush=True)
-          print('PASS_FUTURE_NATIVE_TOURNAMENT_HARNESS',flush=True)
+            pos=sfen(MOVES[:ply-1]);r=run(pos);r={'ply':ply,**r};rows.append(r);print('FUTURE_NATIVE_STATIC_ROW '+json.dumps(r,separators=(',',':')),flush=True)
+          print('FUTURE_NATIVE_STATIC_SUMMARY '+json.dumps({'source':'76d58ef2e4cf64116784f41fd4816425ab6817ee','build':'tournament','rows':rows},separators=(',',':')),flush=True)
+          print('PASS_FUTURE_NATIVE_STATIC_HARNESS',flush=True)
           PY
           python3 /tmp/native/parity.py 2>&1 | tee /tmp/native/parity.log
-          grep -F 'FUTURE_NATIVE_TOURNAMENT_SUMMARY ' /tmp/native/parity.log
-          grep -F 'PASS_FUTURE_NATIVE_TOURNAMENT_HARNESS' /tmp/native/parity.log
-      - name: Publish tournament native evidence to PR80
+          grep -F 'FUTURE_NATIVE_STATIC_SUMMARY ' /tmp/native/parity.log
+          grep -F 'PASS_FUTURE_NATIVE_STATIC_HARNESS' /tmp/native/parity.log
+      - name: Publish native static evidence to PR80
         if: always()
         uses: actions/github-script@v7
-        env:
-          JOB_STATUS: ${{ job.status }}
         with:
           script: |
-            const fs=require('node:fs');let t='';try{t=fs.readFileSync('/tmp/native/parity.log','utf8')}catch{}const lines=t.split(/\r?\n/).filter(x=>/^(FUTURE_NATIVE_TOURNAMENT_ROW|FUTURE_NATIVE_TOURNAMENT_SUMMARY|PASS_FUTURE_NATIVE_TOURNAMENT_HARNESS)/.test(x));const body=['### Future native tournament parity','job_status='+process.env.JOB_STATUS,'```text',...(lines.length?lines:['NO_EVIDENCE']),'```'].join('\n').slice(0,60000);await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:80,body});
+            const fs=require('node:fs');let t='';try{t=fs.readFileSync('/tmp/native/parity.log','utf8')}catch{}const lines=t.split(/\r?\n/).filter(x=>/^(FUTURE_NATIVE_STATIC_ROW|FUTURE_NATIVE_STATIC_SUMMARY|PASS_FUTURE_NATIVE_STATIC_HARNESS)/.test(x));const body=['### Future native static-eval parity','```text',...(lines.length?lines:['NO_EVIDENCE']),'```'].join('\n').slice(0,60000);await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:80,body});
