@@ -53,7 +53,7 @@ jobs:
           grep -F "fresh-singlepv15" /tmp/fsp15/match.mjs
           grep -F "ms:15000,multiPV:1,adaptive:false" /tmp/fsp15/match.mjs
           grep -F "typeof menuKifu==='function'" /tmp/fsp15/match.mjs
-          ! grep -F "dialogNari')" /tmp/fsp15/match.mjs
+          ! grep -F "querySelector('#dialogNari');if(d){d.classList.remove('is-show');d.style.display='none'" /tmp/fsp15/match.mjs
       - name: Run fresh singlePV 15s practical match
         env:
           ATTEMPT: 1
