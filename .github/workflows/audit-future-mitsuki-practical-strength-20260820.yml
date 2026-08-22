@@ -1,4 +1,4 @@
-# diagnostic trigger: direct-bridge production-vs-side artifact parity
+# diagnostic trigger: compare patched EvalFile path vs native-style EvalDir/default nn.bin
 name: Future Mitsuki practical-strength root-cause audit
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 jobs:
-  direct_artifact_compare:
+  eval_path_compare:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -19,7 +19,7 @@ jobs:
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Derive direct-bridge diagnostic workers from production worker
+      - name: Derive current and native-style eval workers
         run: |
           node <<'NODE'
           const fs=require('node:fs');
@@ -27,43 +27,40 @@ jobs:
           const marker="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
           if(!src.includes(marker))throw new Error('worker handler marker missing');
           const diag=`    if(m.type==='rawdepth'){
-            await init();
-            latestInfo={};latestMultiPV={};
-            await sendUSI('setoption name MultiPV value 1');
-            await sendUSI('position sfen '+String(m.sfen||''));
-            const p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');
-            await sendUSI('go depth '+Math.max(1,Number(m.depth)||10),180000);const line=await p;
-            const token=(line.split(/\\s+/)[1]||'').trim();
-            self.postMessage({type:'result',id,ok:true,kind:'rawdepth',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
+            await init();latestInfo={};latestMultiPV={};
+            await sendUSI('setoption name MultiPV value 1');await sendUSI('position sfen '+String(m.sfen||''));
+            const p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');await sendUSI('go depth '+Math.max(1,Number(m.depth)||10),180000);const line=await p;
+            const token=(line.split(/\\s+/)[1]||'').trim();self.postMessage({type:'result',id,ok:true,kind:'rawdepth',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
           }\n`;
-          const prod=src.replace(marker,diag+marker);
-          const baseLine="BASE=new URL('./yaneuraou/',self.location.href).href;";
-          if(!prod.includes(baseLine))throw new Error('BASE marker missing');
-          const side=prod.replace(baseLine,"BASE=new URL('../shogi-side-test/yaneuraou/',self.location.href).href;");
-          fs.writeFileSync('shogi-v21528/future-yaneura-worker-direct-prod.js',prod);
-          fs.writeFileSync('shogi-v21528/future-yaneura-worker-direct-side.js',side);
+          const current=src.replace(marker,diag+marker);
+          let nativeStyle=current;
+          const write="engine.FS.writeFile('/'+EVAL,bytes);";
+          if(!nativeStyle.includes(write))throw new Error('eval write marker missing');
+          nativeStyle=nativeStyle.replace(write,"try{engine.FS.mkdir('/eval')}catch(e){};engine.FS.writeFile('/eval/'+EVAL,bytes);");
+          const evalDir="await sendUSI('setoption name EvalDir value .')";
+          if(!nativeStyle.includes(evalDir))throw new Error('EvalDir marker missing');
+          nativeStyle=nativeStyle.replace(evalDir,"await sendUSI('setoption name EvalDir value eval')");
+          const evalFile="await sendUSI('setoption name EvalFile value '+EVAL)";
+          if(!nativeStyle.includes(evalFile))throw new Error('EvalFile marker missing');
+          nativeStyle=nativeStyle.replace(evalFile,"await Promise.resolve()");
+          fs.writeFileSync('shogi-v21528/future-yaneura-worker-eval-current.js',current);
+          fs.writeFileSync('shogi-v21528/future-yaneura-worker-eval-native.js',nativeStyle);
           NODE
       - name: Start COI server
         run: |
-          cat >/tmp/direct-server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4211,'127.0.0.1');
+          cat >/tmp/eval-server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4217,'127.0.0.1');
           NODE
-          node /tmp/direct-server.mjs >/tmp/direct-server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4211/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;cat /tmp/direct-server.log;exit 1
-      - name: Compare direct bridge on production and side artifacts
+          node /tmp/eval-server.mjs >/tmp/eval-server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4217/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;cat /tmp/eval-server.log;exit 1
+      - name: Compare evaluation loading paths
         run: |
-          cat >direct-artifact-test.mjs <<'NODE'
-          import{webkit}from'playwright';
-          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
-          const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
-          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4211/shogi-v21528/index.html?direct='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('no COI');
-          async function one(artifact){return p.evaluate(async({artifact,sfen})=>{const file=artifact==='prod'?'future-yaneura-worker-direct-prod.js':'future-yaneura-worker-direct-side.js';const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let n=0,P=new Map(),stages=[];w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}const q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=210000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});try{const init=await call('init',{},90000);const r=await call('rawdepth',{sfen,depth:10},190000);return{artifact,init,token:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,stageTail:stages.slice(-20)}}finally{w.terminate()}},{artifact,sfen})}
-          const rows=[];for(const a of['prod','side']){try{const r=await one(a);rows.push(r);console.log('FUTURE_DIRECT_ARTIFACT_ROW '+JSON.stringify(r))}catch(e){const r={artifact:a,error:String(e&&e.message||e)};rows.push(r);console.log('FUTURE_DIRECT_ARTIFACT_ROW '+JSON.stringify(r))}}
-          console.log('FUTURE_DIRECT_ARTIFACT_SUMMARY '+JSON.stringify({sfen,native:{token:'3g3f',cp:-3712,depth:10},rows}));console.log('PASS_FUTURE_DIRECT_ARTIFACT_HARNESS');await b.close();
+          cat >eval-path-test.mjs <<'NODE'
+          import{webkit}from'playwright';const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4217/shogi-v21528/index.html?evalpath='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('no COI');async function one(mode){return p.evaluate(async({mode,sfen})=>{const file=mode==='current'?'future-yaneura-worker-eval-current.js':'future-yaneura-worker-eval-native.js';const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let n=0,P=new Map(),stages=[];w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}const q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=210000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});try{const init=await call('init',{},90000);const r=await call('rawdepth',{sfen,depth:10},190000);return{mode,init,token:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,stageTail:stages.slice(-24)}}finally{w.terminate()}},{mode,sfen})}const rows=[];for(const mode of['current','nativeStyle']){try{const r=await one(mode);rows.push(r);console.log('FUTURE_EVAL_PATH_ROW '+JSON.stringify(r))}catch(e){const r={mode,error:String(e&&e.message||e)};rows.push(r);console.log('FUTURE_EVAL_PATH_ROW '+JSON.stringify(r))}}console.log('FUTURE_EVAL_PATH_SUMMARY '+JSON.stringify({sfen,native:{token:'3g3f',cp:-3712,depth:10},rows}));console.log('PASS_FUTURE_EVAL_PATH_HARNESS');await b.close();
           NODE
-          node direct-artifact-test.mjs 2>&1 | tee /tmp/direct-artifact.log
-          grep -F 'FUTURE_DIRECT_ARTIFACT_SUMMARY ' /tmp/direct-artifact.log
-          grep -F 'PASS_FUTURE_DIRECT_ARTIFACT_HARNESS' /tmp/direct-artifact.log
+          node eval-path-test.mjs 2>&1 | tee /tmp/eval-path.log
+          grep -F 'FUTURE_EVAL_PATH_SUMMARY ' /tmp/eval-path.log
+          grep -F 'PASS_FUTURE_EVAL_PATH_HARNESS' /tmp/eval-path.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(FUTURE_DIRECT_ARTIFACT_ROW|FUTURE_DIRECT_ARTIFACT_SUMMARY|PASS_FUTURE_DIRECT_ARTIFACT_HARNESS)' /tmp/direct-artifact.log || true
+        run: grep -E '^(FUTURE_EVAL_PATH_ROW|FUTURE_EVAL_PATH_SUMMARY|PASS_FUTURE_EVAL_PATH_HARNESS)' /tmp/eval-path.log || true
