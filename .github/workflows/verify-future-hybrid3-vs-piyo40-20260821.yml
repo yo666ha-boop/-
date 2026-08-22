@@ -1,4 +1,4 @@
-name: Audit Future hybrid3 vs Piyo Lv40
+name: Audit Future CLEAN V9.70 vs Piyo Lv40
 on:
   pull_request:
     branches: [main]
@@ -14,49 +14,71 @@ jobs:
       matrix:
         attempt: [1, 2]
     runs-on: ubuntu-22.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu-clean
+      - name: Build clean exact-source WASM and replace runner copy only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu-clean/source/Makefile')
+          s=p.read_text().replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          p.write_text(s)
+          PY
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu-clean:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/clean-practical-build.log 2>&1
+          LIB=YaneuraOu-clean/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/yaneuraou/
+          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,worker.js,wasm}
       - name: Install Chromium and WebKit
         run: |
           set -euo pipefail
-          mkdir -p /tmp/fh3 && cd /tmp/fh3
+          mkdir -p /tmp/fclean && cd /tmp/fclean
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit >/dev/null
       - name: Start local COI server
         run: |
-          cat >/tmp/fh3/server.mjs <<'NODE'
+          cat >/tmp/fclean/server.mjs <<'NODE'
           import http from 'node:http';import fs from 'node:fs';import path from 'node:path';
           const root=process.env.GITHUB_WORKSPACE,mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};
           const srv=http.createServer((req,res)=>{let u=decodeURIComponent((req.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){res.writeHead(403);return res.end('forbidden')}res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){res.writeHead(404);return res.end('not found')}res.setHeader('Content-Type',mime[path.extname(f)]||'application/octet-stream');res.writeHead(200);res.end(b)})});srv.listen(4177,'127.0.0.1',()=>console.log('COI_SERVER_READY'));
           NODE
-          node /tmp/fh3/server.mjs >/tmp/fh3/server.log 2>&1 &
+          node /tmp/fclean/server.mjs >/tmp/fclean/server.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4177/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
-          cat /tmp/fh3/server.log; exit 1
-      - name: Run hybrid3 practical match
+          cat /tmp/fclean/server.log; exit 1
+      - name: Run clean-artifact current-policy practical match
         env:
           ATTEMPT: ${{ matrix.attempt }}
         run: |
-          cat >/tmp/fh3/match.mjs <<'NODE'
+          cat >/tmp/fclean/match.mjs <<'NODE'
           import{chromium,webkit,devices}from'playwright';
-          const MAX=60,R='abcdefghi',INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',attempt=Number(process.env.ATTEMPT||1),policy='hybrid3';
+          const MAX=80,R='abcdefghi',INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL',attempt=Number(process.env.ATTEMPT||1),policy='clean76d-current-adaptive';
           function sfen(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of INIT.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),p=m.endsWith('+'),pc=b.get(a);if(!pc)throw Error('apply '+m+' missing '+a);const cap=b.get(d);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||p})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const pc=b.get(''+f+R[r]);if(!pc){e++;continue}if(e){x+=e;e=0}x+=(pc.pr?'+':'')+(pc.side==='b'?pc.k:pc.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
-          const pb=await chromium.launch({headless:true}),p=await pb.newPage({viewport:{width:1280,height:1000}});await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1500);await p.click('#btnNewGame');await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0);await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote1');const lv=await p.evaluate(()=>{const s=document.querySelector('#selectLevelGote'),o=[...s.options].find(o=>/^\s*Lv40\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return o.textContent.trim()});if(!lv||!lv.includes('R2610'))throw Error('not Lv40 '+lv);await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});await p.click('#btnDialogGameStart');await p.waitForTimeout(700);console.log('FUTURE_HYBRID3_PIYO '+JSON.stringify({attempt,level:lv}));
+          const pb=await chromium.launch({headless:true}),p=await pb.newPage({viewport:{width:1280,height:1000}});await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1500);await p.click('#btnNewGame');await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0);await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote1');const lv=await p.evaluate(()=>{const s=document.querySelector('#selectLevelGote'),o=[...s.options].find(o=>/^\s*Lv40\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return o.textContent.trim()});if(!lv||!lv.includes('R2610'))throw Error('not Lv40 '+lv);await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});await p.click('#btnDialogGameStart');await p.waitForTimeout(700);console.log('FUTURE_CLEAN_PIYO '+JSON.stringify({attempt,level:lv}));
           const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
           async function exportMoves(){await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(80);await p.click('#menuKifu');await p.waitForTimeout(80);await p.check('#dialogKifType2');await p.waitForTimeout(50);const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]}
           async function play(u){if(/^[PLNSGBR]\*/.test(u)){const jp={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'}[u[0]],pt=await p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt.trim(),x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height}}).find(x=>x.w&&x.h&&x.alt===jp)||null,jp);if(!pt)throw Error('hand '+u);await p.mouse.click(pt.x,pt.y);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);return}const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(60);await p.mouse.click(d.x,d.y);await p.waitForTimeout(180);const dlg=p.locator('#dialogNari'),visible=await dlg.isVisible().catch(()=>false);if(u.endsWith('+')){if(visible){await p.getByRole('button',{name:'成る',exact:true}).click({force:true});await p.waitForTimeout(120)}}else if(visible){await p.getByRole('button',{name:'成らない',exact:true}).click({force:true});await p.waitForTimeout(120)}}
-          const fb=await webkit.launch({headless:true}),f=await fb.newPage({...devices['iPhone 14']});const errs=[];f.on('pageerror',e=>errs.push(String(e)));await f.goto('http://127.0.0.1:4177/shogi-v21528/index.html?h3='+attempt+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await f.evaluate(()=>crossOriginIsolated))throw Error('COI');const prof=await f.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=h3-'+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});window.__w=w;window.__call=call;return call('init')});if(prof.threads!==1||prof.hashMB!==32||!prof.mobileWebKit)throw Error('profile '+JSON.stringify(prof));console.log('FUTURE_HYBRID3_PROFILE '+JSON.stringify({attempt,prof}));const call=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});
-          async function choose(pos){const a=await call(pos,{nodes:1500000,multiPV:3,adaptive:false}),tok=(a.candidates||[]).map(x=>x.token).filter(Boolean).slice(0,3);const b=await call(pos,{nodes:1500000,multiPV:1,searchmoves:tok,adaptive:false});b.info={...b.info,stage1:tok};return b}
-          let ms=[],result='MAX_REACHED';const dec=[];while(ms.length<MAX){if(ms.length%2)throw Error('turn '+ms.length);const ply=ms.length+1,pos=sfen(ms),r=await choose(pos),u=String(r.token||'');dec.push({ply,pos,u,info:r.info||{}});console.log('FUTURE_HYBRID3_MOVE '+JSON.stringify({attempt,ply,u,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,stage1:r.info?.stage1||null}));if(u==='resign'||u==='win'){result='FUTURE_'+u;break}const before=ms.length;await play(u);let got=null,last='';const st=Date.now();while(Date.now()-st<45000){const opts=await p.locator('#select_kifu option').allTextContents();last=(opts.at(-1)||'').trim();const x=await exportMoves();if(x.length>=before+2||/投了|詰み|反則|千日手|持将棋|中断|勝ち|負け/.test(last)){got=x;break}await p.waitForTimeout(300)}if(!got){got=await exportMoves().catch(()=>[]);result='PIYO_NO_REPLY';ms=got;console.log('FUTURE_HYBRID3_STOP '+JSON.stringify({attempt,ply,last,plies:ms.length,tail:ms.slice(-8)}));break}if(got[before]!==u)throw Error('USI DIVERGENCE '+ply+' future='+u+' actual='+got[before]);ms=got;console.log('FUTURE_HYBRID3_REPLY '+JSON.stringify({attempt,plies:ms.length,last,tail:ms.slice(-4)}));if(/投了|詰み|反則|千日手|持将棋|中断|勝ち|負け/.test(last)||ms.length%2){result=last||'ENDED';break}}
-          const cps=dec.map(x=>x.info?.cp).filter(Number.isFinite),negMate=dec.filter(x=>Number.isFinite(x.info?.mate)&&x.info.mate<0),summary={policy,attempt,piyo:lv,plies:ms.length,result,futureMoves:dec.length,minCp:cps.length?Math.min(...cps):null,lastCp:cps.length?cps.at(-1):null,negativeMateCount:negMate.length,firstNegativeMatePly:negMate[0]?.ply??null,pageErrors:errs,tail:ms.slice(-14)};console.log('FUTURE_HYBRID3_SUMMARY '+JSON.stringify(summary));if(errs.length)throw Error('page errors '+JSON.stringify(errs));console.log('PASS_FUTURE_HYBRID3_HARNESS');await f.evaluate(()=>window.__w?.terminate());await fb.close();await pb.close();
+          const fb=await webkit.launch({headless:true}),f=await fb.newPage({...devices['iPhone 14']});const errs=[];f.on('pageerror',e=>errs.push(String(e)));await f.goto('http://127.0.0.1:4177/shogi-v21528/index.html?clean='+attempt+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await f.evaluate(()=>crossOriginIsolated))throw Error('COI');const prof=await f.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v=clean-'+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});window.__w=w;window.__call=call;return call('init')});if(prof.threads!==1||prof.hashMB!==32||!prof.mobileWebKit)throw Error('profile '+JSON.stringify(prof));console.log('FUTURE_CLEAN_PROFILE '+JSON.stringify({attempt,prof}));const call=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});
+          let ms=[],result='MAX_REACHED';const dec=[];while(ms.length<MAX){if(ms.length%2)throw Error('turn '+ms.length);const ply=ms.length+1,pos=sfen(ms),r=await call(pos,{ms:4000,multiPV:1,adaptive:true}),u=String(r.token||'');dec.push({ply,pos,u,info:r.info||{}});console.log('FUTURE_CLEAN_MOVE '+JSON.stringify({attempt,ply,u,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,adaptive:r.info?.adaptive,reranked:r.info?.reranked,gapCp:r.info?.gapCp}));if(u==='resign'||u==='win'){result='FUTURE_'+u;break}const before=ms.length;await play(u);let got=null,last='';const st=Date.now();while(Date.now()-st<50000){const opts=await p.locator('#select_kifu option').allTextContents();last=(opts.at(-1)||'').trim();const x=await exportMoves();if(x.length>=before+2||/投了|詰み|反則|千日手|持将棋|中断|勝ち|負け/.test(last)){got=x;break}await p.waitForTimeout(300)}if(!got){got=await exportMoves().catch(()=>[]);result='PIYO_NO_REPLY';ms=got;console.log('FUTURE_CLEAN_STOP '+JSON.stringify({attempt,ply,last,plies:ms.length,tail:ms.slice(-8)}));break}if(got[before]!==u)throw Error('USI DIVERGENCE '+ply+' future='+u+' actual='+got[before]);ms=got;console.log('FUTURE_CLEAN_REPLY '+JSON.stringify({attempt,plies:ms.length,last,tail:ms.slice(-4)}));if(/投了|詰み|反則|千日手|持将棋|中断|勝ち|負け/.test(last)||ms.length%2){result=last||'ENDED';break}}
+          const cps=dec.map(x=>x.info?.cp).filter(Number.isFinite),negMate=dec.filter(x=>Number.isFinite(x.info?.mate)&&x.info.mate<0),summary={policy,attempt,piyo:lv,plies:ms.length,result,futureMoves:dec.length,minCp:cps.length?Math.min(...cps):null,lastCp:cps.length?cps.at(-1):null,negativeMateCount:negMate.length,firstNegativeMatePly:negMate[0]?.ply??null,pageErrors:errs,tail:ms.slice(-14)};console.log('FUTURE_CLEAN_SUMMARY '+JSON.stringify(summary));if(errs.length)throw Error('page errors '+JSON.stringify(errs));console.log('PASS_FUTURE_CLEAN_PRACTICAL_HARNESS');await f.evaluate(()=>window.__w?.terminate());await fb.close();await pb.close();
           NODE
-          cd /tmp/fh3
-          node match.mjs 2>&1 | tee /tmp/fh3/h3-${ATTEMPT}.log
-          grep -F 'FUTURE_HYBRID3_SUMMARY ' /tmp/fh3/h3-${ATTEMPT}.log
-          grep -F 'PASS_FUTURE_HYBRID3_HARNESS' /tmp/fh3/h3-${ATTEMPT}.log
+          cd /tmp/fclean
+          node match.mjs 2>&1 | tee /tmp/fclean/clean-${ATTEMPT}.log
+          grep -F 'FUTURE_CLEAN_SUMMARY ' /tmp/fclean/clean-${ATTEMPT}.log
+          grep -F 'PASS_FUTURE_CLEAN_PRACTICAL_HARNESS' /tmp/fclean/clean-${ATTEMPT}.log
       - name: Preserve evidence
         if: always()
         run: |
-          echo '=== FUTURE HYBRID3 VS PIYO40 ==='
-          grep -E '^(FUTURE_HYBRID3_PIYO|FUTURE_HYBRID3_PROFILE|FUTURE_HYBRID3_MOVE|FUTURE_HYBRID3_REPLY|FUTURE_HYBRID3_STOP|FUTURE_HYBRID3_SUMMARY|PASS_FUTURE_HYBRID3_HARNESS)' /tmp/fh3/h3-${{ matrix.attempt }}.log | tail -180 || true
+          echo '=== FUTURE CLEAN V9.70 VS PIYO40 ==='
+          grep -E '^(FUTURE_CLEAN_PIYO|FUTURE_CLEAN_PROFILE|FUTURE_CLEAN_MOVE|FUTURE_CLEAN_REPLY|FUTURE_CLEAN_STOP|FUTURE_CLEAN_SUMMARY|PASS_FUTURE_CLEAN_PRACTICAL_HARNESS)' /tmp/fclean/clean-${{ matrix.attempt }}.log | tail -220 || true
