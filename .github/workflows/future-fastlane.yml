@@ -1,0 +1,48 @@
+name: Future diagnostic fastlane
+on:
+  push:
+    branches: [diag-future-fastlane-20260822]
+    paths:
+      - '.github/workflows/future-fastlane.yml'
+permissions:
+  contents: read
+jobs:
+  fastlane:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WebKit
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/frerank && cd /tmp/frerank
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Extract exact always-rerank diagnostic
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('.github/workflows/diagnose-future-always-rerank-20260823.yml').read_text()
+          def extract(marker,out):
+              i=s.index(marker)+len(marker); j=s.index('\n          NODE',i)
+              lines=s[i:j].splitlines()
+              text='\n'.join(x[10:] if x.startswith('          ') else x for x in lines)+'\n'
+              Path(out).write_text(text)
+          extract("          cat >/tmp/frerank/server.mjs <<'NODE'\n",'/tmp/frerank/server.mjs')
+          extract("          cat >/tmp/frerank/a.mjs <<'NODE'\n",'/tmp/frerank/a.mjs')
+          PY
+      - name: Start COI server
+        run: |
+          node /tmp/frerank/server.mjs >/tmp/frerank/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4186/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done
+          cat /tmp/frerank/server.log; exit 1
+      - name: Run exact always-rerank diagnostic
+        run: |
+          cd /tmp/frerank
+          node a.mjs 2>&1 | tee /tmp/frerank/a.log
+          grep -F 'FUTURE_ALWAYS_RERANK_SUMMARY ' /tmp/frerank/a.log
+          grep -F 'PASS_FUTURE_ALWAYS_RERANK_HARNESS' /tmp/frerank/a.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FUTURE_ALWAYS_RERANK_ROW|FUTURE_ALWAYS_RERANK_SUMMARY|PASS_FUTURE_ALWAYS_RERANK_HARNESS)' /tmp/frerank/a.log | tail -80 || true
