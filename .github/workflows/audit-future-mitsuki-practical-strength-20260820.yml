@@ -1,3 +1,4 @@
+# diagnostic trigger: standard-USI parity on exact production/side artifacts
 name: Future Mitsuki practical-strength root-cause audit
 on:
   pull_request:
