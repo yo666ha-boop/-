@@ -8,62 +8,62 @@ on:
 permissions:
   contents: read
 jobs:
-  wasm_eval_sensitivity:
+  wasm_artifact_compare:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install WebKit
-        shell: bash
         run: |
-          set -euo pipefail
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Build sensitivity worker from exact production worker
-        shell: bash
+      - name: Build diagnostic workers
         run: |
           node <<'NODE'
-          const fs=require('node:fs');let s=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
-          const decl="let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};";
-          if(!s.includes(decl))throw Error('decl marker');s=s.replace(decl,"let __diag=[];"+decl);
-          const ld="  const line=String(raw||'').trim();";if(!s.includes(ld))throw Error('line marker');s=s.replace(ld,ld+"\n  __diag.push(line);if(__diag.length>1200)__diag.shift();");
-          const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";if(!s.includes(needle))throw Error('handler marker');
-          const ins=`    if(m.type==='diagsensitivity'){
-              await init();__diag=[];
-              const scale=Math.max(1,Math.min(128,Number(m.scale)||24));const file=String(m.evalFile||'nn.bin');
-              for(const c of ['setoption name EvalDir value .','setoption name EvalFile value '+file,'setoption name FV_SCALE value '+scale,'setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])await sendUSI(c,20000);
-              let p=waitLine(x=>x==='readyok',60000,'diag readyok');await sendUSI('isready',60000);await p;const readyLines=__diag.slice();__diag=[];latestInfo={};latestMultiPV={};
-              const pos=String(m.sfen||'');const depth=Math.max(1,Number(m.depth)||10);await sendUSI('usinewgame');await sendUSI('position sfen '+pos);p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');await sendUSI('go depth '+depth,180000);const best=await p;
-              self.postMessage({type:'result',id,ok:true,kind:'diagsensitivity',scale,evalFile:file,readyLines,bestmove:best,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}});return;
+          const fs=require('node:fs');
+          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
+          function build(name,baseExpr){
+            let s=src.replace("new URL('./yaneuraou/',self.location.href).href",baseExpr);
+            const decl="let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};";
+            s=s.replace(decl,"let __all=[];"+decl);
+            const ld="  const line=String(raw||'').trim();";s=s.replace(ld,ld+"\n  __all.push(line);if(__all.length>2000)__all.shift();");
+            const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+            const ins=`    if(m.type==='diagcompare'){
+              let initError='';try{await init()}catch(e){initError=String(e&&e.message||e)}
+              const lines=__all.slice(), opts=lines.filter(x=>x.startsWith('option name '));
+              if(initError){self.postMessage({type:'result',id,ok:true,kind:'diagcompare',initError,lines,opts});return}
+              latestInfo={};latestMultiPV={};const pos=String(m.sfen||'');const depth=Math.max(1,Number(m.depth)||10);
+              await sendUSI('position sfen '+pos);const p=waitLine(x=>x.startsWith('bestmove '),180000,'cmp bestmove');await sendUSI('go depth '+depth,180000);const best=await p;
+              self.postMessage({type:'result',id,ok:true,kind:'diagcompare',initError:'',lines,opts,bestmove:best,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}});return;
             }\n`;
-          fs.writeFileSync('shogi-v21528/future-yaneura-worker-sensitivity.js',s.replace(needle,ins+needle));
+            if(!s.includes(needle))throw Error('marker');
+            fs.writeFileSync('shogi-v21528/'+name,s.replace(needle,ins+needle));
+          }
+          build('future-prod-compare.js',"new URL('./yaneuraou/',self.location.href).href");
+          build('future-side-compare.js',"new URL('../shogi-side-test/yaneuraou/',self.location.href).href");
           NODE
       - name: Start COI server
-        shell: bash
         run: |
-          cat >/tmp/future-sens-server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4201,'127.0.0.1');
+          cat >/tmp/cmp-server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4203,'127.0.0.1');
           NODE
-          node /tmp/future-sens-server.mjs >/tmp/future-sens-server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4201/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;cat /tmp/future-sens-server.log;exit 1
-      - name: Run WebKit FV_SCALE and missing-eval sensitivity
-        shell: bash
+          node /tmp/cmp-server.mjs >/tmp/cmp-server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4203/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;exit 1
+      - name: Compare artifacts on exact collapse SFEN
         run: |
-          cat >future-sensitivity-test.mjs <<'NODE'
+          cat >future-artifact-compare.mjs <<'NODE'
           import{webkit}from'playwright';
           const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
           const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
-          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4201/shogi-v21528/index.html?sens='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-          async function one(scale,evalFile='nn.bin'){return await p.evaluate(async({sfen,scale,evalFile})=>{const w=new Worker('./future-yaneura-worker-sensitivity.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=220000)=>new Promise((res,rej)=>{const id=++n,t=setTimeout(()=>{P.delete(id);rej(Error(type+' timeout'))},timeout);P.set(id,{r:res,j:rej,t});w.postMessage({type,id,...data})});try{return await call('diagsensitivity',{sfen,depth:10,scale,evalFile})}finally{w.terminate()}},{sfen,scale,evalFile})}
-          const rows=[];for(const scale of[1,24,128]){const r=await one(scale);const row={case:'scale',scale,evalFile:r.evalFile,token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,readyNoSuch:r.readyLines.filter(x=>/No such option/i.test(x)),readyLoading:r.readyLines.filter(x=>/loading eval file/i.test(x)),readyEval:r.readyLines.filter(x=>/eval|nn\.bin|FV_SCALE/i.test(x))};rows.push(row);console.log('FUTURE_WASM_SENSITIVITY_ROW '+JSON.stringify(row))}
-          let missing;try{const r=await one(24,'definitely-missing.nn.bin');missing={case:'missing',ok:true,token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,readyNoSuch:r.readyLines.filter(x=>/No such option/i.test(x)),readyLoading:r.readyLines.filter(x=>/loading eval file/i.test(x)),readyEval:r.readyLines.filter(x=>/eval|nn\.bin/i.test(x))}}catch(e){missing={case:'missing',ok:false,error:String(e&&e.message||e)}}console.log('FUTURE_WASM_SENSITIVITY_MISSING '+JSON.stringify(missing));console.log('FUTURE_WASM_SENSITIVITY_SUMMARY '+JSON.stringify({rows,missing}));console.log('PASS_FUTURE_WASM_SENSITIVITY_HARNESS');await b.close();
+          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4203/shogi-v21528/index.html?cmp='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+          async function run(file){return p.evaluate(async({file,sfen})=>{const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let id=1;return await new Promise((res,rej)=>{const t=setTimeout(()=>rej(Error('timeout')),220000);w.onmessage=e=>{const m=e.data||{};if(m.type==='result'&&m.id===id){clearTimeout(t);w.terminate();m.ok?res(m):rej(Error(m.error||'worker'))}};w.postMessage({type:'diagcompare',id,sfen,depth:10})})},{file,sfen})}
+          const out=[];for(const [artifact,file] of[['production76d','future-prod-compare.js'],['side33cc','future-side-compare.js']]){let r;try{r=await run(file)}catch(e){r={initError:String(e&&e.message||e),lines:[],opts:[]}}const row={artifact,initError:r.initError||'',idName:(r.lines||[]).find(x=>x.startsWith('id name '))||'',hasEvalFile:(r.opts||[]).some(x=>x.startsWith('option name EvalFile ')),loading:(r.lines||[]).filter(x=>/loading eval file/i.test(x)),evalErrors:(r.lines||[]).filter(x=>/eval|nn\.bin|No such option|failed to read/i.test(x)),token:(r.bestmove||'').split(/\s+/)[1]||'',cp:r.info?.cp??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null};out.push(row);console.log('FUTURE_WASM_ARTIFACT_ROW '+JSON.stringify(row))}
+          console.log('FUTURE_WASM_ARTIFACT_SUMMARY '+JSON.stringify({sfen,native:{token:'5e5d',cp:-4054},rows:out}));console.log('PASS_FUTURE_WASM_ARTIFACT_HARNESS');await b.close();
           NODE
-          node future-sensitivity-test.mjs 2>&1 | tee /tmp/future-sensitivity.log
-          grep -F 'FUTURE_WASM_SENSITIVITY_SUMMARY ' /tmp/future-sensitivity.log
-          grep -F 'PASS_FUTURE_WASM_SENSITIVITY_HARNESS' /tmp/future-sensitivity.log
+          node future-artifact-compare.mjs 2>&1 | tee /tmp/artifact.log
+          grep -F 'FUTURE_WASM_ARTIFACT_SUMMARY ' /tmp/artifact.log
+          grep -F 'PASS_FUTURE_WASM_ARTIFACT_HARNESS' /tmp/artifact.log
       - name: Preserve evidence
         if: always()
-        shell: bash
-        run: |
-          echo '=== FUTURE WASM SENSITIVITY ===';grep -E '^(FUTURE_WASM_SENSITIVITY_ROW|FUTURE_WASM_SENSITIVITY_MISSING|FUTURE_WASM_SENSITIVITY_SUMMARY|PASS_FUTURE_WASM_SENSITIVITY_HARNESS)' /tmp/future-sensitivity.log || true
+        run: grep -E '^(FUTURE_WASM_ARTIFACT_ROW|FUTURE_WASM_ARTIFACT_SUMMARY|PASS_FUTURE_WASM_ARTIFACT_HARNESS)' /tmp/artifact.log || true
