@@ -1,4 +1,4 @@
-# diagnostic trigger: compare patched EvalFile path vs native-style EvalDir/default nn.bin
+# diagnostic trigger: clean upstream 76d58ef WASM parity against current production artifact
 name: Future Mitsuki practical-strength root-cause audit
 on:
   pull_request:
@@ -9,58 +9,76 @@ on:
 permissions:
   contents: read
 jobs:
-  eval_path_compare:
+  clean_wasm_compare:
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu-clean
+      - name: Prepare clean upstream build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu-clean/source/Makefile')
+          s=p.read_text()
+          if '-s PTHREAD_POOL_SIZE=32' in s:
+              s=s.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          p.write_text(s)
+          PY
+          grep -F 'EMSCRIPTEN_KEEPALIVE extern "C" int usi_command' YaneuraOu-clean/source/usi.cpp
+          grep -F '"halfkp.noeval"' YaneuraOu-clean/script/wasm_build.js
+          test -s shogi-v21528/yaneuraou/nn.bin
+      - name: Build clean upstream HalfKP noeval WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          set +e
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu-clean:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval 2>&1 | tee /tmp/clean-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          test "$rc" -eq 0
+          LIB=YaneuraOu-clean/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.worker.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          mkdir -p shogi-v21528/clean76d
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/clean76d/
+          cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/clean76d/
+          sha256sum shogi-v21528/clean76d/yaneuraou.halfkp.noeval.{js,worker.js,wasm} | tee /tmp/clean-sha.log
       - name: Install WebKit
         run: |
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Derive current and native-style eval workers
+      - name: Derive direct workers for current and clean artifact
         run: |
           node <<'NODE'
-          const fs=require('node:fs');
-          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
-          const marker="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
-          if(!src.includes(marker))throw new Error('worker handler marker missing');
-          const diag=`    if(m.type==='rawdepth'){
-            await init();latestInfo={};latestMultiPV={};
-            await sendUSI('setoption name MultiPV value 1');await sendUSI('position sfen '+String(m.sfen||''));
-            const p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');await sendUSI('go depth '+Math.max(1,Number(m.depth)||10),180000);const line=await p;
-            const token=(line.split(/\\s+/)[1]||'').trim();self.postMessage({type:'result',id,ok:true,kind:'rawdepth',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
-          }\n`;
-          const current=src.replace(marker,diag+marker);
-          let nativeStyle=current;
-          const write="engine.FS.writeFile('/'+EVAL,bytes);";
-          if(!nativeStyle.includes(write))throw new Error('eval write marker missing');
-          nativeStyle=nativeStyle.replace(write,"try{engine.FS.mkdir('/eval')}catch(e){};engine.FS.writeFile('/eval/'+EVAL,bytes);");
-          const evalDir="await sendUSI('setoption name EvalDir value .')";
-          if(!nativeStyle.includes(evalDir))throw new Error('EvalDir marker missing');
-          nativeStyle=nativeStyle.replace(evalDir,"await sendUSI('setoption name EvalDir value eval')");
-          const evalFile="await sendUSI('setoption name EvalFile value '+EVAL)";
-          if(!nativeStyle.includes(evalFile))throw new Error('EvalFile marker missing');
-          nativeStyle=nativeStyle.replace(evalFile,"await Promise.resolve()");
-          fs.writeFileSync('shogi-v21528/future-yaneura-worker-eval-current.js',current);
-          fs.writeFileSync('shogi-v21528/future-yaneura-worker-eval-native.js',nativeStyle);
+          const fs=require('node:fs');const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');const marker="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";if(!src.includes(marker))throw Error('marker');const diag=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),180000,'diag bestmove');await sendUSI('go depth '+Math.max(1,Number(m.depth)||10),180000);const line=await p;const token=(line.split(/\\s+/)[1]||'').trim();self.postMessage({type:'result',id,ok:true,kind:'rawdepth',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;}\n`;const prod=src.replace(marker,diag+marker);const base="BASE=new URL('./yaneuraou/',self.location.href).href;";if(!prod.includes(base))throw Error('base');const clean=prod.replace(base,"BASE=new URL('./clean76d/',self.location.href).href;");fs.writeFileSync('shogi-v21528/future-direct-current.js',prod);fs.writeFileSync('shogi-v21528/future-direct-clean76d.js',clean);
           NODE
       - name: Start COI server
         run: |
-          cat >/tmp/eval-server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4217,'127.0.0.1');
+          cat >/tmp/clean-server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4223,'127.0.0.1');
           NODE
-          node /tmp/eval-server.mjs >/tmp/eval-server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4217/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;cat /tmp/eval-server.log;exit 1
-      - name: Compare evaluation loading paths
+          node /tmp/clean-server.mjs >/tmp/clean-server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4223/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done;cat /tmp/clean-server.log;exit 1
+      - name: Compare current vs clean upstream direct bridge
         run: |
-          cat >eval-path-test.mjs <<'NODE'
-          import{webkit}from'playwright';const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4217/shogi-v21528/index.html?evalpath='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('no COI');async function one(mode){return p.evaluate(async({mode,sfen})=>{const file=mode==='current'?'future-yaneura-worker-eval-current.js':'future-yaneura-worker-eval-native.js';const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let n=0,P=new Map(),stages=[];w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}const q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=210000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});try{const init=await call('init',{},90000);const r=await call('rawdepth',{sfen,depth:10},190000);return{mode,init,token:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,stageTail:stages.slice(-24)}}finally{w.terminate()}},{mode,sfen})}const rows=[];for(const mode of['current','nativeStyle']){try{const r=await one(mode);rows.push(r);console.log('FUTURE_EVAL_PATH_ROW '+JSON.stringify(r))}catch(e){const r={mode,error:String(e&&e.message||e)};rows.push(r);console.log('FUTURE_EVAL_PATH_ROW '+JSON.stringify(r))}}console.log('FUTURE_EVAL_PATH_SUMMARY '+JSON.stringify({sfen,native:{token:'3g3f',cp:-3712,depth:10},rows}));console.log('PASS_FUTURE_EVAL_PATH_HARNESS');await b.close();
+          cat >clean-compare.mjs <<'NODE'
+          import{webkit}from'playwright';const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});await p.goto('http://127.0.0.1:4223/shogi-v21528/index.html?clean='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('no COI');async function one(kind){return p.evaluate(async({kind,sfen})=>{const file=kind==='current'?'future-direct-current.js':'future-direct-clean76d.js';const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let n=0,P=new Map(),stages=[];w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}const q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,data={},timeout=210000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});try{const init=await call('init',{},120000);const r=await call('rawdepth',{sfen,depth:10},190000);return{kind,init,token:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,depth:r.info?.depth??null,nodes:r.info?.nodes??null,profile:r.profile,stageTail:stages.slice(-24)}}finally{w.terminate()}},{kind,sfen})}const rows=[];for(const k of['current','clean76d']){try{const r=await one(k);rows.push(r);console.log('FUTURE_CLEAN_WASM_ROW '+JSON.stringify(r))}catch(e){const r={kind:k,error:String(e&&e.message||e)};rows.push(r);console.log('FUTURE_CLEAN_WASM_ROW '+JSON.stringify(r))}}console.log('FUTURE_CLEAN_WASM_SUMMARY '+JSON.stringify({sfen,native:{token:'3g3f',cp:-3712,depth:10},rows}));console.log('PASS_FUTURE_CLEAN_WASM_HARNESS');await b.close();
           NODE
-          node eval-path-test.mjs 2>&1 | tee /tmp/eval-path.log
-          grep -F 'FUTURE_EVAL_PATH_SUMMARY ' /tmp/eval-path.log
-          grep -F 'PASS_FUTURE_EVAL_PATH_HARNESS' /tmp/eval-path.log
+          node clean-compare.mjs 2>&1 | tee /tmp/clean-compare.log
+          grep -F 'FUTURE_CLEAN_WASM_SUMMARY ' /tmp/clean-compare.log
+          grep -F 'PASS_FUTURE_CLEAN_WASM_HARNESS' /tmp/clean-compare.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(FUTURE_EVAL_PATH_ROW|FUTURE_EVAL_PATH_SUMMARY|PASS_FUTURE_EVAL_PATH_HARNESS)' /tmp/eval-path.log || true
+        run: |
+          grep -E '^(FUTURE_CLEAN_WASM_ROW|FUTURE_CLEAN_WASM_SUMMARY|PASS_FUTURE_CLEAN_WASM_HARNESS)' /tmp/clean-compare.log || true
+          tail -n 80 /tmp/clean-build.log || true
