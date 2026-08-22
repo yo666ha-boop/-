@@ -35,16 +35,14 @@ jobs:
           const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
           if(!s.includes(needle))throw Error('handler marker missing');
           const ins=`    if(m.type==='diagstate'){
-              await init();
-              __diag=[];
+              await init();__diag=[];
               let p=waitLine(x=>x==='usiok',20000,'diag usiok');await sendUSI('usi');await p;
               const usiLines=__diag.slice();__diag=[];
               for(const c of ['setoption name EvalDir value .','setoption name EvalFile value nn.bin','setoption name FV_SCALE value 24','setoption name USI_Hash value 32','setoption name Threads value 1','setoption name MultiPV value 1'])await sendUSI(c,20000);
               p=waitLine(x=>x==='readyok',60000,'diag readyok');await sendUSI('isready',60000);await p;
               const readyLines=__diag.slice();__diag=[];latestInfo={};latestMultiPV={};
               const pos=String(m.sfen||'');const depth=Math.max(1,Number(m.depth)||12);
-              await sendUSI('position sfen '+pos);
-              p=waitLine(x=>x.startsWith('bestmove '),210000,'diag bestmove');await sendUSI('go depth '+depth,210000);const best=await p;
+              await sendUSI('position sfen '+pos);p=waitLine(x=>x.startsWith('bestmove '),210000,'diag bestmove');await sendUSI('go depth '+depth,210000);const best=await p;
               self.postMessage({type:'result',id,ok:true,kind:'diagstate',sfen:pos,usiLines,readyLines,bestmove:best,info:{...latestInfo},searchTail:__diag.slice(-50),profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK,mobileSafe:MOBILE_SAFE}});return;
             }\n`;
           fs.writeFileSync('shogi-v21528/future-yaneura-worker-state-diag.js',s.replace(needle,ins+needle));
@@ -63,7 +61,7 @@ jobs:
       - name: Inspect exact production WASM state at fresh-collapse ply29
         shell: bash
         run: |
-          cat >/tmp/future-state-test.mjs <<'NODE'
+          cat >future-state-test.mjs <<'NODE'
           import {webkit,chromium} from 'playwright';
           const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
           const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
@@ -83,7 +81,7 @@ jobs:
           if(rows.some(x=>x.pageErrors.length))throw Error('page errors');
           console.log('PASS_FUTURE_WASM_STATE_HARNESS');
           NODE
-          node /tmp/future-state-test.mjs 2>&1 | tee /tmp/future-state.log
+          node future-state-test.mjs 2>&1 | tee /tmp/future-state.log
           grep -F 'FUTURE_WASM_STATE_SUMMARY ' /tmp/future-state.log
           grep -F 'PASS_FUTURE_WASM_STATE_HARNESS' /tmp/future-state.log
       - name: Preserve evidence
