@@ -35,7 +35,7 @@ jobs:
           p.write_text(s.replace(old,new,1))
           m=Path('YaneuraOu-layoutfix/source/Makefile')
           t=m.read_text(); assert '-s PTHREAD_POOL_SIZE=32' in t
-          m.write_text(t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
+          print('FUTURE_LAYOUT_FIX_KEEP_PRODUCTION_PTHREAD_POOL_32')
           PY
           docker pull emscripten/emsdk:3.1.43 >/dev/null
           docker run --rm -v "${{ github.workspace }}/YaneuraOu-layoutfix:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/layout-build.log 2>&1
@@ -44,7 +44,7 @@ jobs:
           cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/layoutfix76d/
           cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/layoutfix76d/
           echo FUTURE_LAYOUT_FIX_BUILD_OK
-          sha256sum shogi-v21528/layoutfix76d/yaneuraou.halfkp.noeval.{js,wasm} shogi-v21528/layoutfix76d/nn.bin
+          sha256sum shogi-v21528/layoutfix76d/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/layoutfix76d/nn.bin
       - name: Prepare diagnostic worker and browser
         run: |
           set -euo pipefail
