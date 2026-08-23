@@ -1,0 +1,64 @@
+name: Diagnose Piyo legal click sync at failed Future moves
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-piyo-legal-click-sync-20260823.yml'
+permissions:
+  contents: read
+jobs:
+  legal-click:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Chromium
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pclick && cd /tmp/pclick
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Reproduce failed legal moves in human-human mode
+        run: |
+          cat >/tmp/pclick/check.mjs <<'NODE'
+          import {chromium} from 'playwright';
+          const cases=[
+            {name:'h33-ply7-king',pre:['7g7f','8c8d','4i5h','3c3d','8h2b+','3a2b'],target:'5i4i'},
+            {name:'h25-ply7-rook',pre:['7g7f','4a3b','7f7e','3c3d','8h2b+','3a2b'],target:'2h7h'},
+            {name:'h21-ply21-king',pre:['7g7f','8c8d','4i5h','7a6b','2h3h','3c3d','8h2b+','3a2b','9i9h','8d8e','7f7e','B*5d','3g3f','5d8g+','B*5e','4a3b','7e7d','8g9h','7d7c+','6b7c'],target:'5i4i'}
+          ];
+          const b=await chromium.launch({headless:true});
+          async function setup(){
+            const p=await b.newPage({viewport:{width:1280,height:1000}});
+            await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
+            await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1200);await p.click('#btnNewGame');
+            await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0);
+            await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote0');
+            await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});
+            await p.click('#btnDialogGameStart');await p.waitForTimeout(700);return p;
+          }
+          async function runCase(c){
+            const p=await setup();const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');
+            const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
+            async function exportMoves(){await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(100);await p.click('#menuKifu');await p.waitForTimeout(100);await p.check('#dialogKifType2');await p.waitForTimeout(60);const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]}
+            async function state(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim());return{count:o.length,last:o.at(-1)||'',tail:o.slice(-4)}})}
+            async function diag(u,label){const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));const x=await p.evaluate(({a,d})=>{const f=(q)=>{const e=document.elementFromPoint(q.x,q.y);if(!e)return null;return{tag:e.tagName,id:e.id,cls:e.className,alt:e.getAttribute('alt'),src:e.getAttribute('src')}};return{src:f(a),dst:f(d)}},{a,d});console.log('PIYO_CLICK_DIAG '+JSON.stringify({case:c.name,label,u,a,d,hit:x,state:await state()}))}
+            async function play(u,slow=false){
+              if(/^[PLNSGBR]\*/.test(u)){const jp={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'}[u[0]],pt=await p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img,#komadai_s img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt.trim(),x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height}}).find(x=>x.w&&x.h&&x.alt===jp)||null,jp);if(!pt)throw Error('hand '+u);await p.mouse.click(pt.x,pt.y);await p.waitForTimeout(slow?350:80);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);await p.waitForTimeout(slow?350:120);return}
+              const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(slow?350:80);await p.mouse.click(d.x,d.y);await p.waitForTimeout(slow?350:120);if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1200}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1');await p.waitForTimeout(slow?250:80)
+            }
+            for(const u of c.pre){const before=(await exportMoves()).length;await play(u,true);const got=await exportMoves();if(got.length!==before+1||got.at(-1)!==u)throw Error(c.name+' pre divergence '+u+' '+JSON.stringify(got.slice(-4)))}
+            const before=(await exportMoves()).length;await diag(c.target,'before-fast');await play(c.target,false);let got=await exportMoves();console.log('PIYO_CLICK_ATTEMPT '+JSON.stringify({case:c.name,mode:'fast',target:c.target,before,after:got.length,last:got.at(-1)||null,ok:got.length===before+1&&got.at(-1)===c.target}));
+            if(!(got.length===before+1&&got.at(-1)===c.target)){await diag(c.target,'before-slow-retry');await p.keyboard.press('Escape').catch(()=>{});await p.waitForTimeout(300);await play(c.target,true);got=await exportMoves();console.log('PIYO_CLICK_ATTEMPT '+JSON.stringify({case:c.name,mode:'slow-retry',target:c.target,before,after:got.length,last:got.at(-1)||null,ok:got.length===before+1&&got.at(-1)===c.target}))}
+            const ok=got.length===before+1&&got.at(-1)===c.target;console.log('PIYO_CLICK_SUMMARY '+JSON.stringify({case:c.name,target:c.target,ok,tail:got.slice(-6)}));await p.close();return ok
+          }
+          let all=true;for(const c of cases)all=(await runCase(c))&&all;console.log('PIYO_CLICK_ALL '+JSON.stringify({all}));await b.close();if(!all)process.exit(2);
+          NODE
+          cd /tmp/pclick
+          node --check check.mjs
+          node check.mjs 2>&1 | tee legal-click.log
+      - name: Preserve evidence
+        if: always()
+        run: |
+          grep -E '^(PIYO_CLICK_DIAG|PIYO_CLICK_ATTEMPT|PIYO_CLICK_SUMMARY|PIYO_CLICK_ALL)' /tmp/pclick/legal-click.log || true
