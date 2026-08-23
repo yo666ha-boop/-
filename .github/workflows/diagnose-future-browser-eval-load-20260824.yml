@@ -1,0 +1,65 @@
+name: Diagnose Future browser eval loading parity
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-future-browser-eval-load-20260824.yml'
+permissions:
+  contents: read
+jobs:
+  eval-load:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Chromium and WebKit
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/feval && cd /tmp/feval
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Build diagnostic worker with startup line capture
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const src='shogi-v21528/future-yaneura-worker21528.js',dst='shogi-v21528/future-yaneura-worker-evaldiag.js';
+          let s=fs.readFileSync(src,'utf8');
+          const a='function onLine(raw){\n  const line=String(raw||\'\').trim();';
+          const b='let __diagLines=[];\nfunction onLine(raw){\n  const line=String(raw||\'\').trim();\n  __diagLines.push(line);if(__diagLines.length>1600)__diagLines.shift();';
+          if(!s.includes(a))throw Error('onLine marker');s=s.replace(a,b);
+          const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          const insert=`    if(m.type==='diagstatus'){await init();let size=null,files=[];try{size=engine.FS.stat('/nn.bin').size;files=engine.FS.readdir('/').filter(x=>x.includes('nn')||x.includes('eval'))}catch(e){};self.postMessage({type:'result',id,ok:true,kind:'diagstatus',size,files,lines:__diagLines.slice(),profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT,fireSilk:FIRE_SILK}});return;}\n    if(m.type==='rawusi'){await init();latestInfo={};latestMultiPV={};const commands=Array.isArray(m.commands)?m.commands:[],waitPrefix=String(m.waitPrefix||''),timeout=Number(m.timeout)||180000;let pending=null,line='';for(const c0 of commands){const c=String(c0);if(waitPrefix&&!pending&&/^go(?:\\s|$)/.test(c))pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');await sendUSI(c,timeout)}if(waitPrefix){if(!pending)pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');line=await pending}const token=line.startsWith('bestmove ')?(line.split(/\\s+/)[1]||''):'';self.postMessage({type:'result',id,ok:true,kind:'rawusi',line,token,info:{...latestInfo}});return;}\n`;
+          if(!s.includes(needle))throw Error('handler marker');
+          fs.writeFileSync(dst,s.replace(needle,insert+needle));
+          NODE
+          node --check shogi-v21528/future-yaneura-worker-evaldiag.js
+          sha256sum shogi-v21528/yaneuraou/nn.bin shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm
+          cat shogi-v21528/yaneuraou/build-info.txt
+      - name: Start COI server
+        run: |
+          set -euo pipefail
+          cat >/tmp/feval/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';
+          const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4198,'127.0.0.1');
+          NODE
+          node /tmp/feval/server.mjs >/tmp/feval/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4198/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done
+          cat /tmp/feval/server.log;exit 1
+      - name: Capture startup and one fixed-depth row
+        run: |
+          set -euo pipefail
+          cat >/tmp/feval/check.mjs <<'NODE'
+          import{webkit,chromium,devices}from'playwright';
+          const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
+          async function once(kind){const B=kind==='webkit'?webkit:chromium,b=await B.launch({headless:true}),ctx=kind==='webkit'?await b.newContext({...devices['iPhone 14']}):await b.newContext(),p=await ctx.newPage();await p.goto('http://127.0.0.1:4198/shogi-v21528/index.html?evaldiag='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const out=await p.evaluate(async({kind,sfen})=>{const w=new Worker('./future-yaneura-worker-evaldiag.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={},ms=240000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},120000);const d=await call('diagstatus');const r=await call('rawusi',{commands:['setoption name MultiPV value 1','position sfen '+sfen,'go depth 12'],waitPrefix:'bestmove ',timeout:180000});return{kind,diag:d,row:{token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes}}}finally{w.terminate()}},{kind,sfen});await b.close();const keep=(out.diag.lines||[]).filter(x=>/^(id name|option name)|No such option|loading eval file|Eval|FV_SCALE|Using .*thread|USI_Hash|readyok|usiok/i.test(x));console.log('FUTURE_BROWSER_EVAL_DIAG '+JSON.stringify({kind,size:out.diag.size,files:out.diag.files,profile:out.diag.profile,lines:keep,row:out.row}));return out}
+          await once('webkit');await once('chromium');console.log('PASS_FUTURE_BROWSER_EVAL_DIAG_HARNESS');
+          NODE
+          cd /tmp/feval
+          node check.mjs 2>&1 | tee evaldiag.log
+          grep -E '^(FUTURE_BROWSER_EVAL_DIAG|PASS_FUTURE_BROWSER_EVAL_DIAG_HARNESS)' evaldiag.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(FUTURE_BROWSER_EVAL_DIAG|PASS_FUTURE_BROWSER_EVAL_DIAG_HARNESS)' /tmp/feval/evaldiag.log || true
