@@ -1,0 +1,18 @@
+name: Scalar fastlane reporter
+on:
+  push:
+    branches: [diag-future-scalar-wasm-20260824]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report same-sha runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 8
+          DATA=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=30" --jq '[.workflow_runs[]|{id,name,status,conclusion}]')
+          gh api "repos/${{ github.repository }}/issues/80/comments" -f body="SCALAR_FASTLANE_RUNS sha=${{ github.sha }} data=$DATA"
