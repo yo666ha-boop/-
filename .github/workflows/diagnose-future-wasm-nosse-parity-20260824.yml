@@ -1,0 +1,91 @@
+name: Diagnose Future WASM target NO_SSE parity
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/diagnose-future-wasm-nosse-parity-20260824.yml']
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu-nosse
+      - name: Build WASM target with NO_SSE
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu-nosse/script/wasm_build.js')
+          s=p.read_text()
+          old='name: "halfkp.noeval",\n    edition: "YANEURAOU_ENGINE_NNUE",\n    exportname: "YaneuraOu_HalfKP_noeval",\n    extra: "EM_INITIAL_MEMORY_SIZE=167772160",'
+          new='name: "halfkp.noeval",\n    edition: "YANEURAOU_ENGINE_NNUE",\n    exportname: "YaneuraOu_HalfKP_noeval",\n    extra: "EM_INITIAL_MEMORY_SIZE=167772160 EXTRA_CPPFLAGS=\'"'"'-DNO_SSE\'"'"'",'
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          m=Path('YaneuraOu-nosse/source/Makefile')
+          t=m.read_text()
+          assert '-s PTHREAD_POOL_SIZE=32' in t
+          m.write_text(t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
+          PY
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu-nosse:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/nosse-build.log 2>&1
+          LIB=YaneuraOu-nosse/build/wasm/halfkp.noeval/lib
+          mkdir -p shogi-v21528/nosse76d
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/nosse76d/
+          cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/nosse76d/
+          echo FUTURE_NOSSE_BUILD_TARGET_WASM_NO_SSE
+          sha256sum shogi-v21528/nosse76d/yaneuraou.halfkp.noeval.{js,wasm} shogi-v21528/nosse76d/nn.bin
+      - name: Prepare diagnostic worker and WebKit
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
+          const mark="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          if(!src.includes(mark))throw Error('worker marker');
+          const diag=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),240000,'diag');await sendUSI('go depth '+Number(m.depth),240000);const line=await p;self.postMessage({type:'result',id,ok:true,kind:'rawdepth',token:(line.split(/\\s+/)[1]||''),info:{...latestInfo}});return;}\n`;
+          let s=src.replace(mark,diag+mark).replace("BASE=new URL('./yaneuraou/',self.location.href).href;","BASE=new URL('./nosse76d/',self.location.href).href;");
+          fs.writeFileSync('shogi-v21528/future-depth-nosse.js',s);
+          NODE
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >/tmp/nosse-srv.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4227,'127.0.0.1')
+          NODE
+          node /tmp/nosse-srv.mjs >/tmp/nosse-srv.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4227/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/nosse-srv.log; exit 1
+      - name: Run fixed depth native parity probe
+        run: |
+          set -euo pipefail
+          cat >nosse.mjs <<'NODE'
+          import{webkit}from'playwright';
+          const q={ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',expectedToken:'5e5d',expectedCp:-4054};
+          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'});
+          await p.goto('http://127.0.0.1:4227/shogi-v21528/index.html',{waitUntil:'domcontentloaded'});
+          const r=await p.evaluate(async q=>{const w=new Worker('./future-depth-nosse.js?v='+Date.now());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{const init=await call('init',{},120000);const out=await call('rawdepth',{sfen:q.sfen,depth:q.depth});return{init,out}}finally{w.terminate()}},q);
+          const row={ply:q.ply,depth:q.depth,token:r.out.token,cp:r.out.info?.cp,nodes:r.out.info?.nodes,expectedToken:q.expectedToken,expectedCp:q.expectedCp,tokenMatch:r.out.token===q.expectedToken,cpDelta:r.out.info?.cp-q.expectedCp,init:r.init};
+          console.log('FUTURE_NOSSE_PARITY_ROW '+JSON.stringify(row));
+          console.log('FUTURE_NOSSE_PARITY_SUMMARY '+JSON.stringify({tokenMatch:row.tokenMatch,cpDelta:row.cpDelta,cp:row.cp,nodes:row.nodes}));
+          console.log('PASS_FUTURE_NOSSE_PARITY_HARNESS');
+          await b.close();
+          NODE
+          node nosse.mjs 2>&1 | tee /tmp/nosse.log
+          grep -F 'FUTURE_NOSSE_PARITY_ROW ' /tmp/nosse.log
+          grep -F 'FUTURE_NOSSE_PARITY_SUMMARY ' /tmp/nosse.log
+          grep -F 'PASS_FUTURE_NOSSE_PARITY_HARNESS' /tmp/nosse.log
+      - name: Preserve evidence
+        if: always()
+        run: |
+          echo '=== NO_SSE PARITY ==='
+          grep -E '^(FUTURE_NOSSE_|PASS_FUTURE_NOSSE_)' /tmp/nosse.log || true
+          echo '=== BUILD TAIL ==='
+          tail -80 /tmp/nosse-build.log || true
