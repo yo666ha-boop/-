@@ -1,4 +1,4 @@
-name: Diagnose Future book horizon plus stable SinglePV vs Piyo40
+name: Diagnose Future dynamic horizon plus stable SinglePV vs Piyo40
 on:
   pull_request:
     branches: [main]
@@ -7,14 +7,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: future-book-stable-sp-pr80
+  group: future-dynamic-horizon-stable-sp-pr80
   cancel-in-progress: true
 jobs:
   practical:
     strategy:
       fail-fast: false
       matrix:
-        variant: [legacy29, deep29]
+        horizon: [21, 25, 33]
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
@@ -22,22 +22,22 @@ jobs:
       - name: Install Chromium and WebKit
         run: |
           set -euo pipefail
-          mkdir -p /tmp/fbook && cd /tmp/fbook
+          mkdir -p /tmp/fhorizon && cd /tmp/fhorizon
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit >/dev/null
       - name: Start local COI server
         run: |
-          cat >/tmp/fbook/server.mjs <<'NODE'
+          cat >/tmp/fhorizon/server.mjs <<'NODE'
           import http from'node:http';import fs from'node:fs';import path from'node:path';
           const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};
           http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){s.writeHead(403);return s.end('forbidden')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){s.writeHead(404);return s.end('not found')}s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');s.writeHead(200);s.end(b)})}).listen(4173,'127.0.0.1');
           NODE
-          node /tmp/fbook/server.mjs >/tmp/fbook/server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4173/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/fbook/server.log;exit 1
-      - name: Derive exact practical harness with book horizon and stable SinglePV
+          node /tmp/fhorizon/server.mjs >/tmp/fhorizon/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4173/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/fhorizon/server.log;exit 1
+      - name: Derive path-independent horizon practical harness
         env:
-          VARIANT: ${{ matrix.variant }}
+          HORIZON: ${{ matrix.horizon }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -45,34 +45,49 @@ jobs:
           a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n"
           i=src.index(a)+len(a); j=src.index("\n          NODE\n",i)
           js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
-          js=js.replace("const MAX=70,R=", "const MAX=70,variant=String(process.env.VARIANT||'legacy29'),R=",1)
+          js=js.replace("const MAX=70,R=", "const MAX=70,horizon=Number(process.env.HORIZON||21),R=",1)
           old="const search=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});"
-          new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=book-stable-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o,adaptive:o.adaptive===true})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
+          new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=dynamic-horizon-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o,adaptive:false})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
           if old not in js: raise SystemExit('search marker missing')
           js=js.replace(old,new,1)
-          start=js.index("let ms=[],result='MAX_REACHED';const dec=[];while(ms.length<MAX){")
-          end=js.index("\nconst audits=[];",start)
-          loop=r'''const known=`7g7f 4a3b 4i5h 3c3d 8h2b+ 3a2b 2h3h B*3c 6g6f 3c6f 8g8f 6f9i+ B*7g 9i8i 5i4i 8i9h 5h6g 9h9g 6g6h N*3e 7i8h 9g9h 3i4h 9h7f 6i5h 3e2g+ 7g2b+ 3b2b 3h3i 2g2h 8h7g B*2g S*3h 2h3h 3i3h 7f5h 6h5h G*2h 4i5i 2h3h 5h6g R*4i 5i6h 4i4h+ N*5h S*5i 6h6i L*6d B*8i 6d6g+ 8i6g G*8g L*5b 8b5b 7g6h 5i6h+ 6i6h S*7g 6h7i S*7h 6g7h 8g7h`.split(/\s+/);
-const book=new Map();for(let ply=1;ply<=27;ply+=2)book.set(sfen(known.slice(0,ply-1)),known[ply-1]);const p29=sfen(known.slice(0,28));book.set(p29,variant==='deep29'?'S*1e':'3h3i');
-async function policy(pos,ply){if(book.has(pos)){const token=book.get(pos),out={token,info:{policy:'book',variant,ply}};console.log('FUTURE_BOOK_STABLE_POLICY '+JSON.stringify({variant,ply,source:'book',token}));return out}const sp7=await search(pos,{ms:7000,multiPV:1,adaptive:false}),bad=(Number.isFinite(sp7.info?.mate)&&sp7.info.mate<0)||(Number.isFinite(sp7.info?.cp)&&sp7.info.cp<=50);if(!bad){console.log('FUTURE_BOOK_STABLE_POLICY '+JSON.stringify({variant,ply,source:'sp7-healthy',token:sp7.token,cp:sp7.info?.cp,mate:sp7.info?.mate}));return sp7}const sp15=await search(pos,{ms:15000,multiPV:1,adaptive:false});if(sp7.token===sp15.token){console.log('FUTURE_BOOK_STABLE_POLICY '+JSON.stringify({variant,ply,source:'sp15-stable7',token:sp15.token,cp7:sp7.info?.cp,cp15:sp15.info?.cp,mate15:sp15.info?.mate}));return sp15}const sp30=await search(pos,{ms:30000,multiPV:1,adaptive:false}),stable=sp15.token===sp30.token;console.log('FUTURE_BOOK_STABLE_POLICY '+JSON.stringify({variant,ply,source:stable?'sp30-stable15':'sp30-unstable',token:sp30.token,sp7:sp7.token,sp15:sp15.token,sp30:sp30.token,cp7:sp7.info?.cp,cp15:sp15.info?.cp,cp30:sp30.info?.cp,mate30:sp30.info?.mate}));return sp30}
-let ms=[],result='MAX_REACHED';const dec=[];while(ms.length<MAX){if(ms.length%2)throw Error('turn '+ms.length);const ply=ms.length+1,pos=sfen(ms),r=await policy(pos,ply),u=String(r.token||'');dec.push({ply,pos,u,info:r.info||{}});console.log('FUTURE_BOOK_STABLE_MOVE '+JSON.stringify({variant,attempt,ply,u,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes,policy:r.info?.policy}));if(u==='resign'||u==='win'){result='FUTURE_'+u;break}const before=ms.length,baseState=await kifuState(),baseCount=baseState.count;await play(u);const c0=Date.now();let commit=null;while(Date.now()-c0<10000){const s=await kifuState();if(s.count>=baseCount+1){commit=s;break}await p.waitForTimeout(100)}if(!commit)throw Error('Future move not committed ply '+ply+' '+JSON.stringify({baseCount,state:await kifuState()}));const afterFuture=await exportMoves();console.log('PIYO40_COMMIT '+JSON.stringify({variant,attempt,ply,future:u,actual:afterFuture[before],baseCount,state:commit,tail:afterFuture.slice(-4)}));if(afterFuture[before]!==u)throw Error('USI DIVERGENCE '+ply+' future='+u+' actual='+afterFuture[before]);let ready=false,lastState=commit,nextBeat=30000;const st=Date.now();while(Date.now()-st<420000){lastState=await kifuState();const elapsed=Date.now()-st;if(lastState.count>=baseCount+2||/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)){ready=true;break}if(elapsed>=nextBeat){console.log('PIYO40_HEARTBEAT '+JSON.stringify({variant,attempt,ply,elapsedMs:elapsed,baseCount,state:lastState}));nextBeat+=30000}await p.waitForTimeout(500)}if(!ready)throw Error('Piyo reply timeout ply '+ply+' '+JSON.stringify({baseCount,state:lastState}));const got=await exportMoves();if(got[before]!==u)throw Error('USI DIVERGENCE '+ply+' future='+u+' actual='+got[before]);ms=got;console.log('PIYO40_REPLY '+JSON.stringify({variant,attempt,plies:ms.length,last:lastState.last,tail:ms.slice(-4)}));if(/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||ms.length%2){result=lastState.last||'ENDED';break}}'''
-          js=js[:start]+loop+js[end:]
-          js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_BOOK_STABLE_PROFILE').replace('FUTURE_CURRENT_AUDIT','FUTURE_BOOK_STABLE_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_BOOK_STABLE_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_BOOK_STABLE_PIYO40_HARNESS')
-          js=js.replace("summary={attempt,piyo:lv", "summary={variant,attempt,piyo:lv",1)
-          Path('/tmp/fbook/match.mjs').write_text(js)
+          marker="let ms=[],result='MAX_REACHED';const dec=[];"
+          policy="""async function policy(pos,ply){
+            if(ply<=horizon){
+              const r=await search(pos,{ms:30000,multiPV:1,adaptive:false});
+              console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:'sp30-horizon',token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes}));
+              return r;
+            }
+            const a=await search(pos,{ms:7000,multiPV:1,adaptive:false}),bad=(Number.isFinite(a.info?.mate)&&a.info.mate<0)||(Number.isFinite(a.info?.cp)&&a.info.cp<=50);
+            if(!bad){console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:'sp7-healthy',token:a.token,cp:a.info?.cp,mate:a.info?.mate}));return a}
+            const b=await search(pos,{ms:15000,multiPV:1,adaptive:false});
+            if(a.token===b.token){console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:'sp15-stable7',token:b.token,cp7:a.info?.cp,cp15:b.info?.cp,mate15:b.info?.mate}));return b}
+            const c=await search(pos,{ms:30000,multiPV:1,adaptive:false});
+            console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:b.token===c.token?'sp30-stable15':'sp30-unstable',token:c.token,sp7:a.token,sp15:b.token,sp30:c.token,cp30:c.info?.cp,mate30:c.info?.mate}));
+            return c
+          };"""
+          if marker not in js: raise SystemExit('loop marker missing')
+          js=js.replace(marker,policy+marker,1)
+          old2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:1}),u=String(r.token||'');"
+          new2="const ply=ms.length+1,pos=sfen(ms),r=await policy(pos,ply),u=String(r.token||'');"
+          if old2 not in js: raise SystemExit('move marker missing')
+          js=js.replace(old2,new2,1)
+          js=js.replace("console.log('FUTURE_CURRENT_MOVE '+JSON.stringify({attempt,ply,u,", "console.log('FUTURE_HORIZON_MOVE '+JSON.stringify({horizon,attempt,ply,pos,u,",1)
+          js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_HORIZON_PROFILE').replace('FUTURE_CURRENT_AUDIT','FUTURE_HORIZON_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_HORIZON_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_HORIZON_PIYO40_HARNESS')
+          js=js.replace("summary={attempt,piyo:lv", "summary={horizon,attempt,piyo:lv",1)
+          Path('/tmp/fhorizon/match.mjs').write_text(js)
           PY
-          node --check /tmp/fbook/match.mjs
-          grep -F 'FUTURE_BOOK_STABLE_POLICY' /tmp/fbook/match.mjs | head -1
-      - name: Run diagnostic practical match
+          node --check /tmp/fhorizon/match.mjs
+          grep -F 'FUTURE_HORIZON_POLICY' /tmp/fhorizon/match.mjs | head -1
+      - name: Run dynamic horizon practical match
         env:
           ATTEMPT: 1
-          VARIANT: ${{ matrix.variant }}
+          HORIZON: ${{ matrix.horizon }}
         run: |
-          cd /tmp/fbook
-          node match.mjs 2>&1 | tee /tmp/fbook/${VARIANT}.log
-          grep -F 'FUTURE_BOOK_STABLE_PRACTICAL_SUMMARY ' /tmp/fbook/${VARIANT}.log
-          grep -F 'PASS_FUTURE_BOOK_STABLE_PIYO40_HARNESS' /tmp/fbook/${VARIANT}.log
+          cd /tmp/fhorizon
+          node match.mjs 2>&1 | tee /tmp/fhorizon/h${HORIZON}.log
+          grep -F 'FUTURE_HORIZON_PRACTICAL_SUMMARY ' /tmp/fhorizon/h${HORIZON}.log
+          grep -F 'PASS_FUTURE_HORIZON_PIYO40_HARNESS' /tmp/fhorizon/h${HORIZON}.log
       - name: Preserve evidence
         if: always()
         run: |
-          grep -E '^(PIYO40_PROFILE|FUTURE_BOOK_STABLE_PROFILE|FUTURE_BOOK_STABLE_POLICY|FUTURE_BOOK_STABLE_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FUTURE_BOOK_STABLE_AUDIT|FUTURE_BOOK_STABLE_PRACTICAL_SUMMARY|PASS_FUTURE_BOOK_STABLE_PIYO40_HARNESS)' /tmp/fbook/${{ matrix.variant }}.log | tail -320 || true
+          grep -E '^(PIYO40_PROFILE|FUTURE_HORIZON_PROFILE|FUTURE_HORIZON_POLICY|FUTURE_HORIZON_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FUTURE_HORIZON_AUDIT|FUTURE_HORIZON_PRACTICAL_SUMMARY|PASS_FUTURE_HORIZON_PIYO40_HARNESS)' /tmp/fhorizon/h${{ matrix.horizon }}.log | tail -360 || true
