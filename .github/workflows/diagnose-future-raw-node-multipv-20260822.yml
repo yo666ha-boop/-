@@ -1,4 +1,4 @@
-name: Diagnose Future raw node-limit MultiPV
+name: Diagnose Future 7g7f fresh SP7 practical via proven PR trigger
 on:
   pull_request:
     branches: [main]
@@ -6,67 +6,69 @@ on:
       - '.github/workflows/diagnose-future-raw-node-multipv-20260822.yml'
 permissions:
   contents: read
+  issues: write
+concurrency:
+  group: future-opening-sp7-proven-pr80
+  cancel-in-progress: true
 jobs:
-  rawnodes:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 35
+  practical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
-      - name: Install WebKit
+      - name: Report run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="SP7_PROVEN_RUN ${{ github.run_id }} ${{ github.sha }} OPENING_7G7F_FRESH_SP7"
+      - name: Install Chromium and WebKit
         run: |
           set -euo pipefail
-          mkdir -p /tmp/frawn && cd /tmp/frawn
+          mkdir -p /tmp/fastp && cd /tmp/fastp
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps webkit >/dev/null
-      - name: Derive raw node worker
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Start local COI server
+        run: |
+          cat >/tmp/fastp/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){s.writeHead(403);return s.end('forbidden')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){s.writeHead(404);return s.end('not found')}s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');s.writeHead(200);s.end(b)})}).listen(4174,'127.0.0.1');
+          NODE
+          node /tmp/fastp/server.mjs >/tmp/fastp/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4174/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done
+          cat /tmp/fastp/server.log; exit 1
+      - name: Derive practical harness
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('shogi-v21528/future-yaneura-worker21528.js');s=p.read_text()
-          state="let engine=null,ready=false,initPromise=null,waiters=[],latestInfo={},latestMultiPV={};"
-          if state not in s: raise SystemExit('state marker missing')
-          s=s.replace(state,state+"\nlet rawNodeLines=null;",1)
-          line="  const line=String(raw||'').trim();"
-          if line not in s: raise SystemExit('line marker missing')
-          s=s.replace(line,line+"\n  if(Array.isArray(rawNodeLines))rawNodeLines.push(line);",1)
-          handler="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}"
-          js=[
-            "    if(m.type==='rawnodes'){",
-            "      await init();const pos=String(m.sfen||'');const nodes=Math.max(1000,Math.round(Number(m.nodes)||1000000));const mp=Math.max(1,Math.min(5,Math.round(Number(m.multiPV)||1)));",
-            "      await sendUSI('setoption name MultiPV value '+mp);latestInfo={};latestMultiPV={};rawNodeLines=[];await sendUSI('position sfen '+pos);",
-            "      const bp=waitLine(x=>x.startsWith('bestmove '),120000,'rawnodes bestmove');await sendUSI('go nodes '+nodes,120000);const best=await bp;",
-            "      const token=(best.split(/\\s+/)[1]||'').trim();const raw=rawNodeLines.slice();rawNodeLines=null;const candidates=collectCandidates(token);await sendUSI('setoption name MultiPV value 1');",
-            "      self.postMessage({type:'result',id,ok:true,kind:'rawnodes',token,nodes,multiPV:mp,info:{...latestInfo},candidates,raw:raw.filter(x=>x.startsWith('info ')||x.startsWith('bestmove '))});return;",
-            "    }"
-          ]
-          if handler not in s: raise SystemExit('handler marker missing')
-          s=s.replace(handler,'\n'.join(js)+'\n'+handler,1)
-          Path('shogi-v21528/future-yaneura-worker-rawnodes.js').write_text(s)
+          src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text()
+          a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n"
+          i=src.index(a)+len(a); j=src.index("\n          NODE\n",i)
+          js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
+          js=js.replace('http://127.0.0.1:4173/','http://127.0.0.1:4174/')
+          old="const search=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});"
+          new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=fast-sp7-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),150000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
+          if old not in js: raise SystemExit('search marker missing')
+          js=js.replace(old,new,1)
+          old2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:1}),u=String(r.token||'');"
+          new2="const ply=ms.length+1,pos=sfen(ms),r=ply===1?{token:'7g7f',info:{forcedOpening:true,adaptive:false}}:await search(pos,{ms:7000,multiPV:1,adaptive:false}),u=String(r.token||'');"
+          if old2 not in js: raise SystemExit('move marker missing')
+          js=js.replace(old2,new2,1)
+          old_export="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();await p.waitForTimeout(80);await p.click('#menuKifu');"
+          new_export="async function exportMoves(){await p.evaluate(()=>{const d=document.querySelector('#dialogMess');if(d){d.classList.remove('is-show');d.style.display='none'}try{if(typeof menuKifu==='function')menuKifu()}catch(e){}});await p.waitForTimeout(100);if(!await p.locator('#dialogKifBox').isVisible().catch(()=>false)){await p.locator('img[alt=\"メニュー\"]').first().click({force:true});await p.waitForTimeout(80);await p.click('#menuKifu',{force:true});}"
+          if old_export not in js: raise SystemExit('export marker missing')
+          js=js.replace(old_export,new_export,1)
+          js=js.replace('FUTURE_CURRENT_PROFILE','FAST_SP7_PROFILE').replace('FUTURE_CURRENT_MOVE','FAST_SP7_MOVE').replace('FUTURE_CURRENT_AUDIT','FAST_SP7_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FAST_SP7_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FAST_SP7_PIYO40_HARNESS')
+          Path('/tmp/fastp/match.mjs').write_text(js)
           PY
-          grep -F "m.type==='rawnodes'" shogi-v21528/future-yaneura-worker-rawnodes.js
-      - name: Start COI server
+          grep -F "forcedOpening:true" /tmp/fastp/match.mjs
+          grep -F "ms:7000,multiPV:1,adaptive:false" /tmp/fastp/match.mjs
+      - name: Run opening plus fresh SinglePV7 practical match
+        env:
+          ATTEMPT: 1
         run: |
-          cat >/tmp/frawn/server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4188,'127.0.0.1');
-          NODE
-          node /tmp/frawn/server.mjs >/tmp/frawn/server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4188/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;exit 1
-      - name: Compare node-limit MPV modes
-        run: |
-          cat >/tmp/frawn/a.mjs <<'NODE'
-          import{webkit,devices}from'playwright';
-          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
-          const M=`4i5h 8c8d 2h3h 8d8e 7g7f 8e8f 7f7e 8f8g+ 8h5e P*8h 7e7d 8h8i+ 7d7c+ 8b8e 5e4f 8i7i 5i4h N*5d 7c7d 5d4f 4g4f 7i6i 3g3f 5a4b N*2e 8e2e 2g2f 2e2f P*7b 7a7b 7d6c 2f2i+ P*2f 7b6c 6g6f S*4g 4h4g N*5e 4g4h B*5i 4h4i G*4h 5h4h 5i4h+`.split(/\s+/);
-          function S(ms){const b=new Map(),h={b:{},w:{}};for(let r=0;r<9;r++){let f=9,pr=false;for(const c of I.split('/')[r]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[r],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const x of ms){if(/^[PLNSGBR]\*/.test(x)){const k=x[0],d=x.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=x.slice(0,2),d=x.slice(2,4),q=b.get(a),c=b.get(d);if(!q)throw Error('missing '+x);if(c)h[t][c.k]=(h[t][c.k]||0)+1;b.delete(a);b.set(d,{...q,pr:q.pr||x.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let z='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){z+=e;e=0}z+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)z+=e;rows.push(z)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
-          const b=await webkit.launch({headless:true}),p=await b.newPage({...devices['iPhone 14']});await p.goto('http://127.0.0.1:4188/shogi-v21528/index.html?x='+Date.now(),{waitUntil:'domcontentloaded'});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');
-          async function run(pos,nodes,multiPV){return p.evaluate(async({pos,nodes,multiPV})=>{const w=new Worker('./future-yaneura-worker-rawnodes.js?v='+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),130000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('rawnodes',{sfen:pos,nodes,multiPV})}finally{w.terminate()}},{pos,nodes,multiPV})}
-          const rows=[];for(const ply of[43,45]){const pos=S(M.slice(0,ply-1));for(const nodes of[1000000,1500000])for(const multiPV of[1,5]){const r=await run(pos,nodes,multiPV),raw=r.raw||[],score=raw.filter(x=>/\bscore\b/.test(x)),rank1=score.filter(x=>/\bmultipv 1\b/.test(x));const row={ply,nodes,multiPV,token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,actualNodes:r.info?.nodes,lastRank1:rank1.at(-1)||'',tail:score.slice(-10)};rows.push(row);console.log('FUTURE_RAW_NODES '+JSON.stringify(row))}}
-          for(const ply of[43,45])console.log('FUTURE_RAW_NODES_SUMMARY '+JSON.stringify({ply,rows:rows.filter(x=>x.ply===ply).map(x=>({nodes:x.nodes,multiPV:x.multiPV,token:x.token,cp:x.cp,mate:x.mate,depth:x.depth,actualNodes:x.actualNodes}))}));console.log('PASS_FUTURE_RAW_NODE_MULTIPV_HARNESS');await b.close();
-          NODE
-          cd /tmp/frawn && node a.mjs 2>&1 | tee /tmp/frawn/a.log
-          grep -F 'FUTURE_RAW_NODES_SUMMARY ' /tmp/frawn/a.log
-          grep -F 'PASS_FUTURE_RAW_NODE_MULTIPV_HARNESS' /tmp/frawn/a.log
+          cd /tmp/fastp
+          node match.mjs 2>&1 | tee /tmp/fastp/match.log
+          grep -F 'FAST_SP7_PRACTICAL_SUMMARY ' /tmp/fastp/match.log
+          grep -F 'PASS_FAST_SP7_PIYO40_HARNESS' /tmp/fastp/match.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(FUTURE_RAW_NODES|FUTURE_RAW_NODES_SUMMARY|PASS_FUTURE_RAW_NODE_MULTIPV_HARNESS)' /tmp/frawn/a.log | tail -80 || true
+        run: grep -E '^(PIYO40_PROFILE|FAST_SP7_PROFILE|FAST_SP7_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FAST_SP7_AUDIT|FAST_SP7_PRACTICAL_SUMMARY|PASS_FAST_SP7_PIYO40_HARNESS)' /tmp/fastp/match.log | tail -320 || true
