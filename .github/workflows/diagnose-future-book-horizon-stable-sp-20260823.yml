@@ -50,6 +50,14 @@ jobs:
           new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=dynamic-horizon-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o,adaptive:false})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
           if old not in js: raise SystemExit('search marker missing')
           js=js.replace(old,new,1)
+          close_old="await p.click('#btnDialogKifClose');const m=/^position startpos"
+          close_new="await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos"
+          if close_old not in js: raise SystemExit('kifu close marker missing')
+          js=js.replace(close_old,close_new,1)
+          prom_old="if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1000}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1')"
+          prom_new="if(u.endsWith('+')){await p.locator('#dialogNari').waitFor({state:'visible',timeout:4000});await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}"
+          if prom_old not in js: raise SystemExit('promotion marker missing')
+          js=js.replace(prom_old,prom_new,1)
           marker="let ms=[],result='MAX_REACHED';const dec=[];"
           policy="""async function policy(pos,ply){
             if(ply<=horizon){
@@ -78,11 +86,14 @@ jobs:
           PY
           node --check /tmp/fhorizon/match.mjs
           grep -F 'FUTURE_HORIZON_POLICY' /tmp/fhorizon/match.mjs | head -1
+          grep -F "waitForTimeout(120);const m=/^position startpos" /tmp/fhorizon/match.mjs
+          grep -F "#btnDialogNari2" /tmp/fhorizon/match.mjs | head -1
       - name: Run dynamic horizon practical match
         env:
           ATTEMPT: 1
           HORIZON: ${{ matrix.horizon }}
         run: |
+          set -euo pipefail
           cd /tmp/fhorizon
           node match.mjs 2>&1 | tee /tmp/fhorizon/h${HORIZON}.log
           grep -F 'FUTURE_HORIZON_PRACTICAL_SUMMARY ' /tmp/fhorizon/h${HORIZON}.log
