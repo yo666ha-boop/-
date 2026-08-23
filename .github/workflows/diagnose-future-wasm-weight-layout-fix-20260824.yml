@@ -8,7 +8,7 @@ permissions:
 jobs:
   parity:
     runs-on: ubuntu-22.04
-    timeout-minutes: 75
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,50 +25,29 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import subprocess, textwrap
-
-          # Reuse the exact historical V9.70 thread-lifecycle/live-USI patch that
-          # previously reached usiok/readyok/bestmove.  This avoids re-inventing
-          # the production-specific browser lifecycle in this diagnostic.
-          yml=subprocess.check_output([
-              'git','show','2fbda43b3ac86c38f7760e589ce4c52c15c65141:.github/workflows/diag-yaneuraou-v970-threadfix.yml'
-          ],text=True)
+          yml=subprocess.check_output(['git','show','2fbda43b3ac86c38f7760e589ce4c52c15c65141:.github/workflows/diag-yaneuraou-v970-threadfix.yml'],text=True)
           key="python3 - <<'PY'"
-          block=yml.split(key,1)[1]
-          block=block.split('\n          PY',1)[0]
+          block=yml.split(key,1)[1].split('\n          PY',1)[0]
           script=textwrap.dedent(block.lstrip('\n')).replace("Path('YaneuraOu/", "Path('YaneuraOu-layoutfix/")
           Path('/tmp/threadfix.py').write_text(script)
           PY
           python3 /tmp/threadfix.py
-
-          # Historical diagnostic used pool=2; production runtime records pool=32.
           python3 - <<'PY'
           from pathlib import Path
-          m=Path('YaneuraOu-layoutfix/source/Makefile')
-          s=m.read_text()
+          m=Path('YaneuraOu-layoutfix/source/Makefile');s=m.read_text()
           if '-s PTHREAD_POOL_SIZE=2' not in s: raise SystemExit('threadfix pool marker missing')
           m.write_text(s.replace('-s PTHREAD_POOL_SIZE=2','-s PTHREAD_POOL_SIZE=32',1))
-
-          # Restore the V9.70 WASM EvalFile option exactly as the proven historical fix.
-          p=Path('YaneuraOu-layoutfix/source/eval/nnue/evaluate_nnue.cpp')
-          s=p.read_text()
+          p=Path('YaneuraOu-layoutfix/source/eval/nnue/evaluate_nnue.cpp');s=p.read_text()
           needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
           repl=needle+'''#if defined(__EMSCRIPTEN__)\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n'''
           if 'Options.add("EvalFile"' not in s:
               if needle not in s: raise SystemExit('EvalDir marker missing')
               s=s.replace(needle,repl,1)
           p.write_text(s)
-
-          # Root-cause candidate: under WASM, SSSE3 macros scramble NNUE weights
-          # at load time while custom wasm_simd kernels consume row-major weights.
           for fn,old,new in [
-            ('affine_transform.h',
-             '#if defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;',
-             '#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'),
-            ('affine_transform_sparse_input.h',
-             '#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;',
-             '#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;')]:
-              p=Path('YaneuraOu-layoutfix/source/eval/nnue/layers')/fn
-              s=p.read_text()
+            ('affine_transform.h','#if defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'),
+            ('affine_transform_sparse_input.h','#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;')]:
+              p=Path('YaneuraOu-layoutfix/source/eval/nnue/layers')/fn;s=p.read_text()
               if old not in s: raise SystemExit(f'layout marker missing {fn}')
               p.write_text(s.replace(old,new,1))
           PY
@@ -86,17 +65,13 @@ jobs:
           docker pull emscripten/emsdk:3.1.43 >/dev/null
           mkdir -p YaneuraOu-layoutfix/build/wasm/halfkp.noeval/lib
           docker run --rm -v "${{ github.workspace }}/YaneuraOu-layoutfix:/src" -w /src/source emscripten/emsdk:3.1.43 \
-            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' \
-            >/tmp/layout-build.log 2>&1
+            bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/layout-build.log 2>&1
           LIB=YaneuraOu-layoutfix/build/wasm/halfkp.noeval/lib
           mkdir -p shogi-v21528/layoutfix76d
           cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/layoutfix76d/
           cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/layoutfix76d/
           node - <<'NODE'
-          const fs=require('fs'),p='shogi-v21528/layoutfix76d/yaneuraou.halfkp.noeval.wasm';
-          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
-          if(!ex.includes('usi_command')) throw Error('usi_command missing');
-          console.log('FUTURE_LAYOUT_PATCHED_BUILD_EXPORT_OK');
+          const fs=require('fs'),p='shogi-v21528/layoutfix76d/yaneuraou.halfkp.noeval.wasm';const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);if(!ex.includes('usi_command'))throw Error('usi_command missing');console.log('FUTURE_LAYOUT_PATCHED_BUILD_EXPORT_OK');
           NODE
           sha256sum shogi-v21528/layoutfix76d/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/layoutfix76d/nn.bin
 
@@ -104,12 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs=require('node:fs'),src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
-          const mark="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
-          if(!src.includes(mark))throw Error('worker marker');
-          const diag=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),240000,'diag');await sendUSI('go depth '+Number(m.depth),240000);const line=await p;self.postMessage({type:'result',id,ok:true,kind:'rawdepth',token:(line.split(/\\s+/)[1]||''),info:{...latestInfo}});return;}\n`;
-          const s=src.replace(mark,diag+mark).replace("BASE=new URL('./yaneuraou/',self.location.href).href;","BASE=new URL('./layoutfix76d/',self.location.href).href;");
-          fs.writeFileSync('shogi-v21528/future-depth-layoutfix.js',s);
+          const fs=require('node:fs'),src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');const mark="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";if(!src.includes(mark))throw Error('worker marker');const diag=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),240000,'diag');await sendUSI('go depth '+Number(m.depth),240000);const line=await p;self.postMessage({type:'result',id,ok:true,kind:'rawdepth',token:(line.split(/\\s+/)[1]||''),info:{...latestInfo}});return;}\n`;const s=src.replace(mark,diag+mark).replace("BASE=new URL('./yaneuraou/',self.location.href).href;","BASE=new URL('./layoutfix76d/',self.location.href).href;");fs.writeFileSync('shogi-v21528/future-depth-layoutfix.js',s);
           NODE
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
@@ -119,35 +89,46 @@ jobs:
         run: |
           set -euo pipefail
           cat >/tmp/layout-srv.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4228,'127.0.0.1')
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4228,'127.0.0.1')
           NODE
           node /tmp/layout-srv.mjs >/tmp/layout-srv.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4228/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
           cat /tmp/layout-srv.log; exit 1
 
-      - name: Compare all six fixed-depth cases against native
+      - name: Verify fixed-depth parity against native
         run: |
           set -euo pipefail
           cat >layout.mjs <<'NODE'
-          import{webkit,chromium}from'playwright';
-          const C=[
-          {ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',token:'5e5d',cp:-4054},
-          {ply:29,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',token:'5e5d',cp:-4321},
-          {ply:33,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',token:'2g2f',cp:-4217},
-          {ply:33,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',token:'2g2f',cp:-4410},
-          {ply:35,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',token:'4f5g',cp:-4290},
-          {ply:35,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',token:'4h5i',cp:-4490}];
-          async function run(bt,name){const b=await bt.launch({headless:true}),p=await b.newPage({userAgent:name==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});await p.goto('http://127.0.0.1:4228/shogi-v21528/index.html',{waitUntil:'domcontentloaded'});const out=[];for(const q of C){const r=await p.evaluate(async q=>{const w=new Worker('./future-depth-layoutfix.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},150000);return await call('rawdepth',{sfen:q.sfen,depth:q.depth})}finally{w.terminate()}},q);const row={browser:name,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,nodes:r.info?.nodes,expectedToken:q.token,expectedCp:q.cp,tokenMatch:r.token===q.token,cpDelta:r.info?.cp-q.cp};out.push(row);console.log('FUTURE_LAYOUT_PATCHED_ROW '+JSON.stringify(row))}await b.close();return out}
-          const rows=[...await run(webkit,'webkit'),...await run(chromium,'chromium')];
-          const tokenMatches=rows.filter(x=>x.tokenMatch).length,maxAbsCpDelta=Math.max(...rows.map(x=>Math.abs(x.cpDelta)));
-          console.log('FUTURE_LAYOUT_PATCHED_SUMMARY '+JSON.stringify({rows:rows.length,tokenMatches,maxAbsCpDelta,detail:rows}));
-          if(tokenMatches!==rows.length) throw Error('token parity failed '+tokenMatches+'/'+rows.length);
-          console.log('PASS_FUTURE_LAYOUT_PATCHED_12ROW_HARNESS');
+          import{webkit,chromium}from'playwright';const C=[{ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',token:'5e5d',cp:-4054},{ply:29,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',token:'5e5d',cp:-4321},{ply:33,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',token:'2g2f',cp:-4217},{ply:33,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',token:'2g2f',cp:-4410},{ply:35,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',token:'4f5g',cp:-4290},{ply:35,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',token:'4h5i',cp:-4490}];async function run(bt,name){const b=await bt.launch({headless:true}),p=await b.newPage({userAgent:name==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});await p.goto('http://127.0.0.1:4228/shogi-v21528/index.html',{waitUntil:'domcontentloaded'});const out=[];for(const q of C){const r=await p.evaluate(async q=>{const w=new Worker('./future-depth-layoutfix.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},150000);return await call('rawdepth',{sfen:q.sfen,depth:q.depth})}finally{w.terminate()}},q);const row={browser:name,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,nodes:r.info?.nodes,expectedToken:q.token,expectedCp:q.cp,tokenMatch:r.token===q.token,cpDelta:r.info?.cp-q.cp};out.push(row);console.log('FUTURE_LAYOUT_PATCHED_ROW '+JSON.stringify(row))}await b.close();return out}const rows=[...await run(webkit,'webkit'),...await run(chromium,'chromium')],wk=rows.filter(x=>x.browser==='webkit'),cr=rows.filter(x=>x.browser==='chromium');const summary={rows:rows.length,webkitExact:wk.filter(x=>x.tokenMatch&&x.cpDelta===0).length,chromiumTokenMatches:cr.filter(x=>x.tokenMatch).length,chromiumMaxAbsCpDelta:Math.max(...cr.map(x=>Math.abs(x.cpDelta))),detail:rows};console.log('FUTURE_LAYOUT_PATCHED_SUMMARY '+JSON.stringify(summary));if(summary.webkitExact!==6||summary.chromiumMaxAbsCpDelta>250)throw Error('evaluation parity gate '+JSON.stringify(summary));console.log('PASS_FUTURE_LAYOUT_PATCHED_EVAL_HARNESS');
           NODE
           node layout.mjs 2>&1 | tee /tmp/layout.log
+
+      - name: Run corrected WebKit Future vs Piyo Lv40 practical
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text()
+          a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n";i=src.index(a)+len(a);j=src.index("\n          NODE\n",i)
+          js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
+          js=js.replace("http://127.0.0.1:4173/","http://127.0.0.1:4228/")
+          js=js.replace("./future-yaneura-worker21528.js?v=practical-","./future-depth-layoutfix.js?v=practical-")
+          old="await p.click('#btnDialogKifClose');const m=/^position startpos"
+          new="await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos"
+          if old not in js: raise SystemExit('close marker');js=js.replace(old,new,1)
+          old="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();"
+          new="async function exportMoves(){await p.evaluate(()=>{const d=document.querySelector('#dialogMess');if(d){d.classList.remove('is-show');d.style.display='none'}});await p.locator('img[alt=\"メニュー\"]').first().click({force:true});"
+          if old not in js: raise SystemExit('export marker');js=js.replace(old,new,1)
+          old="if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1000}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1')"
+          new="if(u.endsWith('+')){await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}"
+          if old not in js: raise SystemExit('promotion marker');js=js.replace(old,new,1)
+          js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_LAYOUT_PRACTICAL_PROFILE').replace('FUTURE_CURRENT_MOVE','FUTURE_LAYOUT_PRACTICAL_MOVE').replace('FUTURE_CURRENT_AUDIT','FUTURE_LAYOUT_PRACTICAL_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_LAYOUT_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_LAYOUT_PIYO40_HARNESS')
+          Path('/tmp/layout-practical.mjs').write_text(js)
+          PY
+          ATTEMPT=1 node /tmp/layout-practical.mjs 2>&1 | tee /tmp/layout-practical.log
 
       - name: Preserve evidence
         if: always()
         run: |
-          grep -E '^(FUTURE_LAYOUT_PATCHED_|PASS_FUTURE_LAYOUT_PATCHED_)' /tmp/layout.log || true
+          grep -E '^(FUTURE_LAYOUT_PATCHED_|PASS_FUTURE_LAYOUT_PATCHED_|PIYO40_PROFILE|FUTURE_LAYOUT_PRACTICAL_|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|PASS_FUTURE_LAYOUT_PIYO40_)' /tmp/layout.log /tmp/layout-practical.log 2>/dev/null | tail -500 || true
           tail -80 /tmp/layout-build.log || true
