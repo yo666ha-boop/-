@@ -1,4 +1,4 @@
-name: Diagnose Future dynamic horizon plus stable SinglePV vs Piyo40
+name: Diagnose Future browser fixed-depth parity vs corrected native
 on:
   pull_request:
     branches: [main]
@@ -7,98 +7,70 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: future-dynamic-horizon-stable-sp-pr80
+  group: future-browser-native-fixed-depth-pr80
   cancel-in-progress: true
 jobs:
-  practical:
-    strategy:
-      fail-fast: false
-      matrix:
-        horizon: [21, 25, 33]
+  fixed-depth:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Install Chromium and WebKit
         run: |
           set -euo pipefail
-          mkdir -p /tmp/fhorizon && cd /tmp/fhorizon
+          mkdir -p /tmp/fparity && cd /tmp/fparity
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit >/dev/null
-      - name: Start local COI server
-        run: |
-          cat >/tmp/fhorizon/server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';
-          const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};
-          http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){s.writeHead(403);return s.end('forbidden')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){s.writeHead(404);return s.end('not found')}s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');s.writeHead(200);s.end(b)})}).listen(4173,'127.0.0.1');
-          NODE
-          node /tmp/fhorizon/server.mjs >/tmp/fhorizon/server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4173/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/fhorizon/server.log;exit 1
-      - name: Derive path-independent horizon practical harness
-        env:
-          HORIZON: ${{ matrix.horizon }}
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text()
-          a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n"
-          i=src.index(a)+len(a); j=src.index("\n          NODE\n",i)
-          js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
-          js=js.replace("const MAX=70,R=", "const MAX=70,horizon=Number(process.env.HORIZON||21),R=",1)
-          old="const search=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});"
-          new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=dynamic-horizon-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o,adaptive:false})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
-          if old not in js: raise SystemExit('search marker missing')
-          js=js.replace(old,new,1)
-          close_old="await p.click('#btnDialogKifClose');const m=/^position startpos"
-          close_new="await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos"
-          if close_old not in js: raise SystemExit('kifu close marker missing')
-          js=js.replace(close_old,close_new,1)
-          prom_old="if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1000}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1')"
-          prom_new="if(u.endsWith('+')){await p.locator('#dialogNari').waitFor({state:'visible',timeout:4000});await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}"
-          if prom_old not in js: raise SystemExit('promotion marker missing')
-          js=js.replace(prom_old,prom_new,1)
-          marker="let ms=[],result='MAX_REACHED';const dec=[];"
-          policy="""async function policy(pos,ply){
-            if(ply<=horizon){
-              const r=await search(pos,{ms:30000,multiPV:1,adaptive:false});
-              console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:'sp30-horizon',token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes}));
-              return r;
-            }
-            const a=await search(pos,{ms:7000,multiPV:1,adaptive:false}),bad=(Number.isFinite(a.info?.mate)&&a.info.mate<0)||(Number.isFinite(a.info?.cp)&&a.info.cp<=50);
-            if(!bad){console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:'sp7-healthy',token:a.token,cp:a.info?.cp,mate:a.info?.mate}));return a}
-            const b=await search(pos,{ms:15000,multiPV:1,adaptive:false});
-            if(a.token===b.token){console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:'sp15-stable7',token:b.token,cp7:a.info?.cp,cp15:b.info?.cp,mate15:b.info?.mate}));return b}
-            const c=await search(pos,{ms:30000,multiPV:1,adaptive:false});
-            console.log('FUTURE_HORIZON_POLICY '+JSON.stringify({horizon,ply,source:b.token===c.token?'sp30-stable15':'sp30-unstable',token:c.token,sp7:a.token,sp15:b.token,sp30:c.token,cp30:c.info?.cp,mate30:c.info?.mate}));
-            return c
-          };"""
-          if marker not in js: raise SystemExit('loop marker missing')
-          js=js.replace(marker,policy+marker,1)
-          old2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:1}),u=String(r.token||'');"
-          new2="const ply=ms.length+1,pos=sfen(ms),r=await policy(pos,ply),u=String(r.token||'');"
-          if old2 not in js: raise SystemExit('move marker missing')
-          js=js.replace(old2,new2,1)
-          js=js.replace("console.log('FUTURE_CURRENT_MOVE '+JSON.stringify({attempt,ply,u,", "console.log('FUTURE_HORIZON_MOVE '+JSON.stringify({horizon,attempt,ply,pos,u,",1)
-          js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_HORIZON_PROFILE').replace('FUTURE_CURRENT_AUDIT','FUTURE_HORIZON_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_HORIZON_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_HORIZON_PIYO40_HARNESS')
-          js=js.replace("summary={attempt,piyo:lv", "summary={horizon,attempt,piyo:lv",1)
-          Path('/tmp/fhorizon/match.mjs').write_text(js)
-          PY
-          node --check /tmp/fhorizon/match.mjs
-          grep -F 'FUTURE_HORIZON_POLICY' /tmp/fhorizon/match.mjs | head -1
-          grep -F "waitForTimeout(120);const m=/^position startpos" /tmp/fhorizon/match.mjs
-          grep -F "#btnDialogNari2" /tmp/fhorizon/match.mjs | head -1
-      - name: Run dynamic horizon practical match
-        env:
-          ATTEMPT: 1
-          HORIZON: ${{ matrix.horizon }}
+      - name: Build raw fixed-depth diagnostic worker
         run: |
           set -euo pipefail
-          cd /tmp/fhorizon
-          node match.mjs 2>&1 | tee /tmp/fhorizon/h${HORIZON}.log
-          grep -F 'FUTURE_HORIZON_PRACTICAL_SUMMARY ' /tmp/fhorizon/h${HORIZON}.log
-          grep -F 'PASS_FUTURE_HORIZON_PIYO40_HARNESS' /tmp/fhorizon/h${HORIZON}.log
+          node <<'NODE'
+          const fs=require('node:fs');
+          const src='shogi-v21528/future-yaneura-worker21528.js',dst='shogi-v21528/future-yaneura-worker-depthdiag.js';
+          let s=fs.readFileSync(src,'utf8');
+          const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          const insert=`    if(m.type==='rawusi'){
+              await init();const commands=Array.isArray(m.commands)?m.commands:[],waitPrefix=String(m.waitPrefix||''),timeout=Number(m.timeout)||180000;
+              latestInfo={};latestMultiPV={};let line='',pending=null;
+              for(const command0 of commands){const command=String(command0);if(waitPrefix&&!pending&&/^go(?:\\s|$)/.test(command))pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');await sendUSI(command,timeout)}
+              if(waitPrefix){if(!pending)pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');line=await pending}
+              const token=line.startsWith('bestmove ')?(line.split(/\\s+/)[1]||''):'';
+              self.postMessage({type:'result',id,ok:true,kind:'rawusi',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}});return;
+            }
+`;
+          if(!s.includes(needle))throw Error('insert point');fs.writeFileSync(dst,s.replace(needle,insert+needle));
+          NODE
+          node --check shogi-v21528/future-yaneura-worker-depthdiag.js
+      - name: Start COI server
+        run: |
+          set -euo pipefail
+          cat >/tmp/fparity/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4197,'127.0.0.1');
+          NODE
+          node /tmp/fparity/server.mjs >/tmp/fparity/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4197/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/fparity/server.log;exit 1
+      - name: Compare WebKit and Chromium to corrected native
+        run: |
+          set -euo pipefail
+          cat >/tmp/fparity/check.mjs <<'NODE'
+          import{webkit,chromium}from'playwright';
+          const cases=[
+            {ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',exp:'5e5d',expCp:-4054},
+            {ply:29,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',exp:'5e5d',expCp:-4321},
+            {ply:33,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',exp:'2g2f',expCp:-4217},
+            {ply:33,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',exp:'2g2f',expCp:-4410},
+            {ply:35,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',exp:'4f5g',expCp:-4290},
+            {ply:35,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',exp:'4h5i',expCp:-4490}
+          ];
+          const uas={webkit:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',chromium:'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/139 Safari/537.36'};
+          async function run(kind){const B=kind==='webkit'?webkit:chromium,b=await B.launch({headless:true}),c=await b.newContext({userAgent:uas[kind]}),p=await c.newPage();await p.goto('http://127.0.0.1:4197/shogi-v21528/index.html?parity='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const out=[];for(const q of cases){const r=await p.evaluate(async q=>{const w=new Worker('./future-yaneura-worker-depthdiag.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=240000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},120000);return await call('rawusi',{commands:['setoption name MultiPV value 1','position sfen '+q.sfen,'go depth '+q.depth],waitPrefix:'bestmove ',timeout:210000})}finally{w.terminate()}},q);const row={browser:kind,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,mate:r.info?.mate,nodes:r.info?.nodes,seenDepth:r.info?.depth,expectedToken:q.exp,expectedCp:q.expCp,tokenMatch:r.token===q.exp,cpDelta:Number.isFinite(r.info?.cp)?r.info.cp-q.expCp:null,profile:r.profile};out.push(row);console.log('FUTURE_BROWSER_NATIVE_PARITY_ROW '+JSON.stringify(row))}await b.close();return out}
+          const all=[...await run('webkit'),...await run('chromium')],bad=all.filter(x=>!x.tokenMatch),cpDeltas=all.map(x=>x.cpDelta).filter(Number.isFinite);console.log('FUTURE_BROWSER_NATIVE_PARITY_SUMMARY '+JSON.stringify({nativeSource:'76d58ef2e4cf64116784f41fd4816425ab6817ee',rows:all.length,tokenMismatches:bad,maxAbsCpDelta:cpDeltas.length?Math.max(...cpDeltas.map(Math.abs)):null}));if(bad.length)console.log('FUTURE_BROWSER_NATIVE_PARITY_TOKEN_FAIL '+JSON.stringify(bad));console.log('PASS_FUTURE_BROWSER_NATIVE_PARITY_HARNESS');
+          NODE
+          cd /tmp/fparity
+          node check.mjs 2>&1 | tee parity.log
+          grep -F 'FUTURE_BROWSER_NATIVE_PARITY_SUMMARY ' parity.log
+          grep -F 'PASS_FUTURE_BROWSER_NATIVE_PARITY_HARNESS' parity.log
       - name: Preserve evidence
         if: always()
-        run: |
-          grep -E '^(PIYO40_PROFILE|FUTURE_HORIZON_PROFILE|FUTURE_HORIZON_POLICY|FUTURE_HORIZON_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FUTURE_HORIZON_AUDIT|FUTURE_HORIZON_PRACTICAL_SUMMARY|PASS_FUTURE_HORIZON_PIYO40_HARNESS)' /tmp/fhorizon/h${{ matrix.horizon }}.log | tail -360 || true
+        run: grep -E '^(FUTURE_BROWSER_NATIVE_PARITY_ROW|FUTURE_BROWSER_NATIVE_PARITY_SUMMARY|FUTURE_BROWSER_NATIVE_PARITY_TOKEN_FAIL|PASS_FUTURE_BROWSER_NATIVE_PARITY_HARNESS)' /tmp/fparity/parity.log || true
