@@ -115,17 +115,20 @@ jobs:
           js=js.replace("./future-yaneura-worker21528.js?v=practical-","./future-depth-layoutfix.js?v=practical-")
           old="await p.click('#btnDialogKifClose');const m=/^position startpos"
           new="await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos"
-          if old not in js: raise SystemExit('close marker');js=js.replace(old,new,1)
+          if old not in js: raise SystemExit('close marker')
+          js=js.replace(old,new,1)
           old="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();"
           new="async function exportMoves(){await p.evaluate(()=>{const d=document.querySelector('#dialogMess');if(d){d.classList.remove('is-show');d.style.display='none'}});await p.locator('img[alt=\"メニュー\"]').first().click({force:true});"
-          if old not in js: raise SystemExit('export marker');js=js.replace(old,new,1)
+          if old not in js: raise SystemExit('export marker')
+          js=js.replace(old,new,1)
           old="if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1000}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1')"
           new="if(u.endsWith('+')){await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}"
-          if old not in js: raise SystemExit('promotion marker');js=js.replace(old,new,1)
+          if old not in js: raise SystemExit('promotion marker')
+          js=js.replace(old,new,1)
           js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_LAYOUT_PRACTICAL_PROFILE').replace('FUTURE_CURRENT_MOVE','FUTURE_LAYOUT_PRACTICAL_MOVE').replace('FUTURE_CURRENT_AUDIT','FUTURE_LAYOUT_PRACTICAL_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_LAYOUT_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_LAYOUT_PIYO40_HARNESS')
-          Path('/tmp/layout-practical.mjs').write_text(js)
+          Path('layout-practical.mjs').write_text(js)
           PY
-          ATTEMPT=1 node /tmp/layout-practical.mjs 2>&1 | tee /tmp/layout-practical.log
+          ATTEMPT=1 node layout-practical.mjs 2>&1 | tee /tmp/layout-practical.log
 
       - name: Preserve evidence
         if: always()
