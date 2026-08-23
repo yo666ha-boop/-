@@ -1,4 +1,4 @@
-name: Diagnose Future fresh SP7 practical opening matrix
+name: Diagnose Future trajectory SinglePV policy
 on:
   pull_request:
     branches: [main]
@@ -6,84 +6,48 @@ on:
       - '.github/workflows/diagnose-future-raw-node-multipv-20260822.yml'
 permissions:
   contents: read
-  issues: write
 concurrency:
-  group: future-opening-sp7-proven-pr80
+  group: future-trajectory-singlepv-pr80
   cancel-in-progress: true
 jobs:
-  practical:
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
-    strategy:
-      fail-fast: false
-      matrix:
-        opening: [7g7f, 2g2f, 5g5f]
+  trajectory:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Report run id
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="SP7_MATRIX_RUN ${{ github.run_id }} ${{ github.sha }} OPENING_${{ matrix.opening }}_FRESH_SP7"
-      - name: Install Chromium and WebKit
+      - name: Install WebKit
         run: |
           set -euo pipefail
-          mkdir -p /tmp/fastp && cd /tmp/fastp
+          mkdir -p /tmp/ftraj && cd /tmp/ftraj
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps chromium webkit >/dev/null
-      - name: Start local COI server
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
         run: |
-          cat >/tmp/fastp/server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))){s.writeHead(403);return s.end('forbidden')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.readFile(f,(e,b)=>{if(e){s.writeHead(404);return s.end('not found')}s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');s.writeHead(200);s.end(b)})}).listen(4174,'127.0.0.1');
+          cat >/tmp/ftraj/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';
+          const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};
+          http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4187,'127.0.0.1');
           NODE
-          node /tmp/fastp/server.mjs >/tmp/fastp/server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4174/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done
-          cat /tmp/fastp/server.log; exit 1
-      - name: Derive practical harness
-        env:
-          OPENING: ${{ matrix.opening }}
+          node /tmp/ftraj/server.mjs >/tmp/ftraj/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4187/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done
+          cat /tmp/ftraj/server.log; exit 1
+      - name: Compare latest 7g7f collapse positions
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          opening=os.environ['OPENING']
-          src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text()
-          a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n"
-          i=src.index(a)+len(a); j=src.index("\n          NODE\n",i)
-          js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
-          js=js.replace('http://127.0.0.1:4173/','http://127.0.0.1:4174/')
-          old="const search=(pos,o={})=>f.evaluate(({pos,o})=>window.__call('bestmove',{sfen:pos,...o}),{pos,o});"
-          new="await f.evaluate(()=>{try{window.__w?.terminate()}catch(e){};window.__w=null;window.__call=null});const search=(pos,o={})=>f.evaluate(async({pos,o})=>{const w=new Worker('./future-yaneura-worker21528.js?v=fast-sp7-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),150000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init');return await call('bestmove',{sfen:pos,...o})}finally{try{w.terminate()}catch(e){}}},{pos,o});"
-          if old not in js: raise SystemExit('search marker missing')
-          js=js.replace(old,new,1)
-          old2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:1}),u=String(r.token||'');"
-          new2=f"const ply=ms.length+1,pos=sfen(ms),r=ply===1?{{token:'{opening}',info:{{forcedOpening:true,opening:'{opening}',adaptive:false}}}}:await search(pos,{{ms:7000,multiPV:1,adaptive:false}}),u=String(r.token||'');"
-          if old2 not in js: raise SystemExit('move marker missing')
-          js=js.replace(old2,new2,1)
-          old_export="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();await p.waitForTimeout(80);await p.click('#menuKifu');"
-          new_export="async function exportMoves(){await p.evaluate(()=>{const d=document.querySelector('#dialogMess');if(d){d.classList.remove('is-show');d.style.display='none'}try{if(typeof menuKifu==='function')menuKifu()}catch(e){}});await p.waitForTimeout(100);if(!await p.locator('#dialogKifBox').isVisible().catch(()=>false)){await p.locator('img[alt=\"メニュー\"]').first().click({force:true});await p.waitForTimeout(80);await p.click('#menuKifu',{force:true});}"
-          if old_export not in js: raise SystemExit('export marker missing')
-          js=js.replace(old_export,new_export,1)
-          js=js.replace('FUTURE_CURRENT_PROFILE','FAST_SP7_PROFILE').replace('FUTURE_CURRENT_MOVE','FAST_SP7_MOVE').replace('FUTURE_CURRENT_AUDIT','FAST_SP7_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FAST_SP7_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FAST_SP7_PIYO40_HARNESS')
-          Path('/tmp/fastp/match.mjs').write_text(js)
-          PY
-          grep -F "forcedOpening:true" /tmp/fastp/match.mjs
-          grep -F "ms:7000,multiPV:1,adaptive:false" /tmp/fastp/match.mjs
-      - name: Run opening plus fresh SinglePV7 practical match
-        env:
-          ATTEMPT: 1
-          OPENING: ${{ matrix.opening }}
-        run: |
-          cd /tmp/fastp
-          echo "FAST_SP7_OPENING ${OPENING}"
-          node match.mjs 2>&1 | tee /tmp/fastp/match.log
-          grep -F 'FAST_SP7_PRACTICAL_SUMMARY ' /tmp/fastp/match.log
-          grep -F 'PASS_FAST_SP7_PIYO40_HARNESS' /tmp/fastp/match.log
+          cat >/tmp/ftraj/a.mjs <<'NODE'
+          import{webkit,devices}from'playwright';
+          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+          const M=`7g7f 4a3b 4i5h 3c3d 8h2b+ 3a2b 2h3h B*3c 6g6f 3c6f 8g8f 6f9i+ B*7g 9i8i 5i4i 8i9h 5h6g 9h9g 6g6h N*3e 7i8h 9g9h 3i4h 9h7f 6i5h 3e2g+ 7g2b+ 3b2b 3h3i 2g2h 8h7g B*2g S*3h 2h3h 3i3h 7f5h 6h5h G*2h 4i5i 2h3h 5h6g R*4i 5i6h 4i4h+ N*5h S*5i 6h6i L*6d B*8i 6d6g+ 8i6g G*8g L*5b 8b5b 7g6h 5i6h+ 6i6h S*7g 6h7i S*7h 6g7h 8g7h`.split(/\s+/);
+          function S(ms){const b=new Map(),h={b:{},w:{}};for(let r=0;r<9;r++){let f=9,pr=false;for(const c of I.split('/')[r]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[r],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const x of ms){if(/^[PLNSGBR]\*/.test(x)){const k=x[0],d=x.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=x.slice(0,2),d=x.slice(2,4),q=b.get(a),c=b.get(d);if(!q)throw Error('bad '+x+' after '+ms.join(' '));if(c)h[t][c.k]=(h[t][c.k]||0)+1;b.delete(a);b.set(d,{...q,pr:q.pr||x.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let z='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){z+=e;e=0}z+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)z+=e;rows.push(z)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+          const targets=[29,31,33,35,37,39,41,43,45];
+          const b=await webkit.launch({headless:true}),p=await b.newPage({...devices['iPhone 14']});await p.goto('http://127.0.0.1:4187/shogi-v21528/index.html?traj='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');
+          async function search(pos,ms){return await p.evaluate(async({pos,ms})=>{const w=new Worker('./future-yaneura-worker21528.js?v=traj-'+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),190000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{const profile=await call('init');const r=await call('bestmove',{sfen:pos,ms,multiPV:1,adaptive:false});return{profile,token:r.token,cp:r.info?.cp,mate:r.info?.mate,depth:r.info?.depth,nodes:r.info?.nodes}}finally{try{w.terminate()}catch(e){}}},{pos,ms})}
+          const rows=[];for(const ply of targets){const pos=S(M.slice(0,ply-1));const sp7=await search(pos,7000),sp15=await search(pos,15000),sp30=await search(pos,30000);const fragile=(Number.isFinite(sp7.mate)&&sp7.mate<0)||(Number.isFinite(sp7.cp)&&sp7.cp<=50);const safe=fragile?sp30:sp7;const bookSeed=ply<=33?sp30.token:null;const row={ply,actual:M[ply-1],sp7,sp15,sp30,sp7Eq15:sp7.token===sp15.token,sp15Eq30:sp15.token===sp30.token,fragile,safeToken:safe.token,safeSource:fragile?'sp30':'sp7',bookSeed};rows.push(row);console.log('FUTURE_TRAJECTORY_ROW '+JSON.stringify(row))}
+          const summary={targets,sp7To15Delta:rows.filter(x=>!x.sp7Eq15).map(x=>x.ply),sp15To30Delta:rows.filter(x=>!x.sp15Eq30).map(x=>x.ply),safeChanged:rows.filter(x=>x.safeToken!==x.sp7.token).map(x=>x.ply),sp7NegativeMate:rows.filter(x=>Number.isFinite(x.sp7.mate)&&x.sp7.mate<0).map(x=>x.ply),sp15NegativeMate:rows.filter(x=>Number.isFinite(x.sp15.mate)&&x.sp15.mate<0).map(x=>x.ply),sp30NegativeMate:rows.filter(x=>Number.isFinite(x.sp30.mate)&&x.sp30.mate<0).map(x=>x.ply),bookSeeds:rows.filter(x=>x.bookSeed).map(x=>({ply:x.ply,token:x.bookSeed,stable15to30:x.sp15Eq30})),productionTouched:false};console.log('FUTURE_TRAJECTORY_SUMMARY '+JSON.stringify(summary));console.log('PASS_FUTURE_TRAJECTORY_HARNESS');await b.close();
+          NODE
+          cd /tmp/ftraj && node a.mjs 2>&1 | tee /tmp/ftraj/a.log
+          grep -F 'FUTURE_TRAJECTORY_SUMMARY ' /tmp/ftraj/a.log
+          grep -F 'PASS_FUTURE_TRAJECTORY_HARNESS' /tmp/ftraj/a.log
       - name: Preserve evidence
         if: always()
-        env:
-          OPENING: ${{ matrix.opening }}
-        run: |
-          echo "FAST_SP7_OPENING ${OPENING}"
-          grep -E '^(PIYO40_PROFILE|FAST_SP7_PROFILE|FAST_SP7_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FAST_SP7_AUDIT|FAST_SP7_PRACTICAL_SUMMARY|PASS_FAST_SP7_PIYO40_HARNESS)' /tmp/fastp/match.log | tail -320 || true
+        run: grep -E '^(FUTURE_TRAJECTORY_ROW|FUTURE_TRAJECTORY_SUMMARY|PASS_FUTURE_TRAJECTORY_HARNESS)' /tmp/ftraj/a.log | tail -80 || true
