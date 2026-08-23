@@ -8,7 +8,7 @@ permissions:
 jobs:
   parity:
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,7 +103,7 @@ jobs:
           NODE
           node layout.mjs 2>&1 | tee /tmp/layout.log
 
-      - name: Run corrected WebKit Future vs Piyo Lv40 practical
+      - name: Run corrected WebKit Future vs Piyo Lv40 long practicals
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -125,13 +125,23 @@ jobs:
           new="if(u.endsWith('+')){await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}"
           if old not in js: raise SystemExit('promotion marker')
           js=js.replace(old,new,1)
+          if 'const MAX=70' not in js: raise SystemExit('MAX marker')
+          js=js.replace('const MAX=70','const MAX=120',1)
+          old="await p.uncheck('#chkRandomBook').catch(()=>{});"
+          new="if(attempt===2)await p.check('#chkRandomBook').catch(()=>{});else await p.uncheck('#chkRandomBook').catch(()=>{});"
+          if old not in js: raise SystemExit('random book marker')
+          js=js.replace(old,new,1)
           js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_LAYOUT_PRACTICAL_PROFILE').replace('FUTURE_CURRENT_MOVE','FUTURE_LAYOUT_PRACTICAL_MOVE').replace('FUTURE_CURRENT_AUDIT','FUTURE_LAYOUT_PRACTICAL_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_LAYOUT_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_LAYOUT_PIYO40_HARNESS')
           Path('layout-practical.mjs').write_text(js)
           PY
-          ATTEMPT=1 node layout-practical.mjs 2>&1 | tee /tmp/layout-practical.log
+          : >/tmp/layout-practical.log
+          for ATTEMPT in 1 2; do
+            echo "FUTURE_LAYOUT_LONG_START attempt=$ATTEMPT" | tee -a /tmp/layout-practical.log
+            ATTEMPT=$ATTEMPT node layout-practical.mjs 2>&1 | tee -a /tmp/layout-practical.log
+          done
 
       - name: Preserve evidence
         if: always()
         run: |
-          grep -E '^(FUTURE_LAYOUT_PATCHED_|PASS_FUTURE_LAYOUT_PATCHED_|PIYO40_PROFILE|FUTURE_LAYOUT_PRACTICAL_|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|PASS_FUTURE_LAYOUT_PIYO40_)' /tmp/layout.log /tmp/layout-practical.log 2>/dev/null | tail -500 || true
+          grep -E '^(FUTURE_LAYOUT_PATCHED_|PASS_FUTURE_LAYOUT_PATCHED_|PIYO40_PROFILE|FUTURE_LAYOUT_(LONG_START|PRACTICAL_)|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|PASS_FUTURE_LAYOUT_PIYO40_)' /tmp/layout.log /tmp/layout-practical.log 2>/dev/null | tail -900 || true
           tail -80 /tmp/layout-build.log || true
