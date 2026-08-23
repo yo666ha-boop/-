@@ -45,12 +45,27 @@ jobs:
           async function runCase(c){
             const p=await setup(c.name);const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');
             const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
-            async function exportMoves(){await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(100);await p.click('#menuKifu');await p.waitForTimeout(100);await p.check('#dialogKifType2');await p.waitForTimeout(60);const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]}
-            async function state(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim()),vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden';return{count:o.length,last:o.at(-1)||'',tail:o.slice(-4),nari:vis(document.querySelector('#dialogNari')),game:vis(document.querySelector('#dialogGame')),menu:vis(document.querySelector('#menu'))}})}
+            async function exportMoves(){
+              await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(100);await p.click('#menuKifu');await p.waitForTimeout(100);await p.check('#dialogKifType2');await p.waitForTimeout(60);
+              const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');
+              const t0=Date.now();await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});
+              console.log('PIYO_CLICK_KIFU_CLOSE '+JSON.stringify({case:c.name,elapsedMs:Date.now()-t0}));await p.waitForTimeout(120);
+              const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]
+            }
+            async function state(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim()),vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden'&&e.getClientRects().length>0;return{count:o.length,last:o.at(-1)||'',tail:o.slice(-4),nari:vis(document.querySelector('#dialogNari')),kifu:vis(document.querySelector('#dialogKifBox')),game:vis(document.querySelector('#dialogGame')),menu:vis(document.querySelector('#menu'))}})}
             async function diag(u,label){const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));const x=await p.evaluate(({a,d})=>{const f=q=>{const e=document.elementFromPoint(q.x,q.y);if(!e)return null;const r=e.getBoundingClientRect();return{tag:e.tagName,id:e.id,cls:e.className,alt:e.getAttribute('alt'),src:e.getAttribute('src'),rect:{x:r.x,y:r.y,w:r.width,h:r.height}}};return{src:f(a),dst:f(d)}},{a,d});console.log('PIYO_CLICK_DIAG '+JSON.stringify({case:c.name,label,u,board:br,a,d,hit:x,state:await state()}))}
             async function play(u,slow=false){
               if(/^[PLNSGBR]\*/.test(u)){const jp={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'}[u[0]],pt=await p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img,#komadai_s img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt.trim(),x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height}}).find(x=>x.w&&x.h&&x.alt===jp)||null,jp);if(!pt)throw Error('hand '+u);await p.mouse.click(pt.x,pt.y);await p.waitForTimeout(slow?350:80);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);await p.waitForTimeout(slow?350:120);return}
-              const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(slow?350:80);await p.mouse.click(d.x,d.y);await p.waitForTimeout(slow?350:120);if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1200}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1');await p.waitForTimeout(slow?250:80)
+              const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(slow?350:80);await p.mouse.click(d.x,d.y);
+              if(u.endsWith('+')){
+                await p.locator('#dialogNari').waitFor({state:'visible',timeout:4000});
+                const buttons=await p.evaluate(()=>[...document.querySelectorAll('#dialogNari button,input[type=button]')].filter(x=>x.id?.includes('DialogNari')).map(x=>({id:x.id,text:(x.textContent||x.value||'').trim()})));
+                console.log('PIYO_CLICK_NARI '+JSON.stringify({case:c.name,u,buttons,state:await state()}));
+                await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000});
+              }else{
+                await p.waitForTimeout(slow?350:120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){const buttons=await p.evaluate(()=>[...document.querySelectorAll('#dialogNari button,input[type=button]')].filter(x=>x.id?.includes('DialogNari')).map(x=>({id:x.id,text:(x.textContent||x.value||'').trim()})));console.log('PIYO_CLICK_NARI '+JSON.stringify({case:c.name,u,buttons,state:await state()}));await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}
+              }
+              await p.waitForTimeout(slow?250:80)
             }
             async function commitOne(u,label){const before=(await state()).count;await diag(u,label+'-before-fast');await play(u,false);let s=await state();for(let i=0;i<20&&s.count<before+1;i++){await p.waitForTimeout(100);s=await state()}console.log('PIYO_CLICK_ATTEMPT '+JSON.stringify({case:c.name,label,mode:'fast',target:u,before,after:s.count,state:s,ok:s.count>=before+1}));if(s.count<before+1){await p.keyboard.press('Escape').catch(()=>{});await p.waitForTimeout(300);await diag(u,label+'-before-slow-retry');await play(u,true);s=await state();for(let i=0;i<30&&s.count<before+1;i++){await p.waitForTimeout(100);s=await state()}console.log('PIYO_CLICK_ATTEMPT '+JSON.stringify({case:c.name,label,mode:'slow-retry',target:u,before,after:s.count,state:s,ok:s.count>=before+1}))}if(s.count<before+1)return{ok:false,moves:null,state:s};const got=await exportMoves();return{ok:got.at(-1)===u,moves:got,state:s}}
             console.log('PIYO_CLICK_SETUP '+JSON.stringify({case:c.name,stage:'started',board:br,state:await state()}));
@@ -65,4 +80,4 @@ jobs:
       - name: Preserve evidence
         if: always()
         run: |
-          grep -E '^(PIYO_CLICK_SETUP|PIYO_CLICK_DIAG|PIYO_CLICK_ATTEMPT|PIYO_CLICK_PRE|PIYO_CLICK_SUMMARY|PIYO_CLICK_CASE_ERROR|PIYO_CLICK_ALL)' /tmp/pclick/legal-click.log || true
+          grep -E '^(PIYO_CLICK_SETUP|PIYO_CLICK_KIFU_CLOSE|PIYO_CLICK_NARI|PIYO_CLICK_DIAG|PIYO_CLICK_ATTEMPT|PIYO_CLICK_PRE|PIYO_CLICK_SUMMARY|PIYO_CLICK_CASE_ERROR|PIYO_CLICK_ALL)' /tmp/pclick/legal-click.log || true
