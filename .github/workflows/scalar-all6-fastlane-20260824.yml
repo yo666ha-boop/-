@@ -1,0 +1,46 @@
+name: Scalar WASM all6 fastlane
+on:
+  push:
+    branches: [diag-future-scalar-wasm-20260824]
+permissions:
+  contents: read
+jobs:
+  all6:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: {repository: yaneurao/YaneuraOu, ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee, path: YaneuraOu-scalar}
+      - name: Build scalar WASM
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu-scalar/script/wasm_build.js');s=p.read_text();o='COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=${pkgobj.edition}';assert o in s;p.write_text(s.replace(o,'COMPILER=em++ TARGET_CPU=OTHER YANEURAOU_EDITION=${pkgobj.edition}',1))
+          m=Path('YaneuraOu-scalar/source/Makefile');m.write_text(m.read_text().replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
+          PY
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          docker run --rm -v "$GITHUB_WORKSPACE/YaneuraOu-scalar:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/build.log 2>&1
+          mkdir -p shogi-v21528/scalar76d; cp YaneuraOu-scalar/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/scalar76d/; cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/scalar76d/
+      - name: Harness
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs'),src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8'),mark="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";const d=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),240000,'diag');await sendUSI('go depth '+Number(m.depth),240000);const line=await p;self.postMessage({type:'result',id,ok:true,token:(line.split(/\\s+/)[1]||''),info:{...latestInfo}});return;}\n`;if(!src.includes(mark))throw Error('marker');fs.writeFileSync('shogi-v21528/scalar-depth.js',src.replace(mark,d+mark).replace("BASE=new URL('./yaneuraou/',self.location.href).href;","BASE=new URL('./scalar76d/',self.location.href).href;"))
+          NODE
+          npm init -y >/dev/null; npm i --no-audit --no-fund playwright@1.55.0 >/dev/null; npx playwright install --with-deps webkit >/dev/null
+          cat >/tmp/srv.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE;http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');fs.createReadStream(f).pipe(s)}).listen(4230,'127.0.0.1')
+          NODE
+          node /tmp/srv.mjs & sleep 1
+      - name: All6 exact
+        run: |
+          cat > /tmp/all6.mjs <<'NODE'
+          import{webkit}from'playwright';const C=[
+          [29,12,'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29','5e5d',-4054],[29,14,'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29','5e5d',-4321],[33,12,'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33','2g2f',-4217],[33,14,'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33','2g2f',-4410],[35,12,'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35','4f5g',-4290],[35,14,'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35','4h5i',-4490]];
+          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'});await p.goto('http://127.0.0.1:4230/shogi-v21528/index.html');const rows=[];for(const [ply,depth,sfen,et,ec] of C){const r=await p.evaluate(async({sfen,depth})=>{const w=new Worker('./scalar-depth.js?v='+Math.random());let i=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++i,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},120000);return await call('rawdepth',{sfen,depth})}finally{w.terminate()}},{sfen,depth});const row={ply,depth,token:r.token,cp:r.info?.cp,nodes:r.info?.nodes,expectedToken:et,expectedCp:ec,exact:r.token===et&&r.info?.cp===ec};rows.push(row);console.log('SCALAR_FAST_ALL6_ROW '+JSON.stringify(row))}const bad=rows.filter(x=>!x.exact);console.log('SCALAR_FAST_ALL6_SUMMARY '+JSON.stringify({exact:rows.length-bad.length,total:rows.length,bad}));if(bad.length)throw Error('mismatch');console.log('PASS_SCALAR_FAST_ALL6_EXACT');await b.close()
+          NODE
+          node /tmp/all6.mjs 2>&1 | tee /tmp/all6.log
+      - if: always()
+        run: grep -E '^(SCALAR_FAST_ALL6_ROW|SCALAR_FAST_ALL6_SUMMARY|PASS_SCALAR_FAST_ALL6_EXACT)' /tmp/all6.log || true
