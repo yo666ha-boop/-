@@ -29,6 +29,7 @@ jobs:
             {name:'h25-ply7-rook',pre:['7g7f','4a3b','7f7e','3c3d','8h2b+','3a2b'],target:'2h7h'},
             {name:'h21-ply21-king',pre:['7g7f','8c8d','4i5h','7a6b','2h3h','3c3d','8h2b+','3a2b','9i9h','8d8e','7f7e','B*5d','3g3f','5d8g+','B*5e','4a3b','7e7d','8g9h','7d7c+','6b7c'],target:'5i4i'}
           ];
+          const JP={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'};
           const b=await chromium.launch({headless:true});
           async function setup(name){
             const p=await b.newPage({viewport:{width:1280,height:1000}});
@@ -45,6 +46,7 @@ jobs:
           async function runCase(c){
             const p=await setup(c.name);const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');
             const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
+            async function handPoint(k){const jp=JP[k];return p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img,#komadai_s img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt.trim(),x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height}}).find(x=>x.w&&x.h&&x.alt===jp)||null,jp)}
             async function exportMoves(){
               await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(100);await p.click('#menuKifu');await p.waitForTimeout(100);await p.check('#dialogKifType2');await p.waitForTimeout(60);
               const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');
@@ -53,9 +55,9 @@ jobs:
               const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]
             }
             async function state(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim()),vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden'&&e.getClientRects().length>0;return{count:o.length,last:o.at(-1)||'',tail:o.slice(-4),nari:vis(document.querySelector('#dialogNari')),kifu:vis(document.querySelector('#dialogKifBox')),game:vis(document.querySelector('#dialogGame')),menu:vis(document.querySelector('#menu'))}})}
-            async function diag(u,label){const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));const x=await p.evaluate(({a,d})=>{const f=q=>{const e=document.elementFromPoint(q.x,q.y);if(!e)return null;const r=e.getBoundingClientRect();return{tag:e.tagName,id:e.id,cls:e.className,alt:e.getAttribute('alt'),src:e.getAttribute('src'),rect:{x:r.x,y:r.y,w:r.width,h:r.height}}};return{src:f(a),dst:f(d)}},{a,d});console.log('PIYO_CLICK_DIAG '+JSON.stringify({case:c.name,label,u,board:br,a,d,hit:x,state:await state()}))}
+            async function diag(u,label){const drop=/^[PLNSGBR]\*/.test(u);const a=drop?await handPoint(u[0]):sq(u.slice(0,2)),d=sq(drop?u.slice(2):u.slice(2,4));const x=await p.evaluate(({a,d})=>{const f=q=>{if(!q||!Number.isFinite(q.x)||!Number.isFinite(q.y))return null;const e=document.elementFromPoint(q.x,q.y);if(!e)return null;const r=e.getBoundingClientRect();return{tag:e.tagName,id:e.id,cls:e.className,alt:e.getAttribute('alt'),src:e.getAttribute('src'),rect:{x:r.x,y:r.y,w:r.width,h:r.height}}};return{src:f(a),dst:f(d)}},{a,d});console.log('PIYO_CLICK_DIAG '+JSON.stringify({case:c.name,label,u,drop,board:br,a,d,hit:x,state:await state()}))}
             async function play(u,slow=false){
-              if(/^[PLNSGBR]\*/.test(u)){const jp={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'}[u[0]],pt=await p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img,#komadai_s img')].map(i=>{const r=i.getBoundingClientRect();return{alt:i.alt.trim(),x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height}}).find(x=>x.w&&x.h&&x.alt===jp)||null,jp);if(!pt)throw Error('hand '+u);await p.mouse.click(pt.x,pt.y);await p.waitForTimeout(slow?350:80);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);await p.waitForTimeout(slow?350:120);return}
+              if(/^[PLNSGBR]\*/.test(u)){const pt=await handPoint(u[0]);if(!pt)throw Error('hand '+u);await p.mouse.click(pt.x,pt.y);await p.waitForTimeout(slow?350:80);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);await p.waitForTimeout(slow?350:120);return}
               const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(slow?350:80);await p.mouse.click(d.x,d.y);
               if(u.endsWith('+')){
                 await p.locator('#dialogNari').waitFor({state:'visible',timeout:4000});
