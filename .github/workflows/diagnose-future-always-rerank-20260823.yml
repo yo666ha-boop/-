@@ -1,4 +1,4 @@
-name: Diagnose Future always-rerank policy
+name: Diagnose Future browser fixed-depth parity fast
 on:
   pull_request:
     branches: [main]
@@ -6,43 +6,52 @@ on:
       - '.github/workflows/diagnose-future-always-rerank-20260823.yml'
 permissions:
   contents: read
+concurrency:
+  group: future-browser-native-fixed-depth-fast-pr80
+  cancel-in-progress: true
 jobs:
-  rerank:
+  fixed-depth:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Install WebKit
+      - name: Install Chromium and WebKit
         run: |
           set -euo pipefail
-          mkdir -p /tmp/frerank && cd /tmp/frerank
+          mkdir -p /tmp/fparity && cd /tmp/fparity
           npm init -y >/dev/null
           npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps webkit >/dev/null
+          npx playwright install --with-deps chromium webkit >/dev/null
+      - name: Build raw fixed-depth diagnostic worker
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');const src='shogi-v21528/future-yaneura-worker21528.js',dst='shogi-v21528/future-yaneura-worker-depthdiag.js';let s=fs.readFileSync(src,'utf8');const needle="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";const insert=`    if(m.type==='rawusi'){await init();const commands=Array.isArray(m.commands)?m.commands:[],waitPrefix=String(m.waitPrefix||''),timeout=Number(m.timeout)||180000;latestInfo={};latestMultiPV={};let line='',pending=null;for(const command0 of commands){const command=String(command0);if(waitPrefix&&!pending&&/^go(?:\\s|$)/.test(command))pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');await sendUSI(command,timeout)}if(waitPrefix){if(!pending)pending=waitLine(x=>x.startsWith(waitPrefix),timeout,'rawusi');line=await pending}const token=line.startsWith('bestmove ')?(line.split(/\\s+/)[1]||''):'';self.postMessage({type:'result',id,ok:true,kind:'rawusi',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}});return;}\n`;
+          if(!s.includes(needle))throw Error('insert point');fs.writeFileSync(dst,s.replace(needle,insert+needle));
+          NODE
+          node --check shogi-v21528/future-yaneura-worker-depthdiag.js
       - name: Start COI server
         run: |
-          cat >/tmp/frerank/server.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4186,'127.0.0.1');
+          set -euo pipefail
+          cat >/tmp/fparity/server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=decodeURIComponent((q.url||'/').split('?')[0]);if(u==='/')u='/shogi-v21528/index.html';const f=path.resolve(root,'.'+u);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4197,'127.0.0.1');
           NODE
-          node /tmp/frerank/server.mjs >/tmp/frerank/server.log 2>&1 &
-          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4186/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;exit 1
-      - name: Compare adaptive stage1, forced rerank, and deep SinglePV
+          node /tmp/fparity/server.mjs >/tmp/fparity/server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4197/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/fparity/server.log;exit 1
+      - name: Compare WebKit and Chromium to corrected native
         run: |
-          cat >/tmp/frerank/a.mjs <<'NODE'
-          import{webkit,devices}from'playwright';
-          const R='abcdefghi',I='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
-          const M=`4i5h 3c3d 6g6f 2b6f 5i4i 3a4b 8g8f 8c8d 9i9h 8d8e 2h3h 8e8f 1g1f 8f8g+ 5h6g 6f4d 6g5f 8g9h 5f4e 4d6f 7g7f 9h8h 3h6h 8h7i 6h6f 7i6i 6f6c+ L*6b 6c6b 7a6b 4g4f R*5i 4i3h 8b8h+ L*4h S*4g 3h4g B*5h 4g5f 5h6g+`.split(/\s+/);
-          function S(ms){const b=new Map(),h={b:{},w:{}};for(let r=0;r<9;r++){let f=9,pr=false;for(const c of I.split('/')[r]){if(c==='+'){pr=true;continue}if(/\d/.test(c)){f-=+c;continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[r],{side,k:c.toUpperCase(),pr});pr=false;f--}}let t='b';for(const x of ms){if(/^[PLNSGBR]\*/.test(x)){const k=x[0],d=x.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=x.slice(0,2),d=x.slice(2,4),q=b.get(a),c=b.get(d);if(!q)throw Error('missing '+x);if(c)h[t][c.k]=(h[t][c.k]||0)+1;b.delete(a);b.set(d,{...q,pr:q.pr||x.endsWith('+')})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let z='',e=0;for(let f=9;f;f--){const q=b.get(''+f+R[r]);if(!q){e++;continue}if(e){z+=e;e=0}z+=(q.pr?'+':'')+(q.side==='b'?q.k:q.k.toLowerCase())}if(e)z+=e;rows.push(z)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
-          const b=await webkit.launch({headless:true}),p=await b.newPage({...devices['iPhone 14']});await p.goto('http://127.0.0.1:4186/shogi-v21528/index.html?x='+Date.now(),{waitUntil:'domcontentloaded'});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');
-          async function worker(){return p.evaluate(async()=>{const w=new Worker('./future-yaneura-worker21528.js?v='+Date.now()+'-'+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},q=P.get(m.id);if(!q||m.type!=='result')return;P.delete(m.id);clearTimeout(q.t);m.ok?q.r(m):q.j(Error(m.error||'worker'))};const call=(type,x={})=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),120000);P.set(id,{r,j,t});w.postMessage({type,id,...x})});await call('init');const key='w'+Math.random();window[key]={w,call};return key})}
-          const call=(k,pos,o)=>p.evaluate(({k,pos,o})=>window[k].call('bestmove',{sfen:pos,...o}),{k,pos,o}),kill=k=>p.evaluate(k=>{window[k].w.terminate();delete window[k]},k);
-          async function fresh(pos,o){const k=await worker();try{return await call(k,pos,o)}finally{await kill(k)}}
-          const rows=[];for(const ply of[23,31,35,37,39]){const pos=S(M.slice(0,ply-1)),actual=M[ply-1];const k=await worker();let stage,rerank;try{stage=await call(k,pos,{nodes:1000000,multiPV:5,adaptive:false});const cs=stage.candidates||[],tokens=cs.map(x=>x.token).filter(Boolean).slice(0,5);rerank=tokens.length?await call(k,pos,{nodes:1500000,multiPV:1,searchmoves:tokens,adaptive:false}):null}finally{await kill(k)}const sp4=await fresh(pos,{ms:4000,multiPV:1,adaptive:false}),sp15=await fresh(pos,{ms:15000,multiPV:1,adaptive:false});const c=stage.candidates||[],c1=c.find(x=>x.rank===1)||c[0],c2=c.find(x=>x.rank===2)||c[1],gap=Number.isFinite(c1?.cp)&&Number.isFinite(c2?.cp)?Math.abs(c1.cp-c2.cp):null;const row={ply,actual,stage:stage.token,stageCp:stage.info?.cp,stageMate:stage.info?.mate,stageDepth:stage.info?.depth,gap,stageCandidates:c.slice(0,5).map(x=>({rank:x.rank,token:x.token,cp:x.cp,mate:x.mate,depth:x.depth})),forcedRerank:rerank?.token,rerankCp:rerank?.info?.cp,rerankMate:rerank?.info?.mate,sp4:sp4.token,sp4Cp:sp4.info?.cp,sp4Mate:sp4.info?.mate,sp4Depth:sp4.info?.depth,sp15:sp15.token,sp15Cp:sp15.info?.cp,sp15Mate:sp15.info?.mate,sp15Depth:sp15.info?.depth,rerankMatchesDeep:rerank?.token===sp15.token,stageMatchesDeep:stage.token===sp15.token};rows.push(row);console.log('FUTURE_ALWAYS_RERANK_ROW '+JSON.stringify(row))}
-          console.log('FUTURE_ALWAYS_RERANK_SUMMARY '+JSON.stringify({stageVsDeep:rows.filter(x=>x.stageMatchesDeep).map(x=>x.ply),rerankVsDeep:rows.filter(x=>x.rerankMatchesDeep).map(x=>x.ply),changedByRerank:rows.filter(x=>x.stage!==x.forcedRerank).map(x=>x.ply),largeGapNoDeep:rows.filter(x=>Number.isFinite(x.gap)&&x.gap>20&&!x.stageMatchesDeep).map(x=>({ply:x.ply,gap:x.gap,stage:x.stage,rerank:x.forcedRerank,deep:x.sp15}))}));console.log('PASS_FUTURE_ALWAYS_RERANK_HARNESS');await b.close();
+          set -euo pipefail
+          cat >/tmp/fparity/check.mjs <<'NODE'
+          import{webkit,chromium}from'playwright';
+          const cases=[{ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',exp:'5e5d',expCp:-4054},{ply:29,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',exp:'5e5d',expCp:-4321},{ply:33,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',exp:'2g2f',expCp:-4217},{ply:33,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',exp:'2g2f',expCp:-4410},{ply:35,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',exp:'4f5g',expCp:-4290},{ply:35,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',exp:'4h5i',expCp:-4490}];
+          const uas={webkit:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',chromium:'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/139 Safari/537.36'};
+          async function run(kind){const B=kind==='webkit'?webkit:chromium,b=await B.launch({headless:true}),c=await b.newContext({userAgent:uas[kind]}),p=await c.newPage();await p.goto('http://127.0.0.1:4197/shogi-v21528/index.html?parity='+kind+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))throw Error('COI');const out=[];for(const q of cases){const r=await p.evaluate(async q=>{const w=new Worker('./future-yaneura-worker-depthdiag.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=240000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},120000);return await call('rawusi',{commands:['setoption name MultiPV value 1','position sfen '+q.sfen,'go depth '+q.depth],waitPrefix:'bestmove ',timeout:210000})}finally{w.terminate()}},q);const row={browser:kind,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,mate:r.info?.mate,nodes:r.info?.nodes,seenDepth:r.info?.depth,expectedToken:q.exp,expectedCp:q.expCp,tokenMatch:r.token===q.exp,cpDelta:Number.isFinite(r.info?.cp)?r.info.cp-q.expCp:null,profile:r.profile};out.push(row);console.log('FUTURE_BROWSER_NATIVE_PARITY_ROW '+JSON.stringify(row))}await b.close();return out}
+          const all=[...await run('webkit'),...await run('chromium')],bad=all.filter(x=>!x.tokenMatch),cpDeltas=all.map(x=>x.cpDelta).filter(Number.isFinite);console.log('FUTURE_BROWSER_NATIVE_PARITY_SUMMARY '+JSON.stringify({nativeSource:'76d58ef2e4cf64116784f41fd4816425ab6817ee',rows:all.length,tokenMismatches:bad,maxAbsCpDelta:cpDeltas.length?Math.max(...cpDeltas.map(Math.abs)):null}));if(bad.length)console.log('FUTURE_BROWSER_NATIVE_PARITY_TOKEN_FAIL '+JSON.stringify(bad));console.log('PASS_FUTURE_BROWSER_NATIVE_PARITY_HARNESS');
           NODE
-          cd /tmp/frerank && node a.mjs 2>&1 | tee /tmp/frerank/a.log
-          grep -F 'FUTURE_ALWAYS_RERANK_SUMMARY ' /tmp/frerank/a.log
-          grep -F 'PASS_FUTURE_ALWAYS_RERANK_HARNESS' /tmp/frerank/a.log
+          cd /tmp/fparity
+          node check.mjs 2>&1 | tee parity.log
+          grep -F 'FUTURE_BROWSER_NATIVE_PARITY_SUMMARY ' parity.log
+          grep -F 'PASS_FUTURE_BROWSER_NATIVE_PARITY_HARNESS' parity.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(FUTURE_ALWAYS_RERANK_ROW|FUTURE_ALWAYS_RERANK_SUMMARY|PASS_FUTURE_ALWAYS_RERANK_HARNESS)' /tmp/frerank/a.log | tail -80 || true
+        run: grep -E '^(FUTURE_BROWSER_NATIVE_PARITY_ROW|FUTURE_BROWSER_NATIVE_PARITY_SUMMARY|FUTURE_BROWSER_NATIVE_PARITY_TOKEN_FAIL|PASS_FUTURE_BROWSER_NATIVE_PARITY_HARNESS)' /tmp/fparity/parity.log || true
