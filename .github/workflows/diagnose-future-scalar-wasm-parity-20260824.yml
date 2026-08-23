@@ -1,0 +1,106 @@
+name: Diagnose Future scalar WASM NNUE parity
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-future-scalar-wasm-parity-20260824.yml'
+permissions:
+  contents: read
+jobs:
+  scalar-parity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu-scalar
+      - name: Build TARGET_CPU OTHER scalar WASM
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('YaneuraOu-scalar/script/wasm_build.js')
+          s=p.read_text()
+          old='COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=${pkgobj.edition}'
+          new='COMPILER=em++ TARGET_CPU=OTHER YANEURAOU_EDITION=${pkgobj.edition}'
+          if old not in s: raise SystemExit('TARGET_CPU marker missing')
+          p.write_text(s.replace(old,new,1))
+          m=Path('YaneuraOu-scalar/source/Makefile')
+          t=m.read_text()
+          if '-s PTHREAD_POOL_SIZE=32' in t:
+              t=t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          m.write_text(t)
+          PY
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu-scalar:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval 2>&1 | tee /tmp/scalar-build.log
+          LIB=YaneuraOu-scalar/build/wasm/halfkp.noeval/lib
+          test -s "$LIB/yaneuraou.halfkp.noeval.js"
+          test -s "$LIB/yaneuraou.halfkp.noeval.wasm"
+          mkdir -p shogi-v21528/scalar76d
+          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/scalar76d/
+          cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/scalar76d/
+          echo '=== HASHES ==='
+          sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.{js,wasm} shogi-v21528/scalar76d/yaneuraou.halfkp.noeval.{js,wasm} shogi-v21528/yaneuraou/nn.bin
+      - name: Install WebKit
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Derive raw-depth workers
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
+          const marker="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          if(!src.includes(marker))throw Error('handler marker');
+          const diag=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),210000,'diag bestmove');await sendUSI('go depth '+Math.max(1,Number(m.depth)||10),210000);const line=await p;const token=(line.split(/\\s+/)[1]||'').trim();self.postMessage({type:'result',id,ok:true,kind:'rawdepth',line,token,info:{...latestInfo},profile:{threads:ENGINE_THREADS,hashMB:ENGINE_HASH_MB,mobileWebKit:MOBILE_WEBKIT}});return;}\n`;
+          const prod=src.replace(marker,diag+marker);
+          const base="BASE=new URL('./yaneuraou/',self.location.href).href;";
+          if(!prod.includes(base))throw Error('base marker');
+          const scalar=prod.replace(base,"BASE=new URL('./scalar76d/',self.location.href).href;");
+          fs.writeFileSync('shogi-v21528/future-depth-prod.js',prod);
+          fs.writeFileSync('shogi-v21528/future-depth-scalar.js',scalar);
+          NODE
+          node --check shogi-v21528/future-depth-prod.js
+          node --check shogi-v21528/future-depth-scalar.js
+      - name: Start COI server
+        run: |
+          set -euo pipefail
+          cat >/tmp/scalar-server.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const root=process.env.GITHUB_WORKSPACE,m={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(path.resolve(root))||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4225,'127.0.0.1');
+          NODE
+          node /tmp/scalar-server.mjs >/tmp/scalar-server.log 2>&1 &
+          for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4225/shogi-v21528/index.html >/dev/null&&exit 0||sleep 1;done
+          cat /tmp/scalar-server.log;exit 1
+      - name: Compare production WASM vs scalar WASM vs native
+        run: |
+          set -euo pipefail
+          cat >scalar-compare.mjs <<'NODE'
+          import{webkit}from'playwright';
+          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+          const sfen='lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29';
+          const cases=[{depth:10,native:{token:'3g3f',cp:-3712}},{depth:12,native:{token:'5e5d',cp:-4054}}];
+          const b=await webkit.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport:{width:390,height:844}});
+          await p.goto('http://127.0.0.1:4225/shogi-v21528/index.html?scalar='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+          if(!await p.evaluate(()=>crossOriginIsolated))throw Error('no COI');
+          async function one(kind,q){return p.evaluate(async({kind,q,sfen})=>{const file=kind==='prod'?'future-depth-prod.js':'future-depth-scalar.js';const w=new Worker('./'+file+'?v='+Date.now()+Math.random());let n=0,P=new Map(),stages=[];w.onmessage=e=>{const m=e.data||{};if(m.type==='stage'){stages.push(m.text);return}const z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,data={},timeout=240000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>{P.delete(id);j(Error(type+' timeout'))},timeout);P.set(id,{r,j,t});w.postMessage({type,id,...data})});try{await call('init',{},120000);const r=await call('rawdepth',{sfen,depth:q.depth},220000);return{kind,depth:q.depth,token:r.token,cp:r.info?.cp??null,mate:r.info?.mate??null,nodes:r.info?.nodes??null,seenDepth:r.info?.depth??null,stageTail:stages.slice(-12)}}finally{w.terminate()}},{kind,q,sfen})}
+          const rows=[];
+          for(const q of cases){for(const kind of ['prod','scalar']){try{const r=await one(kind,q);const row={...r,native:q.native,tokenMatchNative:r.token===q.native.token,cpDeltaNative:Number.isFinite(r.cp)?r.cp-q.native.cp:null};rows.push(row);console.log('FUTURE_SCALAR_WASM_ROW '+JSON.stringify(row))}catch(e){const row={kind,depth:q.depth,error:String(e&&e.message||e),native:q.native};rows.push(row);console.log('FUTURE_SCALAR_WASM_ROW '+JSON.stringify(row))}}}
+          const summary={source:'76d58ef2e4cf64116784f41fd4816425ab6817ee',sfen,rows};
+          console.log('FUTURE_SCALAR_WASM_SUMMARY '+JSON.stringify(summary));
+          console.log('PASS_FUTURE_SCALAR_WASM_HARNESS');
+          await b.close();
+          NODE
+          node scalar-compare.mjs 2>&1 | tee /tmp/scalar-compare.log
+          grep -F 'FUTURE_SCALAR_WASM_SUMMARY ' /tmp/scalar-compare.log
+          grep -F 'PASS_FUTURE_SCALAR_WASM_HARNESS' /tmp/scalar-compare.log
+      - name: Preserve evidence
+        if: always()
+        run: |
+          grep -E '^(FUTURE_SCALAR_WASM_ROW|FUTURE_SCALAR_WASM_SUMMARY|PASS_FUTURE_SCALAR_WASM_HARNESS)' /tmp/scalar-compare.log || true
+          tail -n 120 /tmp/scalar-build.log || true
