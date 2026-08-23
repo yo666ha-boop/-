@@ -16,7 +16,7 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
           path: YaneuraOu-layoutfix
-      - name: Patch only WASM NNUE weight layout and build
+      - name: Patch sparse and dense WASM NNUE weight layouts and build
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -27,12 +27,16 @@ jobs:
           new='#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
           assert old in s
           p.write_text(s.replace(old,new,1))
+          p=Path('YaneuraOu-layoutfix/source/eval/nnue/layers/affine_transform_sparse_input.h')
+          s=p.read_text()
+          old='#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
+          new='#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
+          assert old in s
+          p.write_text(s.replace(old,new,1))
           m=Path('YaneuraOu-layoutfix/source/Makefile')
-          t=m.read_text()
-          assert '-s PTHREAD_POOL_SIZE=32' in t
+          t=m.read_text(); assert '-s PTHREAD_POOL_SIZE=32' in t
           m.write_text(t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
           PY
-          grep -n "GetWeightIndex" -A8 YaneuraOu-layoutfix/source/eval/nnue/layers/affine_transform.h | head -12
           docker pull emscripten/emsdk:3.1.43 >/dev/null
           docker run --rm -v "${{ github.workspace }}/YaneuraOu-layoutfix:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/layout-build.log 2>&1
           LIB=YaneuraOu-layoutfix/build/wasm/halfkp.noeval/lib
@@ -69,13 +73,10 @@ jobs:
           set -euo pipefail
           cat >layout.mjs <<'NODE'
           import{webkit,chromium}from'playwright';
-          const qs=[
-            {ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',expectedToken:'5e5d',expectedCp:-4054},
-            {ply:33,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',expectedToken:'5e5d',expectedCp:-4054}
-          ];
-          async function run(type){const bt=type==='webkit'?webkit:chromium,b=await bt.launch({headless:true}),p=await b.newPage({userAgent:type==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});await p.goto('http://127.0.0.1:4228/shogi-v21528/index.html',{waitUntil:'domcontentloaded'});const rows=[];for(const q of qs.slice(0,1)){const r=await p.evaluate(async q=>{const w=new Worker('./future-depth-layoutfix.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{const init=await call('init',{},120000);const out=await call('rawdepth',{sfen:q.sfen,depth:q.depth});return{init,out}}finally{w.terminate()}},q);const row={browser:type,ply:q.ply,depth:q.depth,token:r.out.token,cp:r.out.info?.cp,nodes:r.out.info?.nodes,expectedToken:q.expectedToken,expectedCp:q.expectedCp,tokenMatch:r.out.token===q.expectedToken,cpDelta:r.out.info?.cp-q.expectedCp};rows.push(row);console.log('FUTURE_LAYOUT_FIX_PARITY_ROW '+JSON.stringify(row))}await b.close();return rows}
-          const rows=[...await run('webkit'),...await run('chromium')];
-          console.log('FUTURE_LAYOUT_FIX_PARITY_SUMMARY '+JSON.stringify({rows:rows.length,tokenMatches:rows.filter(x=>x.tokenMatch).length,maxAbsCpDelta:Math.max(...rows.map(x=>Math.abs(x.cpDelta)))}));
+          const q={ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',expectedToken:'5e5d',expectedCp:-4054};
+          async function once(type){const bt=type==='webkit'?webkit:chromium,b=await bt.launch({headless:true}),p=await b.newPage({userAgent:type==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});await p.goto('http://127.0.0.1:4228/shogi-v21528/index.html',{waitUntil:'domcontentloaded'});const r=await p.evaluate(async q=>{const w=new Worker('./future-depth-layoutfix.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},120000);return await call('rawdepth',{sfen:q.sfen,depth:q.depth})}finally{w.terminate()}},q);const row={browser:type,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,nodes:r.info?.nodes,expectedToken:q.expectedToken,expectedCp:q.expectedCp,tokenMatch:r.token===q.expectedToken,cpDelta:r.info?.cp-q.expectedCp};console.log('FUTURE_LAYOUT_FIX_PARITY_ROW '+JSON.stringify(row));await b.close();return row}
+          const rows=[await once('webkit'),await once('chromium')];
+          console.log('FUTURE_LAYOUT_FIX_PARITY_SUMMARY '+JSON.stringify({rows:rows.length,tokenMatches:rows.filter(x=>x.tokenMatch).length,maxAbsCpDelta:Math.max(...rows.map(x=>Math.abs(x.cpDelta))),detail:rows}));
           console.log('PASS_FUTURE_LAYOUT_FIX_PARITY_HARNESS');
           NODE
           node layout.mjs 2>&1 | tee /tmp/layout.log
