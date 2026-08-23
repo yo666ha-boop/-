@@ -1,4 +1,4 @@
-name: Diagnose Future 7g7f fresh SP7 practical via proven PR trigger
+name: Diagnose Future fresh SP7 practical opening matrix
 on:
   pull_request:
     branches: [main]
@@ -14,13 +14,17 @@ jobs:
   practical:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: [7g7f, 2g2f, 5g5f]
     steps:
       - uses: actions/checkout@v4
       - name: Report run id
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="SP7_PROVEN_RUN ${{ github.run_id }} ${{ github.sha }} OPENING_7G7F_FRESH_SP7"
+        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="SP7_MATRIX_RUN ${{ github.run_id }} ${{ github.sha }} OPENING_${{ matrix.opening }}_FRESH_SP7"
       - name: Install Chromium and WebKit
         run: |
           set -euo pipefail
@@ -37,9 +41,13 @@ jobs:
           for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4174/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done
           cat /tmp/fastp/server.log; exit 1
       - name: Derive practical harness
+        env:
+          OPENING: ${{ matrix.opening }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import os
+          opening=os.environ['OPENING']
           src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text()
           a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n"
           i=src.index(a)+len(a); j=src.index("\n          NODE\n",i)
@@ -50,7 +58,7 @@ jobs:
           if old not in js: raise SystemExit('search marker missing')
           js=js.replace(old,new,1)
           old2="const ply=ms.length+1,pos=sfen(ms),r=await search(pos,{ms:4000,multiPV:1}),u=String(r.token||'');"
-          new2="const ply=ms.length+1,pos=sfen(ms),r=ply===1?{token:'7g7f',info:{forcedOpening:true,adaptive:false}}:await search(pos,{ms:7000,multiPV:1,adaptive:false}),u=String(r.token||'');"
+          new2=f"const ply=ms.length+1,pos=sfen(ms),r=ply===1?{{token:'{opening}',info:{{forcedOpening:true,opening:'{opening}',adaptive:false}}}}:await search(pos,{{ms:7000,multiPV:1,adaptive:false}}),u=String(r.token||'');"
           if old2 not in js: raise SystemExit('move marker missing')
           js=js.replace(old2,new2,1)
           old_export="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();await p.waitForTimeout(80);await p.click('#menuKifu');"
@@ -65,11 +73,17 @@ jobs:
       - name: Run opening plus fresh SinglePV7 practical match
         env:
           ATTEMPT: 1
+          OPENING: ${{ matrix.opening }}
         run: |
           cd /tmp/fastp
+          echo "FAST_SP7_OPENING ${OPENING}"
           node match.mjs 2>&1 | tee /tmp/fastp/match.log
           grep -F 'FAST_SP7_PRACTICAL_SUMMARY ' /tmp/fastp/match.log
           grep -F 'PASS_FAST_SP7_PIYO40_HARNESS' /tmp/fastp/match.log
       - name: Preserve evidence
         if: always()
-        run: grep -E '^(PIYO40_PROFILE|FAST_SP7_PROFILE|FAST_SP7_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FAST_SP7_AUDIT|FAST_SP7_PRACTICAL_SUMMARY|PASS_FAST_SP7_PIYO40_HARNESS)' /tmp/fastp/match.log | tail -320 || true
+        env:
+          OPENING: ${{ matrix.opening }}
+        run: |
+          echo "FAST_SP7_OPENING ${OPENING}"
+          grep -E '^(PIYO40_PROFILE|FAST_SP7_PROFILE|FAST_SP7_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FAST_SP7_AUDIT|FAST_SP7_PRACTICAL_SUMMARY|PASS_FAST_SP7_PIYO40_HARNESS)' /tmp/fastp/match.log | tail -320 || true
