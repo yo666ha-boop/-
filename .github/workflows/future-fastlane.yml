@@ -9,91 +9,81 @@ concurrency:
   group: future-fastlane
   cancel-in-progress: true
 jobs:
-  parity:
+  practical:
     runs-on: ubuntu-22.04
-    timeout-minutes: 65
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Report run id
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="FASTLANE_LAYOUT_RUN ${{ github.run_id }} ${{ github.sha }} WASM_NNUE_WEIGHT_LAYOUT_FIX_BOTH"
+        run: gh api repos/${{ github.repository }}/issues/80/comments -f body="FASTLANE_LAYOUT_PRACTICAL_RUN ${{ github.run_id }} ${{ github.sha }} PRODUCTION_PATCHES_PLUS_NNUE_LAYOUT_FIX"
       - uses: actions/checkout@v4
         with:
           repository: yaneurao/YaneuraOu
           ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
           path: YaneuraOu-layoutfix
-      - name: Patch sparse and dense weight layouts and build WASM
+      - name: Restore production WASM patches and NNUE layout fix
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('YaneuraOu-layoutfix/source/eval/nnue/layers/affine_transform.h')
-          s=p.read_text()
-          old='#if defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
-          new='#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
-          assert old in s
-          p.write_text(s.replace(old,new,1))
-          p=Path('YaneuraOu-layoutfix/source/eval/nnue/layers/affine_transform_sparse_input.h')
-          s=p.read_text()
-          old='#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
-          new='#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'
-          assert old in s
-          p.write_text(s.replace(old,new,1))
-          m=Path('YaneuraOu-layoutfix/source/Makefile')
-          t=m.read_text(); assert '-s PTHREAD_POOL_SIZE=32' in t
-          m.write_text(t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
+          import subprocess,textwrap
+          yml=subprocess.check_output(['git','show','2fbda43b3ac86c38f7760e589ce4c52c15c65141:.github/workflows/diag-yaneuraou-v970-threadfix.yml'],text=True)
+          block=yml.split("python3 - <<'PY'",1)[1].split('\n          PY',1)[0]
+          Path('/tmp/threadfix.py').write_text(textwrap.dedent(block.lstrip('\n')).replace("Path('YaneuraOu/","Path('YaneuraOu-layoutfix/"))
           PY
-          grep -n "GetWeightIndex(IndexType i)" -A5 YaneuraOu-layoutfix/source/eval/nnue/layers/affine_transform.h
-          grep -n "GetWeightIndex(IndexType i)" -A5 YaneuraOu-layoutfix/source/eval/nnue/layers/affine_transform_sparse_input.h
+          python3 /tmp/threadfix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('YaneuraOu-layoutfix/source/Makefile');s=m.read_text();assert '-s PTHREAD_POOL_SIZE=2' in s;m.write_text(s.replace('-s PTHREAD_POOL_SIZE=2','-s PTHREAD_POOL_SIZE=32',1))
+          p=Path('YaneuraOu-layoutfix/source/eval/nnue/evaluate_nnue.cpp');s=p.read_text();needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n''';repl=needle+'''#if defined(__EMSCRIPTEN__)\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n''';
+          if 'Options.add("EvalFile"' not in s: assert needle in s;s=s.replace(needle,repl,1)
+          p.write_text(s)
+          for fn,old,new in [('affine_transform.h','#if defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'),('affine_transform_sparse_input.h','#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;')]:
+              p=Path('YaneuraOu-layoutfix/source/eval/nnue/layers')/fn;s=p.read_text();assert old in s;p.write_text(s.replace(old,new,1))
+          PY
+          grep -F 'wasmNativeStarted' YaneuraOu-layoutfix/source/thread.cpp
+          grep -F 'EMSCRIPTEN_KEEPALIVE int usi_command' YaneuraOu-layoutfix/source/engine/yaneuraou-engine/yaneuraou-search.cpp
+          grep -F 'Options.add("EvalFile"' YaneuraOu-layoutfix/source/eval/nnue/evaluate_nnue.cpp
+      - name: Build corrected V9.70 WASM
+        run: |
+          set -euo pipefail
           docker pull emscripten/emsdk:3.1.43 >/dev/null
-          docker run --rm -v "${{ github.workspace }}/YaneuraOu-layoutfix:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/layout-build.log 2>&1
-          LIB=YaneuraOu-layoutfix/build/wasm/halfkp.noeval/lib
-          mkdir -p shogi-v21528/layoutfix76d
-          cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/layoutfix76d/
-          cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/layoutfix76d/
-          echo FAST_LAYOUT_BUILD_OK
-          sha256sum shogi-v21528/layoutfix76d/yaneuraou.halfkp.noeval.{js,wasm} shogi-v21528/layoutfix76d/nn.bin
-      - name: Prepare worker and browser
+          mkdir -p YaneuraOu-layoutfix/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu-layoutfix:/src" -w /src/source emscripten/emsdk:3.1.43 bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/fast-build.log 2>&1
+          LIB=YaneuraOu-layoutfix/build/wasm/halfkp.noeval/lib;mkdir -p shogi-v21528/layoutfix76d;cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/layoutfix76d/;cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/layoutfix76d/
+          echo FAST_LAYOUT_PRACTICAL_BUILD_OK
+      - name: Prepare corrected worker and browsers
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs=require('node:fs');
-          const src=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8');
-          const mark="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
-          if(!src.includes(mark))throw Error('worker marker');
-          const diag=`    if(m.type==='rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),240000,'diag');await sendUSI('go depth '+Number(m.depth),240000);const line=await p;self.postMessage({type:'result',id,ok:true,kind:'rawdepth',token:(line.split(/\\s+/)[1]||''),info:{...latestInfo}});return;}\n`;
-          let s=src.replace(mark,diag+mark).replace("BASE=new URL('./yaneuraou/',self.location.href).href;","BASE=new URL('./layoutfix76d/',self.location.href).href;");
-          fs.writeFileSync('shogi-v21528/future-depth-layoutfix.js',s);
+          const fs=require('fs'),s=fs.readFileSync('shogi-v21528/future-yaneura-worker21528.js','utf8').replace("BASE=new URL('./yaneuraou/',self.location.href).href;","BASE=new URL('./layoutfix76d/',self.location.href).href;");fs.writeFileSync('shogi-v21528/future-layoutfix-worker.js',s);
           NODE
-          npm init -y >/dev/null
-          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps webkit chromium >/dev/null
+          npm init -y >/dev/null;npm i --no-audit --no-fund playwright@1.55.0 >/dev/null;npx playwright install --with-deps chromium webkit >/dev/null
       - name: Start COI server
         run: |
-          cat >/tmp/layout-srv.mjs <<'NODE'
-          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream'};http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4229,'127.0.0.1')
+          cat >/tmp/fast-srv.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4230,'127.0.0.1')
           NODE
-          node /tmp/layout-srv.mjs >/tmp/layout-srv.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4229/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
-          cat /tmp/layout-srv.log; exit 1
-      - name: Fixed depth parity WebKit and Chromium
+          node /tmp/fast-srv.mjs >/tmp/fast-srv.log 2>&1 & for i in $(seq 1 30);do curl -fsS http://127.0.0.1:4230/shogi-v21528/index.html >/dev/null&&exit 0;sleep 1;done;cat /tmp/fast-srv.log;exit 1
+      - name: Corrected WebKit Future vs Piyo Lv40
         run: |
           set -euo pipefail
-          cat >layout.mjs <<'NODE'
-          import{webkit,chromium}from'playwright';
-          const q={ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',expectedToken:'5e5d',expectedCp:-4054};
-          async function once(type){const bt=type==='webkit'?webkit:chromium,b=await bt.launch({headless:true}),p=await b.newPage({userAgent:type==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});await p.goto('http://127.0.0.1:4229/shogi-v21528/index.html',{waitUntil:'domcontentloaded'});const r=await p.evaluate(async q=>{const w=new Worker('./future-depth-layoutfix.js?v='+Date.now()+Math.random());let n=0,P=new Map();w.onmessage=e=>{const m=e.data||{},z=P.get(m.id);if(!z||m.type!=='result')return;P.delete(m.id);clearTimeout(z.t);m.ok?z.r(m):z.j(Error(m.error||'worker'))};const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const id=++n,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(id,{r,j,t});w.postMessage({type,id,...x})});try{await call('init',{},120000);return await call('rawdepth',{sfen:q.sfen,depth:q.depth})}finally{w.terminate()}},q);const row={browser:type,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,nodes:r.info?.nodes,expectedToken:q.expectedToken,expectedCp:q.expectedCp,tokenMatch:r.token===q.expectedToken,cpDelta:r.info?.cp-q.expectedCp};console.log('FAST_LAYOUT_ROW '+JSON.stringify(row));await b.close();return row}
-          const rows=[await once('webkit'),await once('chromium')];
-          console.log('FAST_LAYOUT_SUMMARY '+JSON.stringify({tokenMatches:rows.filter(x=>x.tokenMatch).length,maxAbsCpDelta:Math.max(...rows.map(x=>Math.abs(x.cpDelta))),rows}));
-          console.log('PASS_FAST_LAYOUT_HARNESS');
-          NODE
-          node layout.mjs 2>&1 | tee /tmp/layout.log
-          grep -F 'FAST_LAYOUT_ROW ' /tmp/layout.log
-          grep -F 'FAST_LAYOUT_SUMMARY ' /tmp/layout.log
-          grep -F 'PASS_FAST_LAYOUT_HARNESS' /tmp/layout.log
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/verify-future-current-vs-piyo40-20260820.yml').read_text();a="          cat >/tmp/fpiyo/match.mjs <<'NODE'\n";i=src.index(a)+len(a);j=src.index("\n          NODE\n",i);js='\n'.join(line[10:] if line.startswith('          ') else line for line in src[i:j].splitlines())+'\n'
+          js=js.replace('http://127.0.0.1:4173/','http://127.0.0.1:4230/').replace('./future-yaneura-worker21528.js?v=practical-','./future-layoutfix-worker.js?v=practical-')
+          old="await p.click('#btnDialogKifClose');const m=/^position startpos";new="await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos";assert old in js;js=js.replace(old,new,1)
+          old="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();";new="async function exportMoves(){await p.evaluate(()=>{const d=document.querySelector('#dialogMess');if(d){d.classList.remove('is-show');d.style.display='none'}});await p.locator('img[alt=\"メニュー\"]').first().click({force:true});";assert old in js;js=js.replace(old,new,1)
+          old="if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1000}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1')";new="if(u.endsWith('+')){await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}";assert old in js;js=js.replace(old,new,1)
+          js=js.replace('FUTURE_CURRENT_PROFILE','FAST_LAYOUT_PROFILE').replace('FUTURE_CURRENT_MOVE','FAST_LAYOUT_MOVE').replace('FUTURE_CURRENT_AUDIT','FAST_LAYOUT_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FAST_LAYOUT_PRACTICAL_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FAST_LAYOUT_PIYO40_HARNESS');Path('/tmp/fast-practical.mjs').write_text(js)
+          PY
+          ATTEMPT=1 node /tmp/fast-practical.mjs 2>&1 | tee /tmp/fast-practical.log
       - name: Preserve evidence
         if: always()
         run: |
-          grep -E '^(FAST_LAYOUT_|PASS_FAST_LAYOUT_)' /tmp/layout.log || true
-          tail -100 /tmp/layout-build.log || true
+          grep -E '^(PIYO40_PROFILE|FAST_LAYOUT_PROFILE|FAST_LAYOUT_MOVE|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|FAST_LAYOUT_AUDIT|FAST_LAYOUT_PRACTICAL_SUMMARY|PASS_FAST_LAYOUT_PIYO40_HARNESS)' /tmp/fast-practical.log | tail -400 || true
+          tail -80 /tmp/fast-build.log || true
