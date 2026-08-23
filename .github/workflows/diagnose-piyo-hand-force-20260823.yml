@@ -1,0 +1,51 @@
+name: Diagnose Piyo DOM-force hand click
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-piyo-hand-force-20260823.yml'
+permissions:
+  contents: read
+jobs:
+  force-hand:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          mkdir -p /tmp/forcehand && cd /tmp/forcehand
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Force-click exact hand DOM and continue h21
+        run: |
+          set -euo pipefail
+          cat >/tmp/forcehand/check.mjs <<'NODE'
+          import {chromium} from 'playwright';
+          const pre=['7g7f','8c8d','4i5h','7a6b','2h3h','3c3d','8h2b+','3a2b','9i9h','8d8e','7f7e','B*5d','3g3f','5d8g+','B*5e','4a3b','7e7d','8g9h','7d7c+','6b7c'];
+          const JP={P:'FU',L:'KY',N:'KE',S:'GI',G:'KI',B:'KA',R:'HI'};
+          const b=await chromium.launch({headless:true});
+          const p=await b.newPage({viewport:{width:1280,height:1000}});
+          await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
+          await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1200);await p.click('#btnNewGame');
+          await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0);
+          await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote0');
+          await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});
+          await p.click('#btnDialogGameStart');await p.waitForTimeout(900);
+          const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');
+          const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
+          async function state(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim()),vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden'&&e.getClientRects().length>0;return{count:o.length,last:o.at(-1)||'',balloon:vis(document.querySelector('#balloon0')),nari:vis(document.querySelector('#dialogNari'))}})}
+          async function exportMoves(){await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(100);await p.click('#menuKifu');await p.waitForTimeout(100);await p.check('#dialogKifType2');await p.waitForTimeout(60);const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos(?: moves\s+(.+))?$/s.exec(txt);if(!m)throw Error('export '+txt);return m[1]?m[1].trim().split(/\s+/):[]}
+          async function play(u){const before=(await state()).count;const drop=/^[PLNSGBR]\*/.test(u);if(drop){const id='#U_'+JP[u[0]];await p.locator(id).click({force:true});await p.waitForTimeout(80);const d=sq(u.slice(2));await p.mouse.click(d.x,d.y);await p.waitForTimeout(120)}else{const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(80);await p.mouse.click(d.x,d.y);if(u.endsWith('+')){await p.locator('#dialogNari').waitFor({state:'visible',timeout:4000});await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}await p.waitForTimeout(80)}for(let i=0;i<20&&(await state()).count<before+1;i++)await p.waitForTimeout(100);const s=await state();const got=s.count>=before+1?await exportMoves():[];const ok=got.at(-1)===u;console.log('PIYO_FORCE_STEP '+JSON.stringify({u,before,after:s.count,last:s.last,balloon:s.balloon,ok,tail:got.slice(-4)}));if(!ok)throw Error('commit '+u)}
+          for(const u of pre)await play(u);
+          await play('5i4i');
+          console.log('PIYO_FORCE_SUMMARY '+JSON.stringify({ok:true,state:await state()}));
+          await b.close();
+          NODE
+          cd /tmp/forcehand
+          node --check check.mjs
+          node check.mjs 2>&1 | tee force-hand.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(PIYO_FORCE_STEP|PIYO_FORCE_SUMMARY)' /tmp/forcehand/force-hand.log || true
