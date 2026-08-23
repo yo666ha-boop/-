@@ -93,16 +93,25 @@ jobs:
           js=js.replace('http://127.0.0.1:4173/','http://127.0.0.1:4229/')
           js=js.replace('./future-yaneura-worker21528.js?v=practical-','./future-layoutext-worker.js?v=practical-')
           old="await p.click('#btnDialogKifClose');const m=/^position startpos";new="await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);const m=/^position startpos"
-          if old not in js: raise SystemExit('close marker');
+          if old not in js: raise SystemExit('close marker')
           js=js.replace(old,new,1)
           old="async function exportMoves(){await p.locator('img[alt=\"メニュー\"]').first().click();";new="async function exportMoves(){await p.evaluate(()=>{const d=document.querySelector('#dialogMess');if(d){d.classList.remove('is-show');d.style.display='none'}});await p.locator('img[alt=\"メニュー\"]').first().click({force:true});"
-          if old not in js: raise SystemExit('export marker');
+          if old not in js: raise SystemExit('export marker')
           js=js.replace(old,new,1)
           old="if(u.endsWith('+'))await p.locator('#btnDialogNari2').click({force:true,timeout:1000}).catch(()=>{});else if(await p.locator('#dialogNari').isVisible().catch(()=>false))await p.click('#btnDialogNari1')";new="if(u.endsWith('+')){await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}"
-          if old not in js: raise SystemExit('promotion marker');
+          if old not in js: raise SystemExit('promotion marker')
+          js=js.replace(old,new,1)
+          old="async function kifuState(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim()),vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden';return{count:o.length,last:o.at(-1)||'',tail:o.slice(-4),nari:vis(document.querySelector('#dialogNari')),game:vis(document.querySelector('#dialogGame')),menu:vis(document.querySelector('#menu'))}})}"
+          new="async function kifuState(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim()),vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden',mess=document.querySelector('#dialogMess');return{count:o.length,last:o.at(-1)||'',tail:o.slice(-4),nari:vis(document.querySelector('#dialogNari')),game:vis(document.querySelector('#dialogGame')),menu:vis(document.querySelector('#menu')),messVisible:vis(mess),messText:(mess?.innerText||mess?.textContent||'').trim().slice(0,500)}})}"
+          if old not in js: raise SystemExit('kifu state marker')
+          js=js.replace(old,new,1)
+          js=js.replace('while(Date.now()-st<420000){','while(Date.now()-st<120000){',1)
+          old="if(!ready)throw Error('Piyo reply timeout ply '+ply+' '+JSON.stringify({baseCount,state:lastState}));"
+          new="if(!ready){const diag=await p.evaluate(()=>({title:document.title,active:document.activeElement?.id||document.activeElement?.tagName||'',dialogs:[...document.querySelectorAll('[id*=dialog]')].map(e=>({id:e.id,display:getComputedStyle(e).display,visibility:getComputedStyle(e).visibility,text:(e.innerText||e.textContent||'').trim().slice(0,300)})).filter(x=>x.display!=='none'||x.text),body:(document.body.innerText||'').slice(-1800)}));console.log('PIYO40_STALL_DIAG '+JSON.stringify({attempt,ply,baseCount,state:lastState,diag}));throw Error('Piyo reply timeout ply '+ply+' '+JSON.stringify({baseCount,state:lastState}))}"
+          if old not in js: raise SystemExit('timeout marker')
           js=js.replace(old,new,1)
           old="await p.uncheck('#chkRandomBook').catch(()=>{});";new="if(attempt===1)await p.uncheck('#chkRandomBook').catch(()=>{});else await p.check('#chkRandomBook').catch(()=>{});"
-          if old not in js: raise SystemExit('random book marker');
+          if old not in js: raise SystemExit('random book marker')
           js=js.replace(old,new,1)
           js=js.replace("console.log('PIYO40_PROFILE '+JSON.stringify({attempt,level:lv}));","console.log('PIYO40_PROFILE '+JSON.stringify({attempt,level:lv,randomBook:attempt!==1}));",1)
           js=js.replace('FUTURE_CURRENT_PROFILE','FUTURE_LAYOUT_EXT_PROFILE').replace('FUTURE_CURRENT_MOVE','FUTURE_LAYOUT_EXT_MOVE').replace('FUTURE_CURRENT_AUDIT','FUTURE_LAYOUT_EXT_AUDIT').replace('FUTURE_CURRENT_PRACTICAL_SUMMARY','FUTURE_LAYOUT_EXT_SUMMARY').replace('PASS_FUTURE_CURRENT_PIYO40_HARNESS','PASS_FUTURE_LAYOUT_EXT_HARNESS')
@@ -111,14 +120,23 @@ jobs:
           node --check layoutext-practical.mjs
       - name: Run two extended practical attempts
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          FAIL=0
           for A in 1 2; do
+            set +e
             ATTEMPT=$A node layoutext-practical.mjs 2>&1 | tee /tmp/layoutext-practical-$A.log
-            grep -F 'FUTURE_LAYOUT_EXT_SUMMARY ' /tmp/layoutext-practical-$A.log
-            grep -F 'PASS_FUTURE_LAYOUT_EXT_HARNESS' /tmp/layoutext-practical-$A.log
+            RC=${PIPESTATUS[0]}
+            set -e
+            if [ "$RC" -ne 0 ]; then
+              echo "FUTURE_LAYOUT_EXT_ATTEMPT_FAIL attempt=$A rc=$RC"
+              FAIL=1
+            fi
+            grep -F 'FUTURE_LAYOUT_EXT_SUMMARY ' /tmp/layoutext-practical-$A.log || true
+            grep -F 'PASS_FUTURE_LAYOUT_EXT_HARNESS' /tmp/layoutext-practical-$A.log || true
           done
+          exit "$FAIL"
       - name: Preserve extended evidence
         if: always()
         run: |
-          grep -E '^(PIYO40_PROFILE|FUTURE_LAYOUT_EXT_|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|PASS_FUTURE_LAYOUT_EXT_)' /tmp/layoutext-practical-*.log 2>/dev/null | tail -900 || true
+          grep -E '^(PIYO40_PROFILE|FUTURE_LAYOUT_EXT_|PIYO40_COMMIT|PIYO40_HEARTBEAT|PIYO40_REPLY|PIYO40_STALL_DIAG|PASS_FUTURE_LAYOUT_EXT_)' /tmp/layoutext-practical-*.log 2>/dev/null | tail -1200 || true
           tail -60 /tmp/layoutext-build.log || true
