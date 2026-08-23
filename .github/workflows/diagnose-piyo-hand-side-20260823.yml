@@ -1,0 +1,53 @@
+name: Diagnose Piyo hand side selection
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-piyo-hand-side-20260823.yml'
+permissions:
+  contents: read
+jobs:
+  hand-side:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          mkdir -p /tmp/handdiag && cd /tmp/handdiag
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Inspect both hand stands at B*5d
+        run: |
+          set -euo pipefail
+          cat >/tmp/handdiag/check.mjs <<'NODE'
+          import {chromium} from 'playwright';
+          const seq=['7g7f','8c8d','4i5h','7a6b','2h3h','3c3d','8h2b+','3a2b','9i9h','8d8e','7f7e'];
+          const JP={P:'歩',L:'香',N:'桂',S:'銀',G:'金',B:'角',R:'飛'};
+          const b=await chromium.launch({headless:true});
+          const p=await b.newPage({viewport:{width:1280,height:1000}});
+          await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
+          await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1200);await p.click('#btnNewGame');
+          await p.waitForFunction(()=>document.querySelector('#selectLevelGote')?.options.length>0);
+          await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote0');
+          await p.uncheck('#chkFurigoma').catch(()=>{});await p.uncheck('#chkRandomBook').catch(()=>{});await p.uncheck('#chkRatingTarget').catch(()=>{});
+          await p.click('#btnDialogGameStart');await p.waitForTimeout(900);
+          const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');
+          const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});
+          async function state(){return p.evaluate(()=>{const o=[...document.querySelectorAll('#select_kifu option')].map(x=>(x.textContent||'').trim());return{count:o.length,last:o.at(-1)||''}})}
+          async function exportMoves(){await p.locator('img[alt="メニュー"]').first().click();await p.waitForTimeout(100);await p.click('#menuKifu');await p.waitForTimeout(100);await p.check('#dialogKifType2');await p.waitForTimeout(60);const txt=(await p.locator('#dialogKifBox').textContent()||'').trim();await p.click('#btnDialogKifClose');await p.waitForFunction(()=>{const e=document.querySelector('#dialogKifBox');return !e||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden'||e.getClientRects().length===0},{},{timeout:4000});await p.waitForTimeout(120);return txt}
+          async function play(u){const before=(await state()).count;const a=sq(u.slice(0,2)),d=sq(u.slice(2,4));await p.mouse.click(a.x,a.y);await p.waitForTimeout(80);await p.mouse.click(d.x,d.y);if(u.endsWith('+')){await p.locator('#dialogNari').waitFor({state:'visible',timeout:4000});await p.click('#btnDialogNari2');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}else{await p.waitForTimeout(120);if(await p.locator('#dialogNari').isVisible().catch(()=>false)){await p.click('#btnDialogNari1');await p.locator('#dialogNari').waitFor({state:'hidden',timeout:4000})}}for(let i=0;i<20&&(await state()).count<before+1;i++)await p.waitForTimeout(100);if((await state()).count<before+1)throw Error('commit '+u);await exportMoves()}
+          for(const u of seq)await play(u);
+          const hands=await p.evaluate(jp=>[...document.querySelectorAll('#komadai_u img,#komadai_s img')].map(i=>{const r=i.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return{alt:(i.alt||'').trim(),id:i.id,parent:i.parentElement?.id||'',stand:i.closest('#komadai_u,#komadai_s')?.id||'',x:r.x+r.width/2,y:r.y+r.height/2,w:r.width,h:r.height,display:getComputedStyle(i).display,visibility:getComputedStyle(i).visibility,hit:{tag:hit?.tagName||'',id:hit?.id||'',alt:hit?.getAttribute?.('alt')||'',parent:hit?.parentElement?.id||''}}}).filter(x=>x.w&&x.h&&x.alt===jp),JP.B);
+          console.log('PIYO_HAND_CANDIDATES '+JSON.stringify({state:await state(),hands}));
+          const dst=sq('5d');
+          for(const h of hands){await p.keyboard.press('Escape').catch(()=>{});await p.waitForTimeout(500);const before=(await state()).count;await p.mouse.click(h.x,h.y);await p.waitForTimeout(250);const sel=await p.evaluate(()=>({u:document.querySelector('#komadai_u')?.innerHTML?.slice(0,1200),s:document.querySelector('#komadai_s')?.innerHTML?.slice(0,1200)}));await p.mouse.click(dst.x,dst.y);for(let i=0;i<20&&(await state()).count<before+1;i++)await p.waitForTimeout(100);console.log('PIYO_HAND_ATTEMPT '+JSON.stringify({stand:h.stand,parent:h.parent,before,after:(await state()).count,state:await state(),sel}));if((await state()).count>=before+1)break}
+          await b.close();
+          NODE
+          cd /tmp/handdiag
+          node --check check.mjs
+          node check.mjs 2>&1 | tee hand-side.log
+      - name: Preserve evidence
+        if: always()
+        run: grep -E '^(PIYO_HAND_CANDIDATES|PIYO_HAND_ATTEMPT)' /tmp/handdiag/hand-side.log || true
