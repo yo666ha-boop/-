@@ -16,21 +16,20 @@ jobs:
           repository: yaneurao/YaneuraOu
           ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
           path: YaneuraOu-nosse
-      - name: Build WASM target with NO_SSE
+      - name: Build WASM target with true scalar NNUE
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('YaneuraOu-nosse/script/wasm_build.js')
-          s=p.read_text()
-          old='name: "halfkp.noeval",\n    edition: "YANEURAOU_ENGINE_NNUE",\n    exportname: "YaneuraOu_HalfKP_noeval",\n    extra: "EM_INITIAL_MEMORY_SIZE=167772160",'
-          new='name: "halfkp.noeval",\n    edition: "YANEURAOU_ENGINE_NNUE",\n    exportname: "YaneuraOu_HalfKP_noeval",\n    extra: "EM_INITIAL_MEMORY_SIZE=167772160 EXTRA_CPPFLAGS=\'"'"'-DNO_SSE\'"'"'",'
-          assert old in s
-          p.write_text(s.replace(old,new,1))
           m=Path('YaneuraOu-nosse/source/Makefile')
           t=m.read_text()
+          old='\t\tCPPFLAGS += -DUSE_WASM_SIMD -msimd128\n\t\tCPPFLAGS += -DUSE_SSE42 -msse4.2'
+          new='\t\t# diagnostic: keep em++/TARGET_CPU=WASM but force scalar NNUE\n\t\tCPPFLAGS += -DNO_SSE'
+          assert old in t
+          t=t.replace(old,new,1)
           assert '-s PTHREAD_POOL_SIZE=32' in t
-          m.write_text(t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1))
+          t=t.replace('-s PTHREAD_POOL_SIZE=32','-s PTHREAD_POOL_SIZE=2',1)
+          m.write_text(t)
           PY
           docker pull emscripten/emsdk:3.1.43 >/dev/null
           docker run --rm -v "${{ github.workspace }}/YaneuraOu-nosse:/src" -w /src emscripten/emsdk:3.1.43 node script/wasm_build.js halfkp.noeval >/tmp/nosse-build.log 2>&1
@@ -38,7 +37,9 @@ jobs:
           mkdir -p shogi-v21528/nosse76d
           cp "$LIB"/yaneuraou.halfkp.noeval.{js,worker.js,wasm} shogi-v21528/nosse76d/
           cp shogi-v21528/yaneuraou/nn.bin shogi-v21528/nosse76d/
-          echo FUTURE_NOSSE_BUILD_TARGET_WASM_NO_SSE
+          echo FUTURE_NOSSE_BUILD_TARGET_WASM_TRUE_SCALAR
+          grep -m1 -- '-DNO_SSE' /tmp/nosse-build.log || true
+          if grep -q -- '-DUSE_WASM_SIMD' /tmp/nosse-build.log; then echo FUTURE_NOSSE_BUILD_BAD_USE_WASM_SIMD; exit 1; fi
           sha256sum shogi-v21528/nosse76d/yaneuraou.halfkp.noeval.{js,wasm} shogi-v21528/nosse76d/nn.bin
       - name: Prepare diagnostic worker and WebKit
         run: |
@@ -88,4 +89,4 @@ jobs:
           echo '=== NO_SSE PARITY ==='
           grep -E '^(FUTURE_NOSSE_|PASS_FUTURE_NOSSE_)' /tmp/nosse.log || true
           echo '=== BUILD TAIL ==='
-          tail -80 /tmp/nosse-build.log || true
+          tail -100 /tmp/nosse-build.log || true
