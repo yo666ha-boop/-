@@ -2,8 +2,6 @@ name: Future diagnostic fastlane
 on:
   push:
     branches: [diag-future-fastlane-20260822]
-    paths:
-      - '.github/workflows/future-fastlane.yml'
 permissions:
   contents: read
   issues: write
