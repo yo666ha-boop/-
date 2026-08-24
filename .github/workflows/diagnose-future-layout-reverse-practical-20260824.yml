@@ -1,0 +1,75 @@
+name: Diagnose Future corrected layout reverse-side practical
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/diagnose-future-layout-reverse-practical-20260824.yml']
+permissions:
+  contents: read
+jobs:
+  practical:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu-layoutext
+      - name: Replay corrected build and run Future as gote
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,subprocess
+          from pathlib import Path
+          repo=Path(os.environ['GITHUB_WORKSPACE'])
+          src=subprocess.check_output(['git','show','31fee36df6bc83c2b88ec0d00da19c05a0d4db82:.github/workflows/diagnose-future-layout-practical-extended-20260824.yml'],cwd=repo,text=True)
+          lines=src.splitlines();blocks=[];i=0
+          while i<len(lines):
+              if lines[i]=='        run: |':
+                  i+=1;out=[]
+                  while i<len(lines):
+                      line=lines[i]
+                      if line and not line.startswith('          '):break
+                      out.append(line[10:] if line.startswith('          ') else '');i+=1
+                  blocks.append('\n'.join(out)+'\n');continue
+              i+=1
+          if len(blocks)!=7:raise SystemExit(f'expected 7 blocks, got {len(blocks)}')
+          token='$'+'{{ github.workspace }}';fail=0
+          for n,block in enumerate(blocks,1):
+              block=block.replace(token,str(repo))
+              if n==6:
+                  h=repo/'layoutext-practical.mjs'
+                  s=h.read_text()
+                  old="await p.check('#dialogGameGameTypeSente0');await p.check('#dialogGameGameTypeGote1');const lv=await p.evaluate(()=>{const s=document.querySelector('#selectLevelGote'),o=[...s.options].find(o=>/^\\s*Lv40\\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return o.textContent.trim()});"
+                  new="for(const id of['dialogGameGameTypeSente1','dialogGameGameTypeGote0','selectLevelSente'])if(!document.getElementById(id)){}await p.check('#dialogGameGameTypeSente1');await p.check('#dialogGameGameTypeGote0');const lv=await p.evaluate(()=>{const s=document.querySelector('#selectLevelSente'),o=[...s.options].find(o=>/^\\s*Lv40\\b/.test(o.textContent));if(!o)return null;s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}));return o.textContent.trim()});"
+                  if old not in s:raise SystemExit('side setup marker missing')
+                  s=s.replace(old,new,1)
+                  old="const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');const sq=s=>({x:br.x+((9-+s[0])+.5)*br.width/9,y:br.y+(s.charCodeAt(1)-97+.5)*br.height/9});"
+                  new="const br=await p.locator('#board_img').boundingBox();if(!br)throw Error('board');const sq=s=>({x:br.x+((+s[0]-1)+.5)*br.width/9,y:br.y+((8-(s.charCodeAt(1)-97))+.5)*br.height/9});"
+                  if old not in s:raise SystemExit('square mapping marker missing')
+                  s=s.replace(old,new,1)
+                  old="let ms=[],result='MAX_REACHED';const dec=[];while(ms.length<MAX){if(ms.length%2)throw Error('turn '+ms.length);"
+                  new="let ms=[];for(let z=0;z<120;z++){ms=await exportMoves().catch(()=>[]);if(ms.length>=1)break;await p.waitForTimeout(250)}if(ms.length!==1)throw Error('initial Piyo sente move missing '+JSON.stringify({moves:ms,state:await kifuState()}));console.log('PIYO40_INITIAL '+JSON.stringify({attempt,plies:ms.length,tail:ms.slice(-4)}));let result='MAX_REACHED';const dec=[];while(ms.length<MAX){if(ms.length%2!==1)throw Error('turn '+ms.length);"
+                  if old not in s:raise SystemExit('turn loop marker missing')
+                  s=s.replace(old,new,1)
+                  old="if(lastState.count>=baseCount+2||/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)){ready=true;break}"
+                  new="if(lastState.count>=baseCount+2||/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||/対局終了|プレイヤーの勝ち|プレイヤーの負け|引き分け/.test(lastState.messText||'')){ready=true;break}"
+                  if old not in s:raise SystemExit('completed readiness marker missing')
+                  s=s.replace(old,new,1)
+                  old="if(/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||ms.length%2){result=lastState.last||'ENDED';break}"
+                  new="if(/対局終了|プレイヤーの勝ち|プレイヤーの負け|引き分け/.test(lastState.messText||'')){result=(lastState.messText||'ENDED').replace(/\\s+/g,' ').trim();break}if(/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||ms.length%2===0){result=lastState.last||'ENDED';break}"
+                  if old not in s:raise SystemExit('completed result marker missing')
+                  s=s.replace(old,new,1)
+                  s=s.replace("PIYO40_PROFILE '+JSON.stringify({attempt,level:lv,randomBook:attempt!==1})","PIYO40_REVERSE_PROFILE '+JSON.stringify({attempt,level:lv,randomBook:attempt!==1,futureSide:'gote'})")
+                  s=s.replace('FUTURE_LAYOUT_EXT_PROFILE','FUTURE_LAYOUT_REV_PROFILE').replace('FUTURE_LAYOUT_EXT_MOVE','FUTURE_LAYOUT_REV_MOVE').replace('FUTURE_LAYOUT_EXT_AUDIT','FUTURE_LAYOUT_REV_AUDIT').replace('FUTURE_LAYOUT_EXT_SUMMARY','FUTURE_LAYOUT_REV_SUMMARY').replace('PASS_FUTURE_LAYOUT_EXT_HARNESS','PASS_FUTURE_LAYOUT_REVERSE_HARNESS')
+                  h.write_text(s);subprocess.run(['node','--check',str(h)],cwd=repo,check=True)
+                  print('PASS_FUTURE_REVERSE_HARNESS_PATCH',flush=True)
+              print(f'=== REVERSE_REPLAY_BLOCK_{n} ===',flush=True)
+              rc=subprocess.run(['bash','-lc',block],cwd=repo).returncode
+              if rc!=0:print(f'REVERSE_REPLAY_BLOCK_FAIL block={n} rc={rc}',flush=True);fail=1
+          raise SystemExit(fail)
+          PY
