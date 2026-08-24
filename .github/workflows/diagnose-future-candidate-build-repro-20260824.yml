@@ -1,0 +1,100 @@
+name: Diagnose Future candidate build reproducibility
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/diagnose-future-candidate-build-repro-20260824.yml']
+permissions:
+  contents: read
+  issues: write
+jobs:
+  repro:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      UPSTREAM: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+      CANDIDATE: 70e15f1787aadbf0235428a0939826342c683d39
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: 70e15f1787aadbf0235428a0939826342c683d39
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: Y1
+      - name: Clone identical upstream tree for second build
+        run: cp -a Y1 Y2
+      - name: Apply exact validated source patches to both trees
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,textwrap
+          base=subprocess.check_output(['git','show','2fbda43b3ac86c38f7760e589ce4c52c15c65141:.github/workflows/diag-yaneuraou-v970-threadfix.yml'],text=True)
+          block=base.split("python3 - <<'PY'",1)[1].split('\n          PY',1)[0]
+          for d in ('Y1','Y2'):
+              script=textwrap.dedent(block.lstrip('\n')).replace("Path('YaneuraOu/",f"Path('{d}/")
+              p=Path(f'/tmp/threadfix-{d}.py');p.write_text(script);subprocess.run(['python3',str(p)],check=True)
+              m=Path(d)/'source/Makefile';s=m.read_text();assert '-s PTHREAD_POOL_SIZE=2' in s;m.write_text(s.replace('-s PTHREAD_POOL_SIZE=2','-s PTHREAD_POOL_SIZE=32',1))
+              p=Path(d)/'source/eval/nnue/evaluate_nnue.cpp';s=p.read_text()
+              needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
+              if 'Options.add("EvalFile"' not in s:
+                  assert needle in s;s=s.replace(needle,needle+'#if defined(__EMSCRIPTEN__)\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n',1)
+              p.write_text(s)
+              fixes=[('affine_transform.h','#if defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'),('affine_transform_sparse_input.h','#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;')]
+              for fn,old,new in fixes:
+                  q=Path(d)/'source/eval/nnue/layers'/fn;s=q.read_text();assert old in s;q.write_text(s.replace(old,new,1))
+          PY
+          diff -qr Y1/source Y2/source | grep -v '/.git/' && exit 1 || true
+          echo PASS_REPRO_SOURCE_IDENTICAL
+      - name: Build corrected tree one
+        run: |
+          set -euo pipefail
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          mkdir -p Y1/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "$PWD/Y1:/src" -w /src/source emscripten/emsdk:3.1.43 bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/repro1.log 2>&1
+      - name: Build corrected tree two
+        run: |
+          set -euo pipefail
+          mkdir -p Y2/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "$PWD/Y2:/src" -w /src/source emscripten/emsdk:3.1.43 bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/repro2.log 2>&1
+      - name: Compare both rebuilds with candidate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee /tmp/repro-summary.txt
+          from pathlib import Path
+          import hashlib,json
+          files=['yaneuraou.halfkp.noeval.js','yaneuraou.halfkp.noeval.worker.js','yaneuraou.halfkp.noeval.wasm']
+          roots={'build1':Path('Y1/build/wasm/halfkp.noeval/lib'),'build2':Path('Y2/build/wasm/halfkp.noeval/lib'),'candidate':Path('candidate/shogi-v21528/yaneuraou')}
+          h=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+          rows={k:{f:{'sha256':h(r/f),'bytes':(r/f).stat().st_size} for f in files} for k,r in roots.items()}
+          out={'rows':rows,'buildsByteIdentical':all(rows['build1'][f]==rows['build2'][f] for f in files),'candidateMatchesBuild1':all(rows['candidate'][f]==rows['build1'][f] for f in files),'candidateMatchesBuild2':all(rows['candidate'][f]==rows['build2'][f] for f in files)}
+          print('FUTURE_CANDIDATE_BUILD_REPRO '+json.dumps(out,separators=(',',':')))
+          for f in files:
+              a=(roots['build1']/f).read_bytes();b=(roots['build2']/f).read_bytes();c=(roots['candidate']/f).read_bytes()
+              if a!=b:
+                  n=min(len(a),len(b));first=next((i for i in range(n) if a[i]!=b[i]),None);print('REPRO_DIFF_BUILD12 '+json.dumps({'file':f,'size1':len(a),'size2':len(b),'firstDiff':first}))
+              if a!=c:
+                  n=min(len(a),len(c));first=next((i for i in range(n) if a[i]!=c[i]),None);print('REPRO_DIFF_BUILD1_CAND '+json.dumps({'file':f,'size1':len(a),'sizeCandidate':len(c),'firstDiff':first}))
+          print('PASS_FUTURE_CANDIDATE_BUILD_REPRO_DIAG')
+          PY
+          node - <<'NODE'
+          const fs=require('fs');for(const p of ['Y1/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm','Y2/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm','candidate/shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm']){const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);if(!ex.includes('usi_command'))throw Error('missing export '+p)}console.log('PASS_REPRO_ALL_USI_EXPORTS')
+          NODE
+      - name: Post reproducibility checkpoint to PR81
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '### Corrected WASM reproducibility diagnostic'
+            echo "run \`${{ github.run_id }}\` job \`${{ github.job }}\` candidate \`$CANDIDATE\`"
+            echo '```text'
+            grep -E '^(PASS_REPRO_SOURCE_IDENTICAL|FUTURE_CANDIDATE_BUILD_REPRO|REPRO_DIFF_|PASS_FUTURE_CANDIDATE_BUILD_REPRO_DIAG|PASS_REPRO_ALL_USI_EXPORTS)' /tmp/repro-summary.txt 2>/dev/null || true
+            echo '```'
+          } >/tmp/comment.md
+          gh api "repos/${{ github.repository }}/issues/81/comments" -f body="$(cat /tmp/comment.md)"
