@@ -47,7 +47,7 @@ jobs:
           sleep 1
       - name: Verify iPhone Fire desktop Chromium Firefox runtime
         run: |
-          cat >/tmp/pr83-runtime.mjs <<'NODE'
+          cat >pr83-runtime.mjs <<'NODE'
           import {webkit,chromium,firefox} from 'playwright';
           const cases=[
             {name:'IPHONE_WEBKIT',type:webkit,ua:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',expect:{threads:1,hashMB:32,mobileWebKit:true,fireSilk:false,mobileSafe:true}},
@@ -55,7 +55,6 @@ jobs:
             {name:'DESKTOP_CHROMIUM',type:chromium,ua:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',expect:{threads:1,hashMB:128,mobileWebKit:false,fireSilk:false,mobileSafe:false}},
             {name:'FIREFOX',type:firefox,ua:'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0',expect:{threads:1,hashMB:128,mobileWebKit:false,fireSilk:false,mobileSafe:false}}
           ];
-          function initialState(){let b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let x=0;x<9;x++){b[x]={k:back[x],o:-1};b[72+x]={k:back[8-x],o:1};b[18+x]={k:'P',o:-1};b[54+x]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};return{b,h:{1:{},'-1':{}},t:1,log:[],last:null}}
           const rows=[];
           for(const c of cases){
             const browser=await c.type.launch({headless:true});const context=await browser.newContext({userAgent:c.ua,viewport:{width:c.name==='IPHONE_WEBKIT'?390:1280,height:c.name==='IPHONE_WEBKIT'?844:800}});const page=await context.newPage();
@@ -65,7 +64,7 @@ jobs:
             if(!before.coi||before.cards!==26)throw Error(c.name+' boot '+JSON.stringify(before));
             const r=await page.evaluate(async()=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE;if(!a)throw Error('api missing');const t0=performance.now();await a.init();const initMs=Math.round(performance.now()-t0);const x=await a.bestMove((()=>{let b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let i=0;i<9;i++){b[i]={k:back[i],o:-1};b[72+i]={k:back[8-i],o:1};b[18+i]={k:'P',o:-1};b[54+i]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};return{b,h:{1:{},'-1':{}},t:1,log:[],last:null}})(),{ms:300,multiPV:1});return{initMs,status:a.status(),move:!!x?.move,resign:!!x?.resign,declareWin:!!x?.declareWin,info:x?.info||{},sound:window.AI_SHOGI_PIECE_SOUND?.audit?.()||null};});
             for(const [k,v] of Object.entries(c.expect))if(r.info?.[k]!==v)throw Error(c.name+' profile '+k+' expected '+v+' actual '+r.info?.[k]+' '+JSON.stringify(r.info));
-            if(!r.status.ready||!r.status.worker||(!r.move&&!r.resign&&!r.declareWin))throw Error(c.name+' engine '+JSON.stringify(r));
+            if(!r.status.ready||!r.status.worker||(!r.move&&! r.resign&&!r.declareWin))throw Error(c.name+' engine '+JSON.stringify(r));
             const saved=await page.evaluate(()=>{const api=window.AI_SHOGI_PIECE_SOUND;if(!api)throw Error('sound api');api.setEnabled(false);return{enabled:api.enabled,keys:Object.keys(localStorage),values:Object.fromEntries(Object.keys(localStorage).map(k=>[k,localStorage.getItem(k)]))};});
             await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});const loaded=await page.evaluate(()=>({enabled:window.AI_SHOGI_PIECE_SOUND?.enabled,buttons:document.querySelectorAll('[data-piece-sound-toggle="1"]').length,keys:Object.keys(localStorage)}));
             if(saved.enabled!==false||loaded.enabled!==false||loaded.buttons!==2)throw Error(c.name+' save-load '+JSON.stringify({saved,loaded}));
@@ -74,7 +73,7 @@ jobs:
           }
           console.log('PR83_RUNTIME_SUMMARY '+JSON.stringify(rows));console.log('PASS_PR83_POOL2_FOUR_ENV_RUNTIME');
           NODE
-          node /tmp/pr83-runtime.mjs 2>&1 | tee /tmp/pr83-runtime.log
+          node ./pr83-runtime.mjs 2>&1 | tee /tmp/pr83-runtime.log
           grep -F 'PASS_PR83_POOL2_FOUR_ENV_RUNTIME' /tmp/pr83-runtime.log
       - name: Report PR83 runtime evidence to PR80
         if: always()
