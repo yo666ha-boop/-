@@ -84,7 +84,8 @@ jobs:
             /PTHREAD_POOL_SIZE\s*[:=]\s*2\b/,
             /initialPoolSize\s*[:=]\s*2\b/,
             /for\([^;]*;[^;]*<\s*2;[^)]*\)[^{;]*(?:new Worker|B\.Ga\(\))/s,
-            /for\([^;]*;\s*2\s*>[^;]*;[^)]*\)[^{;]*(?:new Worker|B\.Ga\(\))/s
+            /for\([^;]*;\s*2\s*>[^;]*;[^)]*\)[^{;]*(?:new Worker|B\.Ga\(\))/s,
+            /for\(var\s+([A-Za-z_$][\w$]*)=2;\1--;\)B\.Ga\(\)/
           ];
           if(!probes.some(r=>r.test(s))){
             const hits=[...s.matchAll(/.{0,180}(?:B\.Ga\(\)|Worker|pthread|PThread|unusedWorkers).{0,220}/gi)].slice(0,30).map(m=>m[0]);
