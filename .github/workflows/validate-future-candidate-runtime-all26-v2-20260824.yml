@@ -1,0 +1,97 @@
+name: Validate Future candidate runtime and all26 v2
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/validate-future-candidate-runtime-all26-v2-20260824.yml']
+permissions:
+  contents: read
+env:
+  CANDIDATE_SHA: 70e15f1787aadbf0235428a0939826342c683d39
+
+jobs:
+  future-runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 22
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop, firefox]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 70e15f1787aadbf0235428a0939826342c683d39
+      - name: Prepare runtime
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          cat >/tmp/future-candidate-server.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const r=process.cwd(),m={'.html':'text/html','.js':'text/javascript','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let u=decodeURIComponent(new URL(q.url,'http://x').pathname);if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(r)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4262,'127.0.0.1')
+          NODE
+          node /tmp/future-candidate-server.mjs >/tmp/future-candidate-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4262/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/future-candidate-server.log; exit 1
+      - name: Run Future candidate runtime
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          HOME: /root
+        run: |
+          set -euo pipefail
+          cat >/tmp/future-candidate-runtime.mjs <<'NODE'
+          import{webkit,chromium,firefox}from'playwright';const mode=process.env.PLATFORM,cfg={iphone:{b:webkit,ua:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',v:{width:390,height:844},hash:32,mw:true,fs:false},fire:{b:chromium,ua:'Mozilla/5.0 (Linux; U; en-US; KFMAWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/124.5.3 like Chrome/124.0 Safari/535.19',v:{width:800,height:1280},hash:48,mw:false,fs:true},desktop:{b:chromium,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36',v:{width:1440,height:900},hash:128,mw:false,fs:false},firefox:{b:firefox,ua:'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0',v:{width:1440,height:900},hash:128,mw:false,fs:false}}[mode];if(!cfg)throw Error('bad '+mode);const b=await cfg.b.launch({headless:true,env:{...process.env,HOME:'/root'}}),p=await b.newPage({userAgent:cfg.ua,viewport:cfg.v});const errs=[];p.on('pageerror',e=>errs.push(String(e)));await p.goto('http://127.0.0.1:4262/shogi-v21528/index.html?candidate='+mode+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))await p.reload({waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE,{timeout:120000});const r=await p.evaluate(async()=>{const a=AI_SHOGI_YANEURAOU_FUTURE;await a.init();let b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let x=0;x<9;x++){b[x]={k:back[x],o:-1};b[72+x]={k:back[8-x],o:1};b[18+x]={k:'P',o:-1};b[54+x]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};const q=await a.bestMove({b,h:{1:{},'-1':{}},t:1,log:[],last:null},{ms:300,multiPV:1,adaptive:false});return{status:a.status(),move:!!q.move,resign:!!q.resign,declareWin:!!q.declareWin,info:q.info||{},sound:AI_SHOGI_PIECE_SOUND?.audit?.(),cards:document.querySelectorAll('#chars .ch').length,coi:crossOriginIsolated}});const out={platform:mode,r,errs};console.log('FUTURE_CANDIDATE_RUNTIME '+JSON.stringify(out));if(!r.coi||r.cards!==26||errs.length||!r.status?.ready||(!r.move&&!r.resign&&!r.declareWin)||r.info?.threads!==1||r.info?.hashMB!==cfg.hash||!!r.info?.mobileWebKit!==cfg.mw||!!r.info?.fireSilk!==cfg.fs||r.sound?.buttons!==2)throw Error('runtime gate '+JSON.stringify(out));console.log('PASS_FUTURE_CANDIDATE_RUNTIME '+JSON.stringify({platform:mode,threads:r.info.threads,hashMB:r.info.hashMB,mobileWebKit:r.info.mobileWebKit,fireSilk:r.info.fireSilk,depth:r.info.depth,nodes:r.info.nodes}));await b.close();
+          NODE
+          node /tmp/future-candidate-runtime.mjs 2>&1 | tee /tmp/future-candidate-runtime.log
+      - if: always()
+        run: grep -E '^(FUTURE_CANDIDATE_RUNTIME|PASS_FUTURE_CANDIDATE_RUNTIME)' /tmp/future-candidate-runtime.log || true
+
+  all26-local:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop, firefox]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 70e15f1787aadbf0235428a0939826342c683d39
+          fetch-depth: 0
+      - name: Restore proven all26 audit script
+        run: |
+          set -euo pipefail
+          git fetch origin fa99ef74863590301c1a2d4244c9103617fec729
+          mkdir -p .github/scripts
+          git show fa99ef74863590301c1a2d4244c9103617fec729:.github/scripts/audit-final-all26-post-pr76-20260820.mjs > .github/scripts/audit-final-all26-post-pr76-20260820.mjs
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Start COI server
+        run: |
+          set -euo pipefail
+          cat >/tmp/final26-server.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4248,'127.0.0.1');
+          NODE
+          node /tmp/final26-server.mjs >/tmp/final26-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4248/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/final26-server.log; exit 1
+      - name: Run candidate all26 integrity
+        env:
+          TARGET: local
+          PLATFORM: ${{ matrix.platform }}
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-final-all26-post-pr76-20260820.mjs 2>&1 | tee /tmp/final26.log
+          grep -q '^PASS_FINAL_ALL26_POST_PR76 ' /tmp/final26.log
+          sed -n '/^PASS_FINAL_ALL26_POST_PR76 /p' /tmp/final26.log | sed 's/^/PASS_FUTURE_CANDIDATE_ALL26 /'
+      - if: always()
+        run: grep -E '^(FINAL_ALL26_POST_PR76|PASS_FINAL_ALL26_POST_PR76|PASS_FUTURE_CANDIDATE_ALL26|Error:)' /tmp/final26.log || true
