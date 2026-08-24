@@ -1,0 +1,95 @@
+name: Validate Future layout pool2 probe
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/validate-future-layout-pool2-probe-20260824.yml']
+permissions:
+  contents: read
+env:
+  PROBE_SHA: 9424a984262024b1c55b975f43e07c9062e811e1
+  OLD_CANDIDATE_SHA: 70e15f1787aadbf0235428a0939826342c683d39
+  MAIN_SHA: 4d6e94f2547dd63055c09fa1afb288647a99a8f8
+jobs:
+  pool2:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9424a984262024b1c55b975f43e07c9062e811e1
+          fetch-depth: 0
+      - name: Assert pool2 hybrid scope and exact artifacts
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PROBE_SHA"
+          test "$(git rev-parse HEAD:shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js)" = "$(git rev-parse $MAIN_SHA:shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js)"
+          test "$(git rev-parse HEAD:shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm)" = "$(git rev-parse $OLD_CANDIDATE_SHA:shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm)"
+          test "$(git rev-parse HEAD:shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm)" != "$(git rev-parse $MAIN_SHA:shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm)"
+          grep -F 'for(var a=2;a--;)B.Ga()' shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js
+          ! grep -F 'for(var a=32;a--;)B.Ga()' shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js
+          mapfile -t F < <(git diff --name-only "$MAIN_SHA" HEAD)
+          test "${#F[@]}" -eq 5
+          printf '%s\n' "${F[@]}" | sort > /tmp/actual
+          cat >/tmp/expected <<'EOF'
+          shogi-side-test/future21520.js
+          shogi-v21528/future-yaneura-worker21528.js
+          shogi-v21528/index.html
+          shogi-v21528/yaneuraou/build-info.txt
+          shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm
+          EOF
+          sort -o /tmp/expected /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          echo PASS_POOL2_STATIC_SCOPE
+      - name: Prepare probe runtime
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          node <<'NODE'
+          const fs=require('fs'),p='shogi-v21528/future-yaneura-worker21528.js',src=fs.readFileSync(p,'utf8');
+          const mark="    if(m.type==='stop'){try{if(engine)await sendUSI('stop')}catch(e){};return}";
+          if(!src.includes(mark))throw Error('worker marker missing');
+          const diag=`    if(m.type==='pool2_rawdepth'){await init();latestInfo={};latestMultiPV={};await sendUSI('setoption name MultiPV value 1');await sendUSI('setoption name USI_Hash value 32');await sendUSI('setoption name Threads value 1');await sendUSI('usinewgame');await sendUSI('position sfen '+String(m.sfen||''));const p=waitLine(x=>x.startsWith('bestmove '),240000,'pool2_rawdepth');await sendUSI('go depth '+Number(m.depth),240000);const line=await p;self.postMessage({type:'result',id,ok:true,kind:'pool2_rawdepth',token:(line.split(/\\s+/)[1]||''),info:{...latestInfo}});return;}\n`;
+          fs.writeFileSync('shogi-v21528/future-yaneura-worker-pool2-diag.js',src.replace(mark,diag+mark));
+          NODE
+          cat >/tmp/pool2-server.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4266,'127.0.0.1');
+          NODE
+          node /tmp/pool2-server.mjs >/tmp/pool2-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4266/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/pool2-server.log; exit 1
+      - name: Verify corrected fixed-depth output under pool2
+        run: |
+          set -o pipefail
+          cat >/tmp/pool2-parity.mjs <<'NODE'
+          import{webkit,chromium}from'playwright';
+          const cases=[
+          {ply:29,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',token:'5e5d',cp:-4054},
+          {ply:29,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/4GS1R1/L+r+p2K1NL b gsn2p 29',token:'5e5d',cp:-4321},
+          {ply:33,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',token:'2g2f',cp:-4217},
+          {ply:33,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B3/P2P1PPPP/2+p1gSKR1/L+r2G2NL b sn2p 33',token:'2g2f',cp:-4410},
+          {ply:35,depth:12,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',token:'4f5g',cp:-4290},
+          {ply:35,depth:14,sfen:'lnsgkg1nl/7s1/p3pp1pp/2pp2p2/3+bP4/5B1P1/P2P1PP1P/2+p2SKR1/L+r2g2NL b gsn2p 35',token:'4h5i',cp:-4490}];
+          async function one(bt,name,list){const b=await bt.launch({headless:true}),p=await b.newPage({userAgent:name==='webkit'?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});await p.goto('http://127.0.0.1:4266/shogi-v21528/index.html?parity='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});if(!await p.evaluate(()=>crossOriginIsolated))await p.reload({waitUntil:'domcontentloaded',timeout:120000});const out=[];for(const q of list){const r=await p.evaluate(async q=>new Promise((resolve,reject)=>{const w=new Worker('./future-yaneura-worker-pool2-diag.js?v='+Date.now()+Math.random());let id=0,P=new Map();w.onmessage=e=>{const m=e.data||{},x=P.get(m.id);if(!x||m.type!=='result')return;P.delete(m.id);clearTimeout(x.t);m.ok?x.r(m):x.j(Error(m.error||'worker'))};w.onerror=e=>reject(Error(e.message||'worker'));const call=(type,x={},ms=250000)=>new Promise((r,j)=>{const n=++id,t=setTimeout(()=>j(Error(type+' timeout')),ms);P.set(n,{r,j,t});w.postMessage({type,id:n,...x})});(async()=>{try{await call('init',{},150000);resolve(await call('pool2_rawdepth',{sfen:q.sfen,depth:q.depth}))}catch(e){reject(e)}finally{w.terminate()}})()}),q);const row={browser:name,ply:q.ply,depth:q.depth,token:r.token,cp:r.info?.cp,expectedToken:q.token,expectedCp:q.cp,tokenMatch:r.token===q.token,cpDelta:(r.info?.cp??999999)-q.cp};out.push(row);console.log('POOL2_PARITY_ROW '+JSON.stringify(row))}await b.close();return out}
+          const wk=await one(webkit,'webkit',cases),cr=await one(chromium,'chromium',cases.slice(0,2));const summary={webkitExact:wk.filter(x=>x.tokenMatch&&x.cpDelta===0).length,webkitTotal:wk.length,chromiumTokenMatches:cr.filter(x=>x.tokenMatch).length,chromiumMaxAbsCpDelta:Math.max(...cr.map(x=>Math.abs(x.cpDelta)))};console.log('POOL2_PARITY_SUMMARY '+JSON.stringify(summary));if(summary.webkitExact!==6||summary.chromiumTokenMatches!==2||summary.chromiumMaxAbsCpDelta>250)throw Error('pool2 parity '+JSON.stringify(summary));console.log('PASS_POOL2_FIXED_DEPTH_PARITY '+JSON.stringify(summary));
+          NODE
+          node /tmp/pool2-parity.mjs 2>&1 | tee /tmp/pool2-parity.log
+          grep -q '^PASS_POOL2_FIXED_DEPTH_PARITY ' /tmp/pool2-parity.log
+      - name: Verify real Future reply on iPhone Fire desktop
+        run: |
+          set -o pipefail
+          cat >/tmp/pool2-flow.mjs <<'NODE'
+          import{webkit,chromium}from'playwright';const modes=[['iphone',webkit,'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',{width:390,height:844}],['fire',chromium,'Mozilla/5.0 (Linux; U; en-US; KFMAWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/124.5.3 like Chrome/124.0 Safari/535.19',{width:800,height:1280}],['desktop',chromium,'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36',{width:1440,height:900}]];const rows=[];for(const [mode,bt,ua,viewport] of modes){const b=await bt.launch({headless:true}),p=await b.newPage({userAgent:ua,viewport});const errs=[];p.on('pageerror',e=>errs.push(String(e.message||e)));await p.goto('http://127.0.0.1:4266/shogi-v21528/index.html?flow='+mode+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await p.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE,{timeout:120000});await p.locator('#chars .ch').nth(25).click();await p.selectOption('#sideSelect2157','sente');await p.click('#newBtn');const before=(await p.locator('#moves').textContent()||'').trim();await p.locator('#board').locator(':scope > *').nth(56).click();await p.locator('#board').locator(':scope > *').nth(47).click();await p.waitForFunction(before=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==before},before,{timeout:10000});const human=(await p.locator('#moves').textContent()||'').trim();await p.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています|思考中|bestmove待ち/.test(s)},human,{timeout:90000});const replied=(await p.locator('#moves').textContent()||'').trim(),status=(await p.locator('#status').textContent()||'').trim();const row={mode,human,replied,status,pageErrors:errs};rows.push(row);console.log('POOL2_FLOW '+JSON.stringify(row));if(replied===human||errs.length)throw Error('flow '+JSON.stringify(row));await b.close()}console.log('PASS_POOL2_REAL_REPLY '+JSON.stringify(rows));
+          NODE
+          node /tmp/pool2-flow.mjs 2>&1 | tee /tmp/pool2-flow.log
+          grep -q '^PASS_POOL2_REAL_REPLY ' /tmp/pool2-flow.log
+      - if: always()
+        run: |
+          grep -E '^(PASS_POOL2_STATIC_SCOPE|POOL2_PARITY_|PASS_POOL2_FIXED_DEPTH_PARITY)' /tmp/pool2-parity.log 2>/dev/null || true
+          grep -E '^(POOL2_FLOW|PASS_POOL2_REAL_REPLY|Error:)' /tmp/pool2-flow.log 2>/dev/null || true
