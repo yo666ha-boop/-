@@ -1,0 +1,30 @@
+name: Snapshot Future runtime all26 v2 runs
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/snapshot-future-runtime-all26-v2-pr-20260824.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Print target branch run IDs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/actions/runs?branch=validate-future-layout-candidate-20260824&per_page=100" -o /tmp/runs.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/runs.json'))
+          wanted=['Validate Future candidate runtime and all26 v2','Validate Future candidate vs Piyo Lv40 v2','Validate Future layout production candidate']
+          for name in wanted:
+            rows=[r for r in x.get('workflow_runs',[]) if r.get('name')==name]
+            rows.sort(key=lambda r:r.get('id',0),reverse=True)
+            r=rows[0] if rows else {}
+            print('TARGET_RUN '+json.dumps({'name':name,'id':r.get('id'),'status':r.get('status'),'conclusion':r.get('conclusion'),'head':r.get('head_sha')},separators=(',',':')))
+          PY
