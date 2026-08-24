@@ -1,0 +1,71 @@
+name: Diagnose Future reverse multigame log evidence
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-future-reverse-log-evidence-20260824.yml'
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+jobs:
+  evidence:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Extract compact actual evidence from completed reverse multigame job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          JOB_ID: '97313204247'
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/actions/jobs/${JOB_ID}/logs" \
+            -o /tmp/job.log
+          python3 - <<'PY'
+          import os,re,json
+          from pathlib import Path
+          p=Path('/tmp/job.log')
+          raw=p.read_bytes()
+          text=raw.decode('utf-8','replace')
+          wanted=[]
+          patterns=(
+            'PIYO40_INITIAL ',
+            'PIYO40_REVERSE_PROFILE ',
+            'FUTURE_LAYOUT_REV_MOVE ',
+            'FUTURE_LAYOUT_REV_AUDIT ',
+            'FUTURE_LAYOUT_REV_SUMMARY ',
+            'FUTURE_REVERSE_MULTIGAME_SUMMARY ',
+            'PASS_FUTURE_REVERSE_MULTIGAME_DIVERSITY',
+            'PASS_FUTURE_LAYOUT_REVERSE_HARNESS',
+            'REVERSE_MULTI_BLOCK_FAIL',
+          )
+          for line in text.splitlines():
+              # Actions log lines carry timestamps; preserve only the payload from the first known marker.
+              for mark in patterns:
+                  i=line.find(mark)
+                  if i>=0:
+                      wanted.append(line[i:].strip())
+                      break
+          # De-duplicate exact repeated echo/output lines while preserving order.
+          seen=set(); clean=[]
+          for x in wanted:
+              if x in seen: continue
+              seen.add(x); clean.append(x)
+          summaries=[x for x in clean if x.startswith('FUTURE_LAYOUT_REV_SUMMARY ')]
+          multi=[x for x in clean if x.startswith('FUTURE_REVERSE_MULTIGAME_SUMMARY ')]
+          gate=any(x=='PASS_FUTURE_REVERSE_MULTIGAME_DIVERSITY' for x in clean)
+          if len(summaries)<4 or not multi or not gate:
+              raise SystemExit(f'evidence incomplete: summaries={len(summaries)} multi={len(multi)} gate={gate}; markers={len(clean)}')
+          body='### Diagnostic evidence extraction — reverse multi-game actual\n\n'
+          body+='Source job: `97313204247` (diagnostic only; PR80 NEVER MERGE).\n\n```text\n'+'\n'.join(clean)+'\n```\n'
+          Path('/tmp/comment.md').write_text(body)
+          print('EVIDENCE_COUNTS '+json.dumps({'summaryCount':len(summaries),'multiCount':len(multi),'passGate':gate,'markerCount':len(clean)}))
+          PY
+          gh api "repos/${REPO}/issues/${PR}/comments" -f body=@/tmp/comment.md
