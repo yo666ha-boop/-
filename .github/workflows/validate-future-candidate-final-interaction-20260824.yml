@@ -1,0 +1,66 @@
+name: Validate Future candidate final interaction
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/validate-future-candidate-final-interaction-20260824.yml']
+permissions:
+  contents: read
+env:
+  CANDIDATE_SHA: 70e15f1787aadbf0235428a0939826342c683d39
+jobs:
+  flow:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iphone, fire, desktop]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 70e15f1787aadbf0235428a0939826342c683d39
+          fetch-depth: 0
+      - name: Materialize proven interaction audit for exact Future candidate
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch origin audit-final-interaction-flow-20260820
+          mkdir -p .github/scripts
+          git show origin/audit-final-interaction-flow-20260820:.github/scripts/audit-final-interaction-flow-20260820.mjs > .github/scripts/candidate-final-interaction.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/candidate-final-interaction.mjs');s=p.read_text()
+          old="await page.locator('#chars .ch').nth(0).click();"
+          if old not in s: raise SystemExit('future selection marker missing')
+          s=s.replace(old,"await page.locator('#chars .ch').nth(25).click();",1)
+          s=s.replace("FLOW_DIAGNOSTIC ","FUTURE_CANDIDATE_FLOW_DIAGNOSTIC ").replace("PASS_FINAL_INTERACTION_FLOW ","PASS_FUTURE_CANDIDATE_FINAL_INTERACTION ")
+          p.write_text(s)
+          PY
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          node --check .github/scripts/candidate-final-interaction.mjs
+      - name: Start exact candidate COOP COEP server
+        run: |
+          set -euo pipefail
+          cat >/tmp/coi-flow.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4218,'127.0.0.1');
+          NODE
+          node /tmp/coi-flow.mjs >/tmp/coi-flow.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4218/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/coi-flow.log; exit 1
+      - name: Audit exact Future candidate real interaction flow
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          HOME: /root
+        run: |
+          set -euo pipefail
+          node .github/scripts/candidate-final-interaction.mjs 2>&1 | tee /tmp/future-flow-${{ matrix.platform }}.log
+          grep -q '^PASS_FUTURE_CANDIDATE_FINAL_INTERACTION ' /tmp/future-flow-${{ matrix.platform }}.log
+      - if: always()
+        run: grep -E '^(FUTURE_CANDIDATE_FLOW_DIAGNOSTIC|PASS_FUTURE_CANDIDATE_FINAL_INTERACTION|Error:)' /tmp/future-flow-${{ matrix.platform }}.log 2>/dev/null || true
