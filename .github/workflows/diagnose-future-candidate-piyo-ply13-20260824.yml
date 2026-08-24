@@ -26,12 +26,13 @@ jobs:
           set -euo pipefail
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          mkdir -p .github/scripts
           cat >/tmp/coi-target.mjs <<'NODE'
           import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4233,'127.0.0.1');
           NODE
           node /tmp/coi-target.mjs >/tmp/coi-target.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4233/shogi-v21528/index.html >/dev/null && break; sleep 1; done
-          cat > /tmp/ply13.mjs <<'NODE'
+          cat > .github/scripts/ply13-target.mjs <<'NODE'
           import {webkit} from 'playwright';
           const pos='lnsgk2nl/1r4gb1/p1ppps1pp/1p3pp2/9/2P1SP1P1/PP1PP1P1P/1B5R1/LNSGKG1NL b - 13';
           const chosen='4f4e';
@@ -63,11 +64,11 @@ jobs:
             console.log('PASS_PLY13_DEEP_EQUIVALENCE '+JSON.stringify(summary));
           }finally{await browser.close()}
           NODE
-          node --check /tmp/ply13.mjs
+          node --check .github/scripts/ply13-target.mjs
       - name: Run repeated deep exact-candidate audit
         run: |
           set -o pipefail
-          node /tmp/ply13.mjs 2>&1 | tee /tmp/ply13.log
+          node .github/scripts/ply13-target.mjs 2>&1 | tee /tmp/ply13.log
           grep -q '^PASS_PLY13_DEEP_EQUIVALENCE ' /tmp/ply13.log
       - if: always()
         run: grep -E '^(PLY13_DEEP_AUDIT|PLY13_DEEP_SUMMARY|PASS_PLY13_DEEP_EQUIVALENCE|Error:)' /tmp/ply13.log 2>/dev/null || true
