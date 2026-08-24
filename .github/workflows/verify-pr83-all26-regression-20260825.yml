@@ -50,6 +50,7 @@ jobs:
           page.on('pageerror',e=>errors.push('pageerror:'+e.message));page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource/.test(m.text()))errors.push('console:'+m.text())});
           await page.goto('http://127.0.0.1:4199/shogi-v21528/index.html?pr83all26='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
           await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
+          await page.waitForFunction(()=>{const imgs=[...document.querySelectorAll('#chars .ch img')];return imgs.length===26&&imgs.every(i=>i.complete&&i.naturalWidth>0)},{timeout:15000});
           const snap=await page.evaluate(()=>{const cards=[...document.querySelectorAll('#chars .ch')];const text=e=>(e?.textContent||'').trim();return{coi:crossOriginIsolated,audit:window.AI_SHOGI_WEB_AUDIT||null,v:window.AI_SHOGI_V21528||null,cards:cards.map((c,i)=>({i,name:text(c.querySelector('.chName'))||c.querySelector('img')?.alt||'',rank:text(c.querySelector('.chRank')),style:text(c.querySelector('.chStyle')),img:!!c.querySelector('img')})),broken:[...document.querySelectorAll('#chars .ch img')].filter(i=>i.complete&&i.naturalWidth===0).map(i=>i.alt||i.src)};});
           if(!snap.coi||snap.cards.length!==26)throw Error('boot '+JSON.stringify(snap));
           if(new Set(snap.cards.map(x=>x.name)).size!==26)throw Error('duplicate names '+JSON.stringify(snap.cards));
