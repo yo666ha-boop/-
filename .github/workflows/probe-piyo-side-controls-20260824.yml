@@ -1,0 +1,36 @@
+name: Probe Piyo side controls for reverse practical
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/probe-piyo-side-controls-20260824.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe live Piyo game dialog controls
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piyo-probe && cd /tmp/piyo-probe
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          cat >probe.mjs <<'NODE'
+          import{chromium}from'playwright';
+          const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:1280,height:1000}});
+          await p.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});
+          await p.waitForSelector('#btnNewGame',{timeout:120000});await p.waitForTimeout(1200);await p.click('#btnNewGame');await p.waitForTimeout(500);
+          const data=await p.evaluate(()=>{
+            const vis=e=>!!e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden';
+            const els=[...document.querySelectorAll('#dialogGame input,#dialogGame select,#dialogGame button')].map(e=>({tag:e.tagName,id:e.id,type:e.type||'',name:e.name||'',value:e.value||'',checked:!!e.checked,text:(e.textContent||'').trim().slice(0,100),visible:vis(e),options:e.tagName==='SELECT'?[...e.options].slice(0,45).map(o=>({value:o.value,text:(o.textContent||'').trim()})):undefined}));
+            return{dialog:document.querySelector('#dialogGame')?.innerText||'',els};
+          });
+          console.log('PIYO_SIDE_CONTROLS '+JSON.stringify(data));
+          const ids=data.els.map(x=>x.id);
+          for(const id of['dialogGameGameTypeSente0','dialogGameGameTypeSente1','dialogGameGameTypeGote0','dialogGameGameTypeGote1','selectLevelSente','selectLevelGote'])if(!ids.includes(id))throw Error('missing '+id);
+          console.log('PASS_PIYO_SIDE_CONTROL_PROBE');await b.close();
+          NODE
+          node probe.mjs
