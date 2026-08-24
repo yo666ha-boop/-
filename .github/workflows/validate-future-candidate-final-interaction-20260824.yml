@@ -39,6 +39,10 @@ jobs:
           old="await page.locator('#chars .ch').nth(0).click();"
           if old not in s: raise SystemExit('future selection marker missing')
           s=s.replace(old,"await page.locator('#chars .ch').nth(25).click();",1)
+          old="await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return !!t&&!/考えています/.test(s);},{timeout:30000});"
+          new="await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return !!t&&t!=='まだ棋譜はありません'&&!/考えています|思考中|bestmove待ち/.test(s);},{timeout:30000});"
+          if old not in s: raise SystemExit('gote reply wait marker missing')
+          s=s.replace(old,new,1)
           old="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon/i.test(x));"
           new="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon|Data URL decoding failed|ERR_INVALID_URL/i.test(x));"
           if old not in s: raise SystemExit('console filter marker missing')
