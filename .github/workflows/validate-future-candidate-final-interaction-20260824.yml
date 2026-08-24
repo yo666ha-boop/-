@@ -40,7 +40,7 @@ jobs:
           if old not in s: raise SystemExit('future selection marker missing')
           s=s.replace(old,"await page.locator('#chars .ch').nth(25).click();",1)
           old="await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return !!t&&!/考えています/.test(s);},{timeout:30000});"
-          new="await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return !!t&&t!=='まだ棋譜はありません'&&!/考えています|思考中|bestmove待ち/.test(s);},{timeout:30000});"
+          new="await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim();return !!t&&t!=='まだ棋譜はありません';},{timeout:60000}).catch(async e=>{const snap=await page.evaluate(()=>({moves:(document.getElementById('moves')?.textContent||'').trim(),status:(document.getElementById('status')?.textContent||'').trim(),actual:(document.getElementById('sideActual2157')?.textContent||'').trim()}));throw Error('gote first move timeout '+JSON.stringify(snap)+' '+e.message)});await page.waitForFunction(()=>{const s=(document.getElementById('status')?.textContent||'');return !/考えています|思考中|bestmove待ち/.test(s);},{timeout:10000}).catch(()=>{});"
           if old not in s: raise SystemExit('gote reply wait marker missing')
           s=s.replace(old,new,1)
           old="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon/i.test(x));"
