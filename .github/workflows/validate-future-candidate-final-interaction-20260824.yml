@@ -43,6 +43,14 @@ jobs:
           new="await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim();return !!t&&t!=='まだ棋譜はありません';},{timeout:60000}).catch(async e=>{const snap=await page.evaluate(()=>({moves:(document.getElementById('moves')?.textContent||'').trim(),status:(document.getElementById('status')?.textContent||'').trim(),actual:(document.getElementById('sideActual2157')?.textContent||'').trim()}));throw Error('gote first move timeout '+JSON.stringify(snap)+' '+e.message)});await page.waitForFunction(()=>{const s=(document.getElementById('status')?.textContent||'');return !/考えています|思考中|bestmove待ち/.test(s);},{timeout:10000}).catch(()=>{});"
           if old not in s: raise SystemExit('gote reply wait marker missing')
           s=s.replace(old,new,1)
+          old="if(!/(先手|後手)/.test(randomActual))throw Error('random side unresolved '+randomActual);"
+          new="if(!/(先手|後手)/.test(randomActual))throw Error('random side unresolved '+randomActual);if(/後手/.test(randomActual)){await page.waitForFunction(()=>{const t=(document.getElementById('moves')?.textContent||'').trim();return !!t&&t!=='まだ棋譜はありません';},{timeout:60000}).catch(async e=>{const snap=await page.evaluate(()=>({moves:(document.getElementById('moves')?.textContent||'').trim(),status:(document.getElementById('status')?.textContent||'').trim(),actual:(document.getElementById('sideActual2157')?.textContent||'').trim()}));throw Error('random gote first move timeout '+JSON.stringify(snap)+' '+e.message)});await page.waitForFunction(()=>{const s=(document.getElementById('status')?.textContent||'');return !/考えています|思考中|bestmove待ち/.test(s);},{timeout:15000}).catch(()=>{});}"
+          if old not in s: raise SystemExit('random side marker missing')
+          s=s.replace(old,new,1)
+          old="await page.waitForFunction(b=>(document.getElementById('teacherMove')?.textContent||'').trim()!==b,teacherBefore,{timeout:30000});"
+          new="await page.waitForFunction(b=>(document.getElementById('teacherMove')?.textContent||'').trim()!==b,teacherBefore,{timeout:90000}).catch(async e=>{const snap=await page.evaluate(()=>({teacher:(document.getElementById('teacherMove')?.textContent||'').trim(),status:(document.getElementById('status')?.textContent||'').trim(),moves:(document.getElementById('moves')?.textContent||'').trim(),actual:(document.getElementById('sideActual2157')?.textContent||'').trim()}));throw Error('analysis timeout '+JSON.stringify(snap)+' '+e.message)});"
+          if old not in s: raise SystemExit('analysis wait marker missing')
+          s=s.replace(old,new,1)
           old="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon/i.test(x));"
           new="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon|Data URL decoding failed|ERR_INVALID_URL/i.test(x));"
           if old not in s: raise SystemExit('console filter marker missing')
