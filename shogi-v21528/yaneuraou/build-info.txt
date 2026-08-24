@@ -7,3 +7,4 @@ Future worker direct USI bridge=1
 iPhone Threads=1 Hash=32
 Fire Silk Threads=1 Hash=48
 Desktop Threads=2 Hash=128
+WASM_NNUE_LAYOUT_FIX=1
