@@ -29,11 +29,9 @@ jobs:
             "https://api.github.com/repos/${REPO}/actions/jobs/${JOB_ID}/logs" \
             -o /tmp/job.log
           python3 - <<'PY'
-          import os,re,json
+          import json
           from pathlib import Path
-          p=Path('/tmp/job.log')
-          raw=p.read_bytes()
-          text=raw.decode('utf-8','replace')
+          text=Path('/tmp/job.log').read_bytes().decode('utf-8','replace')
           wanted=[]
           patterns=(
             'PIYO40_INITIAL ',
@@ -47,25 +45,30 @@ jobs:
             'REVERSE_MULTI_BLOCK_FAIL',
           )
           for line in text.splitlines():
-              # Actions log lines carry timestamps; preserve only the payload from the first known marker.
+              if '\x1b[36;1m' in line: continue
               for mark in patterns:
                   i=line.find(mark)
                   if i>=0:
                       wanted.append(line[i:].strip())
                       break
-          # De-duplicate exact repeated echo/output lines while preserving order.
-          seen=set(); clean=[]
-          for x in wanted:
-              if x in seen: continue
-              seen.add(x); clean.append(x)
-          summaries=[x for x in clean if x.startswith('FUTURE_LAYOUT_REV_SUMMARY ')]
-          multi=[x for x in clean if x.startswith('FUTURE_REVERSE_MULTIGAME_SUMMARY ')]
-          gate=any(x=='PASS_FUTURE_REVERSE_MULTIGAME_DIVERSITY' for x in clean)
-          if len(summaries)<4 or not multi or not gate:
-              raise SystemExit(f'evidence incomplete: summaries={len(summaries)} multi={len(multi)} gate={gate}; markers={len(clean)}')
+          summaries=[x for x in wanted if x.startswith('FUTURE_LAYOUT_REV_SUMMARY ')]
+          multi=[x for x in wanted if x.startswith('FUTURE_REVERSE_MULTIGAME_SUMMARY ')]
+          initials=[x for x in wanted if x.startswith('PIYO40_INITIAL ')]
+          profiles=[x for x in wanted if x.startswith('PIYO40_REVERSE_PROFILE ')]
+          audits=[x for x in wanted if x.startswith('FUTURE_LAYOUT_REV_AUDIT ')]
+          moves=[x for x in wanted if x.startswith('FUTURE_LAYOUT_REV_MOVE ')]
+          gate=any(x=='PASS_FUTURE_REVERSE_MULTIGAME_DIVERSITY' for x in wanted)
+          if len(summaries)!=4 or len(initials)!=4 or len(profiles)!=4 or not multi or not gate:
+              raise SystemExit(f'evidence incomplete: summaries={len(summaries)} initials={len(initials)} profiles={len(profiles)} multi={len(multi)} gate={gate}')
+          # Keep full per-game summary plus initial/profile, and all deep audits. Move lines are reduced to those carrying commit/reply/mate evidence.
+          move_evidence=[x for x in moves if any(k in x for k in ('commit','reply','mate','resign','declare'))]
+          selected=profiles+initials+summaries+multi[-1:]+['PASS_FUTURE_REVERSE_MULTIGAME_DIVERSITY']+audits+move_evidence
           body='### Diagnostic evidence extraction — reverse multi-game actual\n\n'
-          body+='Source job: `97313204247` (diagnostic only; PR80 NEVER MERGE).\n\n```text\n'+'\n'.join(clean)+'\n```\n'
+          body+='Source job: `97313204247` (diagnostic only; PR80 NEVER MERGE).\n\n```text\n'+'\n'.join(selected)+'\n```\n'
+          if len(body)>64000:
+              # Guaranteed compact fallback retains every game summary, diversity marker, and audit aggregate count.
+              body='### Diagnostic evidence extraction — reverse multi-game actual\n\nSource job: `97313204247` (diagnostic only; PR80 NEVER MERGE).\n\n```text\n'+'\n'.join(profiles+initials+summaries+multi[-1:]+['PASS_FUTURE_REVERSE_MULTIGAME_DIVERSITY'])+f'\nAUDIT_LINE_COUNT {len(audits)}\nMOVE_LINE_COUNT {len(moves)}\n```\n'
           Path('/tmp/comment.md').write_text(body)
-          print('EVIDENCE_COUNTS '+json.dumps({'summaryCount':len(summaries),'multiCount':len(multi),'passGate':gate,'markerCount':len(clean)}))
+          print('EVIDENCE_COUNTS '+json.dumps({'summaryCount':len(summaries),'initialCount':len(initials),'profileCount':len(profiles),'multiCount':len(multi),'passGate':gate,'auditCount':len(audits),'moveCount':len(moves),'commentBytes':len(body.encode())}))
           PY
-          gh api "repos/${REPO}/issues/${PR}/comments" -f body=@/tmp/comment.md
+          gh api "repos/${REPO}/issues/${PR}/comments" -F body=@/tmp/comment.md
