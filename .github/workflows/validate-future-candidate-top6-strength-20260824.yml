@@ -1,0 +1,49 @@
+name: Validate Future candidate top6 strength quality
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/validate-future-candidate-top6-strength-20260824.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 70e15f1787aadbf0235428a0939826342c683d39
+          fetch-depth: 0
+      - name: Materialize proven top6 audit
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch origin audit-top6-strength-quality-20260820
+          mkdir -p .github/scripts
+          git show origin/audit-top6-strength-quality-20260820:.github/scripts/audit-top6-strength-quality-20260820.mjs > .github/scripts/candidate-top6.mjs
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          node --check .github/scripts/candidate-top6.mjs
+      - name: Start exact candidate COOP COEP server
+        run: |
+          set -euo pipefail
+          cat >/tmp/coi-top6.mjs <<'NODE'
+          import http from'http';import fs from'fs';import path from'path';const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4221,'127.0.0.1');
+          NODE
+          node /tmp/coi-top6.mjs >/tmp/coi-top6.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4221/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/coi-top6.log; exit 1
+      - name: Audit exact candidate representative top6 quality
+        run: |
+          set -euo pipefail
+          node .github/scripts/candidate-top6.mjs 2>&1 | tee /tmp/candidate-top6.log
+          grep -q '^PASS_TOP6_STRENGTH_QUALITY ' /tmp/candidate-top6.log
+          sed -n '/^PASS_TOP6_STRENGTH_QUALITY /p' /tmp/candidate-top6.log | sed 's/^/PASS_FUTURE_CANDIDATE_TOP6 /'
+      - if: always()
+        run: grep -E '^(TOP6_REF|TOP6_ROW|TOP6_SUMMARY|PASS_TOP6_STRENGTH_QUALITY|PASS_FUTURE_CANDIDATE_TOP6|Error:)' /tmp/candidate-top6.log 2>/dev/null | tail -400 || true
