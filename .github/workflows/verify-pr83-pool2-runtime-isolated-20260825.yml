@@ -1,5 +1,7 @@
 name: Verify PR83 pool2 isolated four-environment runtime
 on:
+  push:
+    branches: [validate-pr83-pool2-runtime-20260825]
   pull_request:
     branches: [future-layout-fix-pool2-production-candidate-20260824]
     paths: ['.github/workflows/verify-pr83-pool2-runtime-isolated-20260825.yml']
