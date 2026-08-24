@@ -1,0 +1,110 @@
+name: Validate Future candidate vs Piyo Lv40 v2
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/validate-future-candidate-piyo40-v2-20260824.yml']
+permissions:
+  contents: read
+jobs:
+  practical:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 70e15f1787aadbf0235428a0939826342c683d39
+          fetch-depth: 0
+      - name: Prepare Playwright
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium >/dev/null
+      - name: Start exact candidate COI server
+        run: |
+          set -euo pipefail
+          cat >/tmp/candidate-piyo-srv.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';const r=process.env.GITHUB_WORKSPACE,m={'.html':'text/html','.js':'text/javascript','.wasm':'application/wasm','.bin':'application/octet-stream','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.css':'text/css','.json':'application/json'};http.createServer((q,s)=>{let u=new URL(q.url,'http://x').pathname;if(u.endsWith('/'))u+='index.html';const f=path.resolve(r,'.'+u);if(!f.startsWith(path.resolve(r))||!fs.existsSync(f)){s.writeHead(404);return s.end()}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',m[path.extname(f)]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4229,'127.0.0.1')
+          NODE
+          node /tmp/candidate-piyo-srv.mjs >/tmp/candidate-piyo-srv.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4229/shogi-v21528/index.html >/dev/null && exit 0; sleep 1; done
+          cat /tmp/candidate-piyo-srv.log; exit 1
+      - name: Materialize proven harness source and derive candidate harness
+        run: |
+          set -euo pipefail
+          git fetch origin 31fee36df6bc83c2b88ec0d00da19c05a0d4db82
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          ref='31fee36df6bc83c2b88ec0d00da19c05a0d4db82'
+          verify='.github/workflows/verify-future-current-vs-piyo40-20260820.yml'
+          p=Path(verify);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(subprocess.check_output(['git','show',f'{ref}:{verify}'],text=True))
+          src=subprocess.check_output(['git','show',f'{ref}:.github/workflows/diagnose-future-layout-practical-extended-20260824.yml'],text=True)
+          lines=src.splitlines();blocks=[];i=0
+          while i<len(lines):
+              if lines[i]=='        run: |':
+                  i+=1;out=[]
+                  while i<len(lines):
+                      line=lines[i]
+                      if line and not line.startswith('          '):break
+                      out.append(line[10:] if line.startswith('          ') else '');i+=1
+                  blocks.append('\n'.join(out)+'\n');continue
+              i+=1
+          if len(blocks)!=7:raise SystemExit(f'expected 7 blocks got {len(blocks)}')
+          r=subprocess.run(['bash','-lc',blocks[4]])
+          if r.returncode:raise SystemExit(r.returncode)
+          h=Path('layoutext-practical.mjs');s=h.read_text()
+          old='./future-layoutext-worker.js?v=practical-';new='./future-yaneura-worker21528.js?v=candidate-practical-'
+          if old not in s:raise SystemExit('candidate worker marker missing')
+          s=s.replace(old,new,1)
+          old="if(lastState.count>=baseCount+2||/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)){ready=true;break}"
+          new="if(lastState.count>=baseCount+2||/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||/対局終了|プレイヤーの勝ち|プレイヤーの負け|引き分け/.test(lastState.messText||'')){ready=true;break}"
+          if old not in s:raise SystemExit('completed readiness marker missing')
+          s=s.replace(old,new,1)
+          old="if(/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||ms.length%2){result=lastState.last||'ENDED';break}"
+          new="if(/対局終了|プレイヤーの勝ち|プレイヤーの負け|引き分け/.test(lastState.messText||'')){result=(lastState.messText||'ENDED').replace(/\\s+/g,' ').trim();break}if(/投了|詰み|反則|千日手|持将棋|中断/.test(lastState.last)||ms.length%2){result=lastState.last||'ENDED';break}"
+          if old not in s:raise SystemExit('completed result marker missing')
+          s=s.replace(old,new,1)
+          s=s.replace('FUTURE_LAYOUT_EXT_PROFILE','FUTURE_CANDIDATE_PROFILE').replace('FUTURE_LAYOUT_EXT_MOVE','FUTURE_CANDIDATE_MOVE').replace('FUTURE_LAYOUT_EXT_AUDIT','FUTURE_CANDIDATE_AUDIT').replace('FUTURE_LAYOUT_EXT_SUMMARY','FUTURE_CANDIDATE_SUMMARY').replace('PASS_FUTURE_LAYOUT_EXT_HARNESS','PASS_FUTURE_CANDIDATE_HARNESS')
+          h.write_text(s)
+          PY
+          node --check layoutext-practical.mjs
+          echo PASS_FUTURE_CANDIDATE_HARNESS_DERIVED
+      - name: Run two exact-candidate completed practical attempts
+        run: |
+          set -uo pipefail
+          FAIL=0
+          for A in 1 2; do
+            set +e
+            ATTEMPT=$A node layoutext-practical.mjs 2>&1 | tee /tmp/candidate-piyo-$A.log
+            RC=${PIPESTATUS[0]}
+            set -e
+            if [ "$RC" -ne 0 ]; then echo "FUTURE_CANDIDATE_ATTEMPT_FAIL attempt=$A rc=$RC"; FAIL=1; fi
+          done
+          python3 - <<'PY' | tee /tmp/candidate-piyo-summary.txt
+          from pathlib import Path
+          import json,re
+          games=[]
+          for a in (1,2):
+              t=Path(f'/tmp/candidate-piyo-{a}.log').read_text(errors='replace')
+              m=re.findall(r'^FUTURE_CANDIDATE_SUMMARY (\{.*\})$',t,re.M)
+              if not m:raise SystemExit(f'missing summary {a}')
+              s=json.loads(m[-1]);moves=[json.loads(x) for x in re.findall(r'^FUTURE_CANDIDATE_MOVE (\{.*\})$',t,re.M)]
+              commits=[json.loads(x) for x in re.findall(r'^PIYO40_COMMIT (\{.*\})$',t,re.M)]
+              bad=[x for x in commits if x.get('future')!=x.get('actual')]
+              neg=[x for x in moves if isinstance(x.get('mate'),(int,float)) and x['mate']<0]
+              if '先手:プレイヤーの勝ち' not in str(s.get('result','')):raise SystemExit(f'attempt {a} not completed Future win: {s.get("result")}')
+              if int(s.get('outsideTop5',99))!=0:raise SystemExit(f'attempt {a} outsideTop5={s.get("outsideTop5")}')
+              if s.get('pageErrors'):raise SystemExit(f'attempt {a} pageErrors={s.get("pageErrors")}')
+              if neg:raise SystemExit(f'attempt {a} negative mates {neg[:2]}')
+              if bad:raise SystemExit(f'attempt {a} UI/USI mismatch {bad[:2]}')
+              games.append({'attempt':a,'result':s.get('result'),'plies':s.get('plies'),'futureMoves':s.get('futureMoves'),'audits':s.get('audits'),'deepBestMatches':s.get('deepBestMatches'),'outsideTop5':s.get('outsideTop5'),'maxKnownLossCp':s.get('maxKnownLossCp'),'lossOver100':s.get('lossOver100'),'pageErrors':s.get('pageErrors'),'exactCommitCount':len([x for x in commits if int(x.get('attempt',0))==a]),'negativeMateMoves':0})
+          print('FUTURE_CANDIDATE_PIYO40_SUMMARY '+json.dumps({'candidate':'70e15f1787aadbf0235428a0939826342c683d39','games':games},ensure_ascii=False,separators=(',',':')))
+          print('PASS_FUTURE_CANDIDATE_PIYO40_COMPLETED')
+          PY
+          exit "$FAIL"
+      - name: Preserve exact candidate evidence
+        if: always()
+        run: |
+          cat /tmp/candidate-piyo-summary.txt 2>/dev/null || true
+          grep -E '^(PIYO40_PROFILE|FUTURE_CANDIDATE_|PIYO40_COMMIT|PIYO40_REPLY|PASS_FUTURE_CANDIDATE_)' /tmp/candidate-piyo-*.log 2>/dev/null | tail -1200 || true
