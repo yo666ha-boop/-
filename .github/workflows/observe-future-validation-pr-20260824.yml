@@ -1,0 +1,47 @@
+name: Observe Future candidate validation runs
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/observe-future-validation-pr-20260824.yml']
+permissions:
+  actions: read
+  issues: write
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - name: Poll validation-branch runs and report to PR81
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,subprocess,time
+          repo=os.environ['REPO'];tok=os.environ['GH_TOKEN'];branch='validate-future-layout-candidate-20260824'
+          wanted=['Validate Future layout production candidate','Diagnose Future candidate build reproducibility','Validate Future candidate vs Piyo Lv40']
+          def get():
+            raw=subprocess.check_output(['curl','-fsSL','-H',f'Authorization: Bearer {tok}','-H','Accept: application/vnd.github+json',f'https://api.github.com/repos/{repo}/actions/runs?branch={branch}&per_page=100'],text=True)
+            runs=json.loads(raw).get('workflow_runs',[]);out={}
+            for name in wanted:
+              rows=[r for r in runs if r.get('name')==name];rows.sort(key=lambda r:r.get('id',0),reverse=True)
+              if rows: out[name]=rows[0]
+            return out
+          d={}
+          for n in range(90):
+            d=get();print('POLL',n+1,{k:(v.get('id'),v.get('status'),v.get('conclusion')) for k,v in d.items()},flush=True)
+            if len(d)==len(wanted) and all(v.get('status')=='completed' for v in d.values()): break
+            time.sleep(30)
+          lines=['### Validation-branch run observer']
+          for name in wanted:
+            r=d.get(name,{})
+            lines.append(f"- {name}: run `{r.get('id')}` status=`{r.get('status')}` conclusion=`{r.get('conclusion')}` head=`{r.get('head_sha')}`")
+            if r.get('id'):
+              raw=subprocess.check_output(['curl','-fsSL','-H',f'Authorization: Bearer {tok}','-H','Accept: application/vnd.github+json',f'https://api.github.com/repos/{repo}/actions/runs/{r["id"]}/jobs?per_page=100'],text=True)
+              for j in json.loads(raw).get('jobs',[]): lines.append(f"  - job `{j.get('id')}` {j.get('name')} status=`{j.get('status')}` conclusion=`{j.get('conclusion')}`")
+          body='\n'.join(lines)
+          print(body)
+          subprocess.run(['gh','api',f'repos/{repo}/issues/81/comments','-f','body='+body],check=True)
+          PY
