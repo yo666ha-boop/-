@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 45
     env:
       EXPECTED_MAIN: 4d6e94f2547dd63055c09fa1afb288647a99a8f8
-      CANDIDATE_BRANCH: future-layout-fix-production-candidate-20260824
+      CANDIDATE_BRANCH: future-layout-fix-pool2-production-candidate-20260824
       UPSTREAM_SHA: 76d58ef2e4cf64116784f41fd4816425ab6817ee
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
           from pathlib import Path
           m=Path('YaneuraOu-prod-candidate/source/Makefile');s=m.read_text()
           if '-s PTHREAD_POOL_SIZE=2' not in s: raise SystemExit('pool marker missing')
-          m.write_text(s.replace('-s PTHREAD_POOL_SIZE=2','-s PTHREAD_POOL_SIZE=32',1))
+          print('PTHREAD_POOL_SIZE=2 preserved from proven production patch')
           p=Path('YaneuraOu-prod-candidate/source/eval/nnue/evaluate_nnue.cpp');s=p.read_text()
           needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
           if 'Options.add("EvalFile"' not in s:
@@ -64,9 +64,10 @@ jobs:
               if old not in s: raise SystemExit('layout marker '+fn)
               p.write_text(s.replace(old,new,1))
           PY
+          grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu-prod-candidate/source/Makefile
           grep -F '!defined(USE_WASM_SIMD)' YaneuraOu-prod-candidate/source/eval/nnue/layers/affine_transform.h
           grep -F '!defined(USE_WASM_SIMD)' YaneuraOu-prod-candidate/source/eval/nnue/layers/affine_transform_sparse_input.h
-          echo PASS_FUTURE_PROD_SOURCE_LAYOUT_PATCH
+          echo PASS_FUTURE_PROD_SOURCE_LAYOUT_PATCH_POOL2
       - name: Build corrected V9.70 WASM with exact validated toolchain
         run: |
           set -euo pipefail
@@ -74,6 +75,8 @@ jobs:
           mkdir -p YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib
           docker run --rm -v "${{ github.workspace }}/YaneuraOu-prod-candidate:/src" -w /src/source emscripten/emsdk:3.1.43 bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/future-prod-build.log 2>&1
           LIB=YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib
+          grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu-prod-candidate/source/Makefile
+          grep -Eq 'pthreadPoolSize.?[:=].?2|PTHREAD_POOL_SIZE.?=.?2|initialPoolSize.?[:=].?2' "$LIB/yaneuraou.halfkp.noeval.js" || { echo 'generated JS pool2 marker missing'; grep -oE '.{0,80}(pthreadPoolSize|PTHREAD_POOL_SIZE|initialPoolSize).{0,120}' "$LIB/yaneuraou.halfkp.noeval.js" | head -20; exit 1; }
           node - <<'NODE'
           const fs=require('fs'),p='YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
           const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
@@ -96,26 +99,25 @@ jobs:
           from pathlib import Path
           c=Path('/tmp/future-candidate')
           p=c/'shogi-v21528/future-yaneura-worker21528.js';s=p.read_text()
-          old="const BUILD='21528v970d5';";new="const BUILD='21528v970d6';"
+          old="const BUILD='21528v970d5';";new="const BUILD='21528v970d8';"
           if old not in s: raise SystemExit('worker BUILD cache marker missing')
           p.write_text(s.replace(old,new,1))
           p=c/'shogi-side-test/future21520.js';s=p.read_text()
-          old="future-yaneura-worker21528.js?v=21528v970d6";new="future-yaneura-worker21528.js?v=21528v970d7"
+          old="future-yaneura-worker21528.js?v=21528v970d6";new="future-yaneura-worker21528.js?v=21528v970d8"
           if old not in s: raise SystemExit('Future worker URL marker missing')
           p.write_text(s.replace(old,new,1))
           p=c/'shogi-v21528/index.html';s=p.read_text()
-          old="get(test+'future21520.js?v=21528g')";new="get(test+'future21520.js?v=21528h')"
+          old="get(test+'future21520.js?v=21528g')";new="get(test+'future21520.js?v=21528i')"
           if old not in s: raise SystemExit('Future patch cache marker missing')
           p.write_text(s.replace(old,new,1))
           p=c/'shogi-v21528/yaneuraou/build-info.txt';s=p.read_text()
-          if 'WASM_NNUE_LAYOUT_FIX=1' not in s:s=s.rstrip()+'\nWASM_NNUE_LAYOUT_FIX=1\n'
+          s=s.rstrip()+'\nWASM_NNUE_LAYOUT_FIX=1\nPTHREAD_POOL_SIZE=2\nUPSTREAM_SHA=76d58ef2e4cf64116784f41fd4816425ab6817ee\nEMSCRIPTEN=3.1.43\n'
           p.write_text(s)
           PY
           echo '=== CANDIDATE CHANGES ==='
           git -C "$C" status --short
           CHANGED=$(git -C "$C" status --short | awk '{print $2}')
           test -n "$CHANGED"
-          # Strictly Future/runtime files only; no diagnostics may enter this branch.
           if echo "$CHANGED" | grep -Ev '^(shogi-v21528/(index\.html|future-yaneura-worker21528\.js|yaneuraou/(build-info\.txt|yaneuraou\.halfkp\.noeval\.(js|worker\.js|wasm)))|shogi-side-test/future21520\.js)$'; then
             echo 'unexpected candidate file'; exit 1
           fi
@@ -134,8 +136,8 @@ jobs:
           git -C "$C" config user.name github-actions[bot]
           git -C "$C" config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git -C "$C" add shogi-v21528/index.html shogi-v21528/future-yaneura-worker21528.js shogi-side-test/future21520.js shogi-v21528/yaneuraou/build-info.txt shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm
-          git -C "$C" commit -m 'Fix Future WASM NNUE layout and cache identity'
+          git -C "$C" commit -m 'Rebuild Future corrected NNUE layout with proven pool2'
           NEW=$(git -C "$C" rev-parse HEAD)
           git -C "$C" push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
           echo "FUTURE_PRODUCTION_CANDIDATE_SHA=$NEW"
-          echo PASS_FUTURE_PRODUCTION_CANDIDATE_PUSH
+          echo PASS_FUTURE_PRODUCTION_CANDIDATE_POOL2_PUSH
