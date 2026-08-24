@@ -76,15 +76,18 @@ jobs:
           docker run --rm -v "${{ github.workspace }}/YaneuraOu-prod-candidate:/src" -w /src/source emscripten/emsdk:3.1.43 bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/future-prod-build.log 2>&1
           LIB=YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib
           grep -F 'PTHREAD_POOL_SIZE=2' YaneuraOu-prod-candidate/source/Makefile
-          # Emscripten 3.1.43 minifies the generated pthread-pool identifier, so a literal
-          # PTHREAD_POOL_SIZE marker is not stable. Assert the emitted startup pool count
-          # structurally: the JS must contain the minified worker-pool initializer with 2.
           node - <<'NODE'
           const fs=require('fs'),p='YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js';
           const s=fs.readFileSync(p,'utf8');
-          const probes=[/pthreadPoolSize\s*[:=]\s*2\b/,/PTHREAD_POOL_SIZE\s*[:=]\s*2\b/,/initialPoolSize\s*[:=]\s*2\b/,/\.allocateUnusedWorker\(\).*?2/s,/for\([^;]*;[^;]*<2;[^)]*\)[^{]*\{[^}]*new Worker/s];
+          const probes=[
+            /pthreadPoolSize\s*[:=]\s*2\b/,
+            /PTHREAD_POOL_SIZE\s*[:=]\s*2\b/,
+            /initialPoolSize\s*[:=]\s*2\b/,
+            /for\([^;]*;[^;]*<\s*2;[^)]*\)[^{;]*(?:new Worker|B\.Ga\(\))/s,
+            /for\([^;]*;\s*2\s*>[^;]*;[^)]*\)[^{;]*(?:new Worker|B\.Ga\(\))/s
+          ];
           if(!probes.some(r=>r.test(s))){
-            const hits=[...s.matchAll(/.{0,120}(?:Worker|pthread|PThread|unusedWorkers).{0,180}/gi)].slice(0,20).map(m=>m[0]);
+            const hits=[...s.matchAll(/.{0,180}(?:B\.Ga\(\)|Worker|pthread|PThread|unusedWorkers).{0,220}/gi)].slice(0,30).map(m=>m[0]);
             console.log(hits.join('\n---\n'));
             throw Error('generated JS structural pool2 evidence missing');
           }
