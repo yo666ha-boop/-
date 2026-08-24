@@ -1,0 +1,83 @@
+name: Verify PR83 representative real move to AI replies
+on:
+  push:
+    branches: [validate-pr83-pool2-runtime-20260825]
+permissions:
+  contents: read
+jobs:
+  real-replies:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      CANDIDATE_SHA: d96a37094d6ceab48079c7b3322261004ec09d5a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+      - name: Assert exact candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          grep -F 'WASM_NNUE_LAYOUT_FIX=1' shogi-v21528/yaneuraou/build-info.txt
+          grep -F 'PTHREAD_POOL_SIZE=2' shogi-v21528/yaneuraou/build-info.txt
+          echo PASS_PR83_REAL_REPLY_EXACT_CANDIDATE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install WebKit
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >coi-real-reply.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';
+          const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};
+          http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4201,'127.0.0.1');
+          NODE
+          node ./coi-real-reply.mjs >/tmp/pr83-real-reply-server.log 2>&1 &
+          sleep 1
+      - name: Verify representative real human move to AI reply
+        run: |
+          cat >pr83-real-replies.mjs <<'NODE'
+          import {webkit} from 'playwright';
+          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+          const browser=await webkit.launch({headless:true});
+          const page=await browser.newPage({userAgent:ua,viewport:{width:390,height:844}});const errors=[];
+          page.on('pageerror',e=>errors.push('pageerror:'+String(e.message||e)));page.on('console',m=>{if(m.type()==='error'&&!/favicon|Data URL decoding failed|ERR_INVALID_URL|Load request cancelled|Failed to load resource/i.test(m.text()))errors.push('console:'+m.text())});
+          const txt=sel=>page.locator(sel).textContent().then(v=>String(v||'').trim());
+          await page.goto('http://127.0.0.1:4201/shogi-v21528/index.html?pr83real='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+          await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE&&window.AI_SHOGI_YANEURAOU_TOP5&&window.AI_SHOGI_YANEURAOU_COHORT7_12&&window.AI_SHOGI_YANEURAOU_COHORT13_18&&window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR,{timeout:120000});
+          await page.waitForFunction(()=>[...document.querySelectorAll('#chars .ch img')].every(i=>i.complete&&i.naturalWidth>0),{timeout:30000});
+          async function realReply(index,label){
+            await page.locator('#chars .ch').nth(index).click();
+            await page.selectOption('#sideSelect2157','sente');
+            await page.click('#newBtn');await page.waitForTimeout(150);
+            const before=await txt('#moves');
+            await page.locator('#board').locator(':scope > *').nth(56).click();await page.waitForTimeout(60);await page.locator('#board').locator(':scope > *').nth(47).click();
+            await page.waitForFunction(b=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==b;},before,{timeout:10000});
+            const human=await txt('#moves');
+            await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},human,{timeout:120000});
+            const replied=await txt('#moves'),status=await txt('#status'),opp=await txt('#oppName');
+            if(replied===human)throw Error(label+' AI reply missing');if(!opp.includes(label))throw Error(label+' opponent mismatch '+opp);
+            return{index,label,human,replied,status,opp};
+          }
+          const state=await page.evaluate(()=>({coi:crossOriginIsolated,top5:AI_SHOGI_YANEURAOU_TOP5,c7:AI_SHOGI_YANEURAOU_COHORT7_12,c13:AI_SHOGI_YANEURAOU_COHORT13_18,lower:AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR,future:AI_SHOGI_YANEURAOU_FUTURE}));
+          if(!state.coi)throw Error('COI false');
+          const nameAt=(g,i)=>g.names[g.indices.indexOf(i)];
+          const routes=[];
+          routes.push(await realReply(0,state.top5.names[0]));
+          routes.push(await realReply(24,nameAt(state.c7,24)));
+          routes.push(await realReply(20,nameAt(state.c13,20)));
+          routes.push(await realReply(8,nameAt(state.lower,8)));
+          routes.push(await realReply(25,'未来からやってきたみつき'));
+          const final=await page.evaluate(()=>({futureState:window.AI_SHOGI_YANEURAOU_FUTURE?.state||'',futureError:window.AI_SHOGI_YANEURAOU_FUTURE?.error||'',cards:document.querySelectorAll('#chars .ch').length,coi:crossOriginIsolated}));
+          console.log('PR83_REAL_REPLY_ROWS '+JSON.stringify({routes,final,errors}));
+          if(final.cards!==26||!final.coi||final.futureError||errors.length)throw Error('final '+JSON.stringify({final,errors}));
+          console.log('PASS_PR83_REPRESENTATIVE_REAL_MOVE_AI_REPLIES');
+          await browser.close();
+          NODE
+          node ./pr83-real-replies.mjs 2>&1 | tee /tmp/pr83-real-replies.log
+          grep -F 'PASS_PR83_REPRESENTATIVE_REAL_MOVE_AI_REPLIES' /tmp/pr83-real-replies.log
