@@ -46,8 +46,9 @@ jobs:
           if len(blocks)!=7:
               raise SystemExit(f'expected 7 prior run blocks, got {len(blocks)}')
           fail=0; patched=False
+          workspace_token='$'+'{{ github.workspace }}'
           for n,block in enumerate(blocks,1):
-              block=block.replace('${{ github.workspace }}',str(repo))
+              block=block.replace(workspace_token,str(repo))
               print(f'=== REPLAY_BLOCK_{n} ===',flush=True)
               rc=subprocess.run(['bash','-lc',block],cwd=repo).returncode
               harness=repo/'layoutext-practical.mjs'
