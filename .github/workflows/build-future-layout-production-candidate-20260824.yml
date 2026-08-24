@@ -1,0 +1,141 @@
+name: Build isolated Future corrected-layout production candidate
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/build-future-layout-production-candidate-20260824.yml']
+permissions:
+  contents: write
+jobs:
+  build-candidate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_MAIN: 4d6e94f2547dd63055c09fa1afb288647a99a8f8
+      CANDIDATE_BRANCH: future-layout-fix-production-candidate-20260824
+      UPSTREAM_SHA: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Assert production and candidate bases are untouched
+        run: |
+          set -euo pipefail
+          MAIN=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          CAND=$(git ls-remote origin refs/heads/${CANDIDATE_BRANCH} | awk '{print $1}')
+          echo "MAIN_ACTUAL=$MAIN"
+          echo "CANDIDATE_BASE_ACTUAL=$CAND"
+          test "$MAIN" = "$EXPECTED_MAIN"
+          test "$CAND" = "$EXPECTED_MAIN"
+      - uses: actions/checkout@v4
+        with:
+          repository: yaneurao/YaneuraOu
+          ref: 76d58ef2e4cf64116784f41fd4816425ab6817ee
+          path: YaneuraOu-prod-candidate
+      - name: Replay exact production patches plus corrected WASM NNUE layout
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,textwrap
+          yml=subprocess.check_output(['git','show','2fbda43b3ac86c38f7760e589ce4c52c15c65141:.github/workflows/diag-yaneuraou-v970-threadfix.yml'],text=True)
+          block=yml.split("python3 - <<'PY'",1)[1].split('\n          PY',1)[0]
+          script=textwrap.dedent(block.lstrip('\n')).replace("Path('YaneuraOu/","Path('YaneuraOu-prod-candidate/")
+          Path('/tmp/threadfix.py').write_text(script)
+          PY
+          python3 /tmp/threadfix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('YaneuraOu-prod-candidate/source/Makefile');s=m.read_text()
+          if '-s PTHREAD_POOL_SIZE=2' not in s: raise SystemExit('pool marker missing')
+          m.write_text(s.replace('-s PTHREAD_POOL_SIZE=2','-s PTHREAD_POOL_SIZE=32',1))
+          p=Path('YaneuraOu-prod-candidate/source/eval/nnue/evaluate_nnue.cpp');s=p.read_text()
+          needle='''    Options.add("EvalDir", Option(default_eval_dir, [](const Option& o) {\n                    std::string eval_dir = std::string(o);\n                    if (last_eval_dir != eval_dir)\n                    {\n                        // 評価関数フォルダ名の変更に際して、評価関数ファイルの読み込みフラグをクリアする。\n                        last_eval_dir = eval_dir;\n                        eval_loaded   = false;\n                    }\n                    return std::nullopt;\n                }));\n\n'''
+          if 'Options.add("EvalFile"' not in s:
+              if needle not in s: raise SystemExit('EvalDir marker missing')
+              s=s.replace(needle,needle+'#if defined(__EMSCRIPTEN__)\n    Options.add("EvalFile", Option(EvalFileDefaultName));\n#endif\n\n',1)
+          p.write_text(s)
+          fixes=[
+            ('affine_transform.h','#if defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || defined(USE_NEON_DOTPROD)) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;'),
+            ('affine_transform_sparse_input.h','#if defined(USE_SSSE3) || USE_NEON >= 8\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;','#if (defined(USE_SSSE3) || USE_NEON >= 8) && !defined(USE_WASM_SIMD)\n        return kOutputDimensions % 4 == 0 ? GetWeightIndexScrambled(i) : i;')]
+          for fn,old,new in fixes:
+              p=Path('YaneuraOu-prod-candidate/source/eval/nnue/layers')/fn;s=p.read_text()
+              if old not in s: raise SystemExit('layout marker '+fn)
+              p.write_text(s.replace(old,new,1))
+          PY
+          grep -F '!defined(USE_WASM_SIMD)' YaneuraOu-prod-candidate/source/eval/nnue/layers/affine_transform.h
+          grep -F '!defined(USE_WASM_SIMD)' YaneuraOu-prod-candidate/source/eval/nnue/layers/affine_transform_sparse_input.h
+          echo PASS_FUTURE_PROD_SOURCE_LAYOUT_PATCH
+      - name: Build corrected V9.70 WASM with exact validated toolchain
+        run: |
+          set -euo pipefail
+          docker pull emscripten/emsdk:3.1.43 >/dev/null
+          mkdir -p YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib
+          docker run --rm -v "${{ github.workspace }}/YaneuraOu-prod-candidate:/src" -w /src/source emscripten/emsdk:3.1.43 bash -lc 'make clean && make -j2 tournament COMPILER=em++ TARGET_CPU=WASM YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE TARGET=../build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.js EM_EXPORT_NAME=YaneuraOu_HalfKP_noeval EM_INITIAL_MEMORY_SIZE=167772160' >/tmp/future-prod-build.log 2>&1
+          LIB=YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib
+          node - <<'NODE'
+          const fs=require('fs'),p='YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib/yaneuraou.halfkp.noeval.wasm';
+          const ex=WebAssembly.Module.exports(new WebAssembly.Module(fs.readFileSync(p))).map(x=>x.name);
+          if(!ex.includes('usi_command'))throw Error('usi_command missing');
+          console.log('PASS_FUTURE_PROD_WASM_EXPORT');
+          NODE
+          sha256sum "$LIB"/yaneuraou.halfkp.noeval.js "$LIB"/yaneuraou.halfkp.noeval.worker.js "$LIB"/yaneuraou.halfkp.noeval.wasm
+      - name: Populate isolated candidate branch and cache-bust Future only
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANDIDATE_BRANCH"
+          git worktree add -B "$CANDIDATE_BRANCH" /tmp/future-candidate "origin/$CANDIDATE_BRANCH"
+          C=/tmp/future-candidate
+          test "$(git -C "$C" rev-parse HEAD)" = "$EXPECTED_MAIN"
+          LIB="$GITHUB_WORKSPACE/YaneuraOu-prod-candidate/build/wasm/halfkp.noeval/lib"
+          cp "$LIB"/yaneuraou.halfkp.noeval.js "$C/shogi-v21528/yaneuraou/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.worker.js "$C/shogi-v21528/yaneuraou/"
+          cp "$LIB"/yaneuraou.halfkp.noeval.wasm "$C/shogi-v21528/yaneuraou/"
+          python3 - <<'PY'
+          from pathlib import Path
+          c=Path('/tmp/future-candidate')
+          p=c/'shogi-v21528/future-yaneura-worker21528.js';s=p.read_text()
+          old="const BUILD='21528v970d5';";new="const BUILD='21528v970d6';"
+          if old not in s: raise SystemExit('worker BUILD cache marker missing')
+          p.write_text(s.replace(old,new,1))
+          p=c/'shogi-side-test/future21520.js';s=p.read_text()
+          old="future-yaneura-worker21528.js?v=21528v970d6";new="future-yaneura-worker21528.js?v=21528v970d7"
+          if old not in s: raise SystemExit('Future worker URL marker missing')
+          p.write_text(s.replace(old,new,1))
+          p=c/'shogi-v21528/index.html';s=p.read_text()
+          old="get(test+'future21520.js?v=21528g')";new="get(test+'future21520.js?v=21528h')"
+          if old not in s: raise SystemExit('Future patch cache marker missing')
+          p.write_text(s.replace(old,new,1))
+          p=c/'shogi-v21528/yaneuraou/build-info.txt';s=p.read_text()
+          if 'WASM_NNUE_LAYOUT_FIX=1' not in s:s=s.rstrip()+'\nWASM_NNUE_LAYOUT_FIX=1\n'
+          p.write_text(s)
+          PY
+          echo '=== CANDIDATE CHANGES ==='
+          git -C "$C" status --short
+          CHANGED=$(git -C "$C" status --short | awk '{print $2}')
+          test -n "$CHANGED"
+          # Strictly Future/runtime files only; no diagnostics may enter this branch.
+          if echo "$CHANGED" | grep -Ev '^(shogi-v21528/(index\.html|future-yaneura-worker21528\.js|yaneuraou/(build-info\.txt|yaneuraou\.halfkp\.noeval\.(js|worker\.js|wasm)))|shogi-side-test/future21520\.js)$'; then
+            echo 'unexpected candidate file'; exit 1
+          fi
+          git -C "$C" diff --check
+          node --check "$C/shogi-v21528/future-yaneura-worker21528.js"
+          node --check "$C/shogi-side-test/future21520.js"
+          sha256sum "$C/shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js" "$C/shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js" "$C/shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm" "$C/shogi-v21528/yaneuraou/nn.bin"
+      - name: Recheck main then commit and push candidate only
+        run: |
+          set -euo pipefail
+          MAIN=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          REMOTE_CAND=$(git ls-remote origin refs/heads/${CANDIDATE_BRANCH} | awk '{print $1}')
+          test "$MAIN" = "$EXPECTED_MAIN"
+          test "$REMOTE_CAND" = "$EXPECTED_MAIN"
+          C=/tmp/future-candidate
+          git -C "$C" config user.name github-actions[bot]
+          git -C "$C" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C "$C" add shogi-v21528/index.html shogi-v21528/future-yaneura-worker21528.js shogi-side-test/future21520.js shogi-v21528/yaneuraou/build-info.txt shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.worker.js shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm
+          git -C "$C" commit -m 'Fix Future WASM NNUE layout and cache identity'
+          NEW=$(git -C "$C" rev-parse HEAD)
+          git -C "$C" push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          echo "FUTURE_PRODUCTION_CANDIDATE_SHA=$NEW"
+          echo PASS_FUTURE_PRODUCTION_CANDIDATE_PUSH
