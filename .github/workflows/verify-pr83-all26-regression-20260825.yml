@@ -1,0 +1,64 @@
+name: Verify PR83 all26 candidate regression
+on:
+  push:
+    branches: [validate-pr83-pool2-runtime-20260825]
+permissions:
+  contents: read
+jobs:
+  all26-regression:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      CANDIDATE_SHA: d96a37094d6ceab48079c7b3322261004ec09d5a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+      - name: Assert exact candidate and pool2 identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          grep -F 'WASM_NNUE_LAYOUT_FIX=1' shogi-v21528/yaneuraou/build-info.txt
+          grep -F 'PTHREAD_POOL_SIZE=2' shogi-v21528/yaneuraou/build-info.txt
+          test "$(sha256sum shogi-v21528/yaneuraou/yaneuraou.halfkp.noeval.wasm | awk '{print $1}')" = '48f44d95c7ca3d0bde108f01d47df04514e8ebb24e63284148760aec876b3ab9'
+          echo PASS_PR83_REGRESSION_EXACT_CANDIDATE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install browser
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Start COI server
+        run: |
+          cat >coi-regression.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';
+          const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};
+          http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4199,'127.0.0.1');
+          NODE
+          node ./coi-regression.mjs >/tmp/pr83-all26-server.log 2>&1 &
+          sleep 1
+      - name: Verify all26 top cohorts UI save focus and Future route
+        run: |
+          cat >pr83-all26.mjs <<'NODE'
+          import {chromium} from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];
+          page.on('pageerror',e=>errors.push('pageerror:'+e.message));page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource/.test(m.text()))errors.push('console:'+m.text())});
+          await page.goto('http://127.0.0.1:4199/shogi-v21528/index.html?pr83all26='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+          await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});
+          const snap=await page.evaluate(()=>{const cards=[...document.querySelectorAll('#chars .ch')];const text=e=>(e?.textContent||'').trim();return{coi:crossOriginIsolated,audit:window.AI_SHOGI_WEB_AUDIT||null,v:window.AI_SHOGI_V21528||null,cards:cards.map((c,i)=>({i,name:text(c.querySelector('.chName'))||c.querySelector('img')?.alt||'',rank:text(c.querySelector('.chRank')),style:text(c.querySelector('.chStyle')),img:!!c.querySelector('img')})),broken:[...document.querySelectorAll('#chars .ch img')].filter(i=>i.complete&&i.naturalWidth===0).map(i=>i.alt||i.src)};});
+          if(!snap.coi||snap.cards.length!==26)throw Error('boot '+JSON.stringify(snap));
+          if(new Set(snap.cards.map(x=>x.name)).size!==26)throw Error('duplicate names '+JSON.stringify(snap.cards));
+          if(snap.v?.characters!==26||snap.v?.futureIndex!==25||snap.v?.rating!==3400||snap.v?.futureName!=='未来からやってきたみつき')throw Error('future metadata '+JSON.stringify(snap.v));
+          if(snap.broken.length)throw Error('broken images '+JSON.stringify(snap.broken));
+          const selected=[];for(const idx of [0,1,2,3,4,6,12,19,24,25]){const card=page.locator('#chars .ch').nth(idx);await card.click();await page.waitForTimeout(80);const o=await page.locator('#oppName').innerText();selected.push({idx,opponent:o});if(!o.trim())throw Error('empty opponent '+idx)}
+          await page.locator('#chars .ch').nth(25).click();await page.waitForTimeout(100);const future=await page.evaluate(()=>({name:document.querySelector('#oppName')?.textContent?.trim(),rank:document.querySelector('#oppRank')?.textContent?.trim(),api:!!window.AI_SHOGI_YANEURAOU_FUTURE}));if(!future.name?.includes('未来からやってきたみつき')||!future.rank?.includes('3400')||!future.api)throw Error('future select '+JSON.stringify(future));
+          await page.locator('#focusBtn').click();await page.waitForTimeout(80);const focus=await page.evaluate(()=>({display:getComputedStyle(document.querySelector('#focus')).display,name:document.querySelector('#foppName')?.textContent?.trim()}));if(focus.display==='none'||!focus.name?.includes('未来からやってきたみつき'))throw Error('focus '+JSON.stringify(focus));await page.locator('#closeBtn').click();
+          const saved=await page.evaluate(()=>{window.AI_SHOGI_PIECE_SOUND.setEnabled(false);return window.AI_SHOGI_PIECE_SOUND.enabled});await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:120000});const loaded=await page.evaluate(()=>window.AI_SHOGI_PIECE_SOUND?.enabled);if(saved!==false||loaded!==false)throw Error('sound persistence '+JSON.stringify({saved,loaded}));
+          const result={cards:snap.cards,selected,future,focus,soundPersist:loaded===false,errors};console.log('PR83_ALL26_REGRESSION '+JSON.stringify(result));if(errors.length)throw Error('runtime errors '+JSON.stringify(errors));console.log('PASS_PR83_TOP5_COHORT_ALL26_REGRESSION');await browser.close();
+          NODE
+          node ./pr83-all26.mjs 2>&1 | tee /tmp/pr83-all26.log
+          grep -F 'PASS_PR83_TOP5_COHORT_ALL26_REGRESSION' /tmp/pr83-all26.log
