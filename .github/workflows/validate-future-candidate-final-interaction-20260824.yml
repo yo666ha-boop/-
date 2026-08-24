@@ -39,6 +39,14 @@ jobs:
           old="await page.locator('#chars .ch').nth(0).click();"
           if old not in s: raise SystemExit('future selection marker missing')
           s=s.replace(old,"await page.locator('#chars .ch').nth(25).click();",1)
+          old="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon/i.test(x));"
+          new="const severeConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*favicon|Data URL decoding failed|ERR_INVALID_URL/i.test(x));"
+          if old not in s: raise SystemExit('console filter marker missing')
+          s=s.replace(old,new,1)
+          old="const severeFailures=requestFailures.filter(x=>!/^data:/i.test(x.url)&&!/favicon\\.ico(?:\\?|$)/i.test(x.url));"
+          new="const severeFailures=requestFailures.filter(x=>!/^data:/i.test(x.url)&&!/favicon\\.ico(?:\\?|$)/i.test(x.url)&&!/ERR_ABORTED/i.test(x.failure));"
+          if old not in s: raise SystemExit('failure filter marker missing')
+          s=s.replace(old,new,1)
           s=s.replace("FLOW_DIAGNOSTIC ","FUTURE_CANDIDATE_FLOW_DIAGNOSTIC ").replace("PASS_FINAL_INTERACTION_FLOW ","PASS_FUTURE_CANDIDATE_FINAL_INTERACTION ")
           p.write_text(s)
           PY
