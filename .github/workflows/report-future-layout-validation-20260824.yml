@@ -1,0 +1,49 @@
+name: Report Future candidate validation run
+on:
+  push:
+    branches: [validate-future-layout-candidate-20260824]
+    paths: ['.github/workflows/report-future-layout-validation-20260824.yml']
+permissions:
+  actions: read
+  issues: write
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    steps:
+      - name: Find validation run and wait for completion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: validate-future-layout-candidate-20260824
+        run: |
+          set -euo pipefail
+          found=''
+          for n in $(seq 1 90); do
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/actions/runs?branch=$BRANCH&per_page=100" -o /tmp/runs.json
+            python3 - <<'PY' >/tmp/validation.json
+          import json
+          x=json.load(open('/tmp/runs.json'))
+          rows=[r for r in x.get('workflow_runs',[]) if r.get('name')=='Validate Future layout production candidate']
+          rows.sort(key=lambda r:r.get('id',0),reverse=True)
+          print(json.dumps(rows[0] if rows else {},ensure_ascii=False))
+          PY
+            found=$(python3 -c "import json;d=json.load(open('/tmp/validation.json'));print(d.get('id',''))")
+            status=$(python3 -c "import json;d=json.load(open('/tmp/validation.json'));print(d.get('status',''))")
+            echo "validation run=$found status=$status poll=$n"
+            if [ -n "$found" ] && [ "$status" = completed ]; then break; fi
+            sleep 30
+          done
+          test -n "$found"
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/actions/runs/$found/jobs?per_page=100" -o /tmp/jobs.json
+          python3 - <<'PY' >/tmp/report.md
+          import json
+          r=json.load(open('/tmp/validation.json'));j=json.load(open('/tmp/jobs.json')).get('jobs',[])
+          print('### Future candidate validation run checkpoint')
+          print(f"run `{r.get('id')}` status=`{r.get('status')}` conclusion=`{r.get('conclusion')}` head_sha=`{r.get('head_sha')}`")
+          for x in j: print(f"- job `{x.get('id')}` `{x.get('name')}` status=`{x.get('status')}` conclusion=`{x.get('conclusion')}`")
+          print('\nCandidate `70e15f1787aadbf0235428a0939826342c683d39`; validation branch only; main untouched.')
+          PY
+          cat /tmp/report.md
+          gh api "repos/$REPO/issues/81/comments" -f body="$(cat /tmp/report.md)"
