@@ -1,3 +1,4 @@
+# validation retrigger 2026-08-25
 name: Verify PR83 all26 candidate regression
 on:
   push:
