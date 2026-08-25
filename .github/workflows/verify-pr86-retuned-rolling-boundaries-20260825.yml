@@ -18,6 +18,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           CANDIDATE=cecf7b88822ecde046d44e12d45f1cb7eac203be
           git merge-base --is-ancestor "$CANDIDATE" HEAD
           mapfile -t CHANGED < <(git diff --name-only "$CANDIDATE"..HEAD)
