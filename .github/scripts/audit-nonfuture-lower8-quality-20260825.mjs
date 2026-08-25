@@ -1,0 +1,50 @@
+import { webkit } from 'playwright';
+const R='abcdefghi',INIT='lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL';
+const LONG=`4i5h 8c8d 2h3h 8d8e 6g6f 8e8f 8g8f 8b8f 7g7f 8f8g+ 6i7h 8g7f P*7b 7a7b 5i4i 7f8e 3i4h P*8f 6f6e 8f8g+ 8h5e 8e6e 7h6h 6e5e 5g5f 5e7e 6h6i 3c3d 9g9f 2b9i+ 7i8h 9i8h 3h3i B*2h 3i3h 2h1i+ 4g4f 1i2i 3h3i 2i2h 3i3h 2h2g 4h3i N*2f 5h4h 8h8i 4h5g L*4g 5g4g 8i6g 6i5h 7e7i L*5i 2f3h+`.split(/\s+/);
+function sfen(ms){const b=new Map(),h={b:{},w:{}};let rr=0;for(const row of INIT.split('/')){let f=9,pr=false;for(const c of row){if(c==='+'){pr=true;continue}if(c>='1'&&c<='9'){f-=Number(c);continue}const side=c===c.toUpperCase()?'b':'w';b.set(''+f+R[rr],{side,k:c.toUpperCase(),pr});pr=false;f--}rr++}let t='b';for(const m of ms){if(/^[PLNSGBR]\*/.test(m)){const k=m[0],d=m.slice(2);h[t][k]=(h[t][k]||0)-1;b.set(d,{side:t,k,pr:false})}else{const a=m.slice(0,2),d=m.slice(2,4),p=m.endsWith('+'),pc=b.get(a);if(!pc)throw Error('missing '+a+' '+m);const cap=b.get(d);if(cap)h[t][cap.k]=(h[t][cap.k]||0)+1;b.delete(a);b.set(d,{...pc,pr:pc.pr||p})}t=t==='b'?'w':'b'}const rows=[];for(let r=0;r<9;r++){let x='',e=0;for(let f=9;f;f--){const pc=b.get(''+f+R[r]);if(!pc){e++;continue}if(e){x+=e;e=0}x+=(pc.pr?'+':'')+(pc.side==='b'?pc.k:pc.k.toLowerCase())}if(e)x+=e;rows.push(x)}let hand='';for(const side of['b','w'])for(const k of['R','B','G','S','N','L','P']){const n=h[side][k]||0;if(n>0)hand+=(n>1?n:'')+(side==='b'?k:k.toLowerCase())}return rows.join('/')+' '+t+' '+(hand||'-')+' '+(ms.length+1)}
+const late=sfen(LONG.slice(0,53)).replace(/\s+\d+$/,' 56');
+const cases=[
+ {label:'open-7g7f',phase:'opening',pos:sfen(['7g7f']),nodes:3000000},
+ {label:'open-2g2f',phase:'opening',pos:sfen(['2g2f']),nodes:3000000},
+ {label:'mid-12',phase:'middlegame',pos:sfen(LONG.slice(0,11)),nodes:4000000},
+ {label:'mid-20',phase:'middlegame',pos:sfen(LONG.slice(0,19)),nodes:4000000},
+ {label:'mid-28',phase:'middlegame',pos:sfen(LONG.slice(0,27)),nodes:4500000},
+ {label:'mid-34',phase:'middlegame',pos:sfen(LONG.slice(0,33)),nodes:4500000},
+ {label:'late-53',phase:'endgame',pos:late,nodes:5000000},
+ {label:'mate-in-1',phase:'mate',pos:'k8/9/9/9/9/9/9/5r3/4K4 w g 60',nodes:1200000}
+];
+const targets=[
+ {i:8,n:'直江兼続',r:1700,minTop5:4},{i:13,n:'ユリア',r:1680,minTop5:4},{i:10,n:'バット',r:1600,minTop5:4},{i:7,n:'しんじ',r:1550,minTop5:4},
+ {i:22,n:'リン',r:1500,minTop5:4},{i:6,n:'ジャギ',r:1450,minTop5:3},{i:14,n:'玉ちゃん',r:1380,minTop5:3},{i:16,n:'ぺんぺん',r:1250,minTop5:3}
+];
+const browser=await webkit.launch({headless:true}),page=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}}),pageErrors=[];
+page.on('pageerror',e=>pageErrors.push(String(e.message||e)));
+const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):0;
+try{
+ await page.goto('http://127.0.0.1:4239/shogi-v21528/index-lower8-quality.html?x='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+ await page.waitForFunction(()=>window.__L8Q&&window.AI_SHOGI_YANEURAOU_FUTURE&&window.AI_SHOGI_YANEURAOU_COHORT13_18&&window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR?.version==='2.15.36',{timeout:120000});
+ const lower=await page.evaluate(()=>window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR),stats=Object.fromEntries(targets.map(t=>[t.i,{...t,tests:0,exact:0,top5:0,mateExact:0,nonBest:0,loss:[],depth:[]} ])),upper={tests:0,exact:0,top5:0,mateExact:0,loss:[]};
+ if(lower.mode!=='profiled-yaneuraou-every-move')throw Error('mode '+lower.mode);
+ for(const t of targets){const p=lower.profiles[t.i];if(!p||!p.label.includes('R'+t.r))throw Error('profile identity '+JSON.stringify({t,p}))}
+ for(const c of cases){
+   const st=await page.evaluate(pos=>window.__L8Q.parse(pos),c.pos),legal=await page.evaluate(s=>window.__L8Q.legal(s),st);
+   const ref=await page.evaluate(async({s,n})=>window.AI_SHOGI_YANEURAOU_FUTURE.bestMove(s,{nodes:n,multiPV:5,adaptive:false}),{s:st,n:c.nodes}),rc=(ref?.info?.candidates||[]).filter(x=>x?.token).sort((a,b)=>(a.rank||99)-(b.rank||99)),rb=rc[0];
+   if(!rb?.token)throw Error('no ref '+c.label);
+   console.log('L8Q_REF '+JSON.stringify({case:c.label,phase:c.phase,best:rb.token,depth:ref?.info?.depth,nodes:ref?.info?.nodes,candidates:rc.map(x=>({rank:x.rank,token:x.token,cp:x.cp,mate:x.mate}))}));
+   const ur=await page.evaluate(async s=>window.AI_SHOGI_YANEURAOU_COHORT13_18.bestMove(s,11),st),uu=ur?.move?await page.evaluate(m=>window.__L8Q.usi(m),ur.move):ur?.info?.bestmove;
+   if(!legal.includes(uu))throw Error('upper illegal '+c.label+' '+uu);const uh=rc.find(x=>x.token===uu);upper.tests++;upper.exact+=uu===rb.token?1:0;upper.top5+=uh?1:0;upper.mateExact+=(c.phase==='mate'&&uu===rb.token)?1:0;upper.loss.push(Number(ur?.info?.cpLoss||0));
+   console.log('L8Q_UPPER '+JSON.stringify({case:c.label,token:uu,exact:uu===rb.token,top5:!!uh,cpLoss:ur?.info?.cpLoss||0}));
+   for(const t of targets){
+     const res=await page.evaluate(async({s,i})=>window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR.bestMove(s,i),{s:st,i:t.i}),u=res?.move?await page.evaluate(m=>window.__L8Q.usi(m),res.move):res?.info?.bestmove,p=lower.profiles[t.i];
+     if(!u||!legal.includes(u))throw Error('lower illegal '+t.n+' '+c.label+' '+u);const h=rc.find(x=>x.token===u),z=stats[t.i],loss=Number(res?.info?.cpLoss||0);if(loss>p.maxLoss)throw Error('maxLoss '+t.n+' '+c.label+' '+loss+'>'+p.maxLoss);
+     z.tests++;z.exact+=u===rb.token?1:0;z.top5+=h?1:0;z.mateExact+=(c.phase==='mate'&&u===rb.token)?1:0;z.nonBest+=(c.phase!=='mate'&&Number(res?.info?.selectedRank||1)>1)?1:0;z.loss.push(loss);z.depth.push(Number(res?.info?.depth||0));
+     console.log('L8Q_ROW '+JSON.stringify({case:c.label,phase:c.phase,index:t.i,name:t.n,rating:t.r,token:u,selectedRank:res?.info?.selectedRank||1,cpLoss:loss,exact:u===rb.token,top5:!!h,refRank:h?.rank||0,depth:res?.info?.depth||0,nodes:res?.info?.nodes||0,targetMs:res?.targetMs||0}));
+   }
+ }
+ const up={tests:upper.tests,exact:upper.exact,top5:upper.top5,mateExact:upper.mateExact,meanLoss:mean(upper.loss),quality:upper.exact*2+upper.top5},by=targets.map(t=>{const z=stats[t.i];return{index:t.i,name:t.n,rating:t.r,tests:z.tests,exact:z.exact,top5:z.top5,mateExact:z.mateExact,nonBest:z.nonBest,meanLoss:mean(z.loss),meanDepth:mean(z.depth),quality:z.exact*2+z.top5}}),fail=[];
+ if(up.tests!==8||up.mateExact!==1)fail.push('upper unstable '+JSON.stringify(up));
+ for(const x of by){const t=targets.find(q=>q.i===x.index);if(x.tests!==8)fail.push('tests '+x.name);if(x.mateExact!==1)fail.push('mate '+x.name);if(x.top5<t.minTop5)fail.push('deepTop5 '+x.name+' '+x.top5+'<'+t.minTop5);if(x.quality>up.quality+2)fail.push('quality inversion '+x.name+' '+x.quality+' > '+(up.quality+2));}
+ for(let j=1;j<by.length;j++){if(by[j].rating<by[j-1].rating&&by[j].quality>by[j-1].quality+5)fail.push('large lower inversion '+by[j].name+' '+by[j].quality+' > '+by[j-1].name+' '+by[j-1].quality)}
+ if(pageErrors.length)fail.push('page '+pageErrors.join('|'));
+ console.log('LOWER8_QUALITY_SUMMARY '+JSON.stringify({upper:up,by,fail,pageErrors}));if(fail.length)throw Error(fail.join(' | '));console.log('PASS_NONFUTURE_LOWER8_8CASE_QUALITY '+JSON.stringify({upper:up,by}));
+}finally{await browser.close()}

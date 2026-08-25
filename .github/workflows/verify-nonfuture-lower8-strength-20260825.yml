@@ -1,0 +1,81 @@
+name: Verify non-Future lower8 strength
+on:
+  push:
+    branches: [tune-nonfuture-strength-20260825]
+permissions:
+  contents: read
+jobs:
+  lower8-strength:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static strength policy gate
+        run: |
+          set -euo pipefail
+          node --check shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F "version:'2.15.36'" shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F "mode:'profiled-yaneuraou-every-move'" shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F 'cohort19-26-yaneura21536.js?v=21536a' shogi-side-test/final21513_rinimg.js
+          ! grep -F 'builtin-preserved' shogi-side-test/cohort19-26-yaneura21536.js
+          echo PASS_LOWER8_STATIC_FULL_ENGINE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install WebKit
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
+        run: |
+          cat >coi-lower8.mjs <<'NODE'
+          import http from'node:http';import fs from'node:fs';import path from'node:path';
+          const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.wasm':'application/wasm','.bin':'application/octet-stream','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};
+          http.createServer((q,s)=>{let n=decodeURIComponent(new URL(q.url,'http://x').pathname);if(n.endsWith('/'))n+='index.html';const f=path.resolve(root,'.'+n);if(!f.startsWith(root)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){s.writeHead(404);return s.end('404')}s.setHeader('Cross-Origin-Opener-Policy','same-origin');s.setHeader('Cross-Origin-Embedder-Policy','require-corp');s.setHeader('Cross-Origin-Resource-Policy','same-origin');s.setHeader('Cache-Control','no-store');s.setHeader('Content-Type',mime[path.extname(f).toLowerCase()]||'application/octet-stream');fs.createReadStream(f).pipe(s)}).listen(4202,'127.0.0.1');
+          NODE
+          node ./coi-lower8.mjs >/tmp/lower8-server.log 2>&1 &
+          sleep 1
+      - name: Verify all lower8 real move to YaneuraOu reply
+        run: |
+          cat >verify-lower8.mjs <<'NODE'
+          import {webkit} from 'playwright';
+          const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1';
+          const browser=await webkit.launch({headless:true});
+          const page=await browser.newPage({userAgent:ua,viewport:{width:390,height:844}});const errors=[];
+          page.on('pageerror',e=>errors.push('pageerror:'+String(e.message||e)));page.on('console',m=>{if(m.type()==='error'&&!/favicon|Data URL decoding failed|ERR_INVALID_URL|Load request cancelled|Failed to load resource/i.test(m.text()))errors.push('console:'+m.text())});
+          const txt=sel=>page.locator(sel).textContent().then(v=>String(v||'').trim());
+          await page.goto('http://127.0.0.1:4202/shogi-v21528/index.html?lower8='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+          await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR?.version==='2.15.36',{timeout:120000});
+          await page.waitForFunction(()=>[...document.querySelectorAll('#chars .ch img')].every(i=>i.complete&&i.naturalWidth>0),{timeout:30000});
+          const api=await page.evaluate(()=>window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR);
+          if(api.mode!=='profiled-yaneuraou-every-move')throw Error('wrong mode '+api.mode);
+          const expected=[
+            [8,'直江兼続',1700],[13,'ユリア',1680],[10,'バット',1600],[7,'しんじ',1550],
+            [22,'リン',1500],[6,'ジャギ',1450],[14,'玉ちゃん',1380],[16,'ぺんぺん',1250]
+          ];
+          if(JSON.stringify(api.indices)!==JSON.stringify(expected.map(x=>x[0])))throw Error('indices '+JSON.stringify(api.indices));
+          let prevNormal=Infinity,prevLoss=0;
+          for(const [idx,name,rating] of expected){const p=api.profiles[idx];if(!p)throw Error('missing profile '+idx);if(p.normal>prevNormal)throw Error('normal hierarchy '+JSON.stringify({idx,p,prevNormal}));if(p.maxLoss<prevLoss)throw Error('loss hierarchy '+JSON.stringify({idx,p,prevLoss}));prevNormal=p.normal;prevLoss=p.maxLoss;if(!p.label.includes('R'+rating))throw Error('rating label '+JSON.stringify({idx,p}))}
+          async function realReply(idx,name){
+            await page.locator('#chars .ch').nth(idx).click();
+            await page.selectOption('#sideSelect2157','sente');
+            await page.click('#newBtn');await page.waitForTimeout(120);
+            const before=await txt('#moves');
+            await page.locator('#board').locator(':scope > *').nth(56).click();await page.waitForTimeout(50);await page.locator('#board').locator(':scope > *').nth(47).click();
+            await page.waitForFunction(b=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==b;},before,{timeout:10000});
+            const human=await txt('#moves');
+            await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},human,{timeout:120000});
+            const replied=await txt('#moves'),status=await txt('#status'),opp=await txt('#oppName');
+            if(replied===human)throw Error(name+' no AI reply');if(!opp.includes(name))throw Error(name+' opponent mismatch '+opp);if(!status.includes('やねうら王＋水匠5'))throw Error(name+' not engine route '+status);if(status.includes('内蔵AI退避'))throw Error(name+' fallback '+status);
+            return{idx,name,human,replied,status,opp};
+          }
+          const rows=[];for(const [idx,name] of expected)rows.push(await realReply(idx,name));
+          const final=await page.evaluate(()=>({coi:crossOriginIsolated,cards:document.querySelectorAll('#chars .ch').length,version:window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR?.version,mode:window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR?.mode}));
+          console.log('LOWER8_REAL_REPLY_ROWS '+JSON.stringify({api:{version:api.version,mode:api.mode,profiles:api.profiles},rows,final,errors}));
+          if(!final.coi||final.cards!==26||errors.length)throw Error('final '+JSON.stringify({final,errors}));
+          console.log('PASS_NONFUTURE_LOWER8_FULL_ENGINE_REAL_REPLIES');
+          await browser.close();
+          NODE
+          node ./verify-lower8.mjs 2>&1 | tee /tmp/verify-lower8.log
+          grep -F 'PASS_NONFUTURE_LOWER8_FULL_ENGINE_REAL_REPLIES' /tmp/verify-lower8.log
