@@ -12,12 +12,20 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.55.0-jammy
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Assert exact PR86 candidate base
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "cecf7b88822ecde046d44e12d45f1cb7eac203be"
-          echo "PASS_PR86_BOUNDARY_EXACT_CANDIDATE cecf7b88822ecde046d44e12d45f1cb7eac203be"
+          CANDIDATE=cecf7b88822ecde046d44e12d45f1cb7eac203be
+          git merge-base --is-ancestor "$CANDIDATE" HEAD
+          mapfile -t CHANGED < <(git diff --name-only "$CANDIDATE"..HEAD)
+          printf 'VALIDATION_DIFF %s\n' "${CHANGED[*]}"
+          test "${#CHANGED[@]}" -eq 2
+          printf '%s\n' "${CHANGED[@]}" | grep -Fx '.github/scripts/audit-retuned-rolling-boundaries-20260825.mjs'
+          printf '%s\n' "${CHANGED[@]}" | grep -Fx '.github/workflows/verify-pr86-retuned-rolling-boundaries-20260825.yml'
+          echo "PASS_PR86_BOUNDARY_EXACT_CANDIDATE $CANDIDATE"
       - name: Prepare Playwright
         run: |
           npm init -y >/dev/null
