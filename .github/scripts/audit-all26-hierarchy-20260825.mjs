@@ -16,7 +16,6 @@ const cases=[
 ];
 const order=[25,0,1,2,3,4,24,23,21,5,17,19,15,12,20,18,9,11,8,13,10,7,22,6,14,16];
 const minTop4={25:6,0:6,1:5,2:5,3:5,4:5,24:4,23:4,21:4,5:4,17:4,19:4,15:3,12:3,20:3,18:3,9:3,11:3,8:4,13:4,10:4,7:4,22:4,6:3,14:3,16:3};
-const groupOf=i=>i===25?'future':[0,1,2,3,4].includes(i)?'top5':[24,23,21,5,17,19].includes(i)?'7-12':[15,12,20,18,9,11].includes(i)?'13-18':'19-26';
 const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):0;
 const browser=await webkit.launch({headless:true});
 const page=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}});
@@ -24,9 +23,9 @@ const pageErrors=[];page.on('pageerror',e=>pageErrors.push(String(e.message||e))
 try{
  await page.goto('http://127.0.0.1:4239/shogi-v21528/index-lower8-quality.html?all26='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
  await page.waitForFunction(()=>window.__L8Q&&window.AI_SHOGI_YANEURAOU_FUTURE&&window.AI_SHOGI_YANEURAOU_TOP5&&window.AI_SHOGI_YANEURAOU_COHORT7_12&&window.AI_SHOGI_YANEURAOU_COHORT13_18&&window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR?.version==='2.15.36',{timeout:120000});
- const targets=await page.evaluate(order=>order.map(i=>{const top=window.AI_SHOGI_YANEURAOU_TOP5,c7=window.AI_SHOGI_YANEURAOU_COHORT7_12,c13=window.AI_SHOGI_YANEURAOU_COHORT13_18,lo=window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR;let p=null,api='';if(i===25){p={label:'R3400・未来最強',maxLoss:0};api='future'}else if(top?.enabled(i)){p=top.profiles[i];api='top5'}else if(c7?.enabled(i)){p=c7.profiles[i];api='7-12'}else if(c13?.enabled(i)){p=c13.profiles[i];api='13-18'}else if(lo?.enabled(i)){p=lo.profiles[i];api='19-26'}return{i,name:C[i]?.[0]||('CHAR'+i),rating:Number(C[i]?.[1]||0),api,profile:p}}),order);
+ const targets=await page.evaluate(order=>{const future=window.AI_SHOGI_YANEURAOU_FUTURE,top=window.AI_SHOGI_YANEURAOU_TOP5,c7=window.AI_SHOGI_YANEURAOU_COHORT7_12,c13=window.AI_SHOGI_YANEURAOU_COHORT13_18,lo=window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR;const meta=(mod,i)=>{const k=Array.isArray(mod?.indices)?mod.indices.indexOf(i):-1;return{name:k>=0&&Array.isArray(mod.names)?mod.names[k]:('CHAR'+i),rating:k>=0&&Array.isArray(mod.ratings)?Number(mod.ratings[k]||0):0}};return order.map(i=>{let p=null,api='',m=null;if(i===25){p={label:'R3400・未来最強',maxLoss:0};api='future';m={name:future.name,rating:Number(future.rating||3400)}}else if(top?.enabled(i)){p=top.profiles[i];api='top5';m=meta(top,i)}else if(c7?.enabled(i)){p=c7.profiles[i];api='7-12';m=meta(c7,i)}else if(c13?.enabled(i)){p=c13.profiles[i];api='13-18';m=meta(c13,i)}else if(lo?.enabled(i)){p=lo.profiles[i];api='19-26';m=meta(lo,i)}return{i,name:m?.name||('CHAR'+i),rating:Number(m?.rating||0),api,profile:p}})},order);
  if(targets.length!==26||new Set(targets.map(x=>x.i)).size!==26)throw Error('target count/uniqueness '+targets.length);
- if(targets.some(x=>!x.api||!x.profile))throw Error('missing profile '+JSON.stringify(targets.filter(x=>!x.api||!x.profile)));
+ if(targets.some(x=>!x.api||!x.profile||!x.rating))throw Error('missing profile/meta '+JSON.stringify(targets.filter(x=>!x.api||!x.profile||!x.rating)));
  for(let j=1;j<targets.length;j++)if(targets[j].rating>=targets[j-1].rating)throw Error('rating order '+JSON.stringify([targets[j-1],targets[j]]));
  const stats=Object.fromEntries(targets.map(t=>[t.i,{...t,tests:0,exact:0,top4:0,mateExact:0,nonBest:0,internalLoss:[],refLoss:[],depth:[],nodes:[],outside:[]} ]));
  for(const c of cases){
