@@ -7,14 +7,14 @@
   const EXPECTED={8:'直江兼続',13:'ユリア',10:'バット',7:'しんじ',22:'リン',6:'ジャギ',14:'玉ちゃん',16:'ぺんぺん'};
   for(const i of INDICES)if(C[i]?.[0]!==EXPECTED[i]){console.error('cohort19-26 yaneura identity mismatch',i,C[i]?.[0],EXPECTED[i]);return}
   const PROFILES={
-    8:{label:'R1700・義知略',personality:'positional',multiPV:5,minRank:3,maxLoss:180,normal:300,endgame:500},
-    13:{label:'R1680・静穏安定',personality:'stable',multiPV:5,minRank:3,maxLoss:190,normal:285,endgame:480},
-    10:{label:'R1600・元気直感',personality:'aggressive',multiPV:5,minRank:4,maxLoss:200,normal:260,endgame:460},
-    7:{label:'R1550・慎重成長',personality:'defensive',multiPV:5,minRank:4,maxLoss:215,normal:240,endgame:430},
-    22:{label:'R1500・基本忠実',personality:'balanced',multiPV:5,minRank:4,maxLoss:230,normal:220,endgame:400},
-    6:{label:'R1450・撹乱小細工',personality:'aggressive',multiPV:5,minRank:4,maxLoss:245,normal:200,endgame:370},
-    14:{label:'R1380・応援マスコット',personality:'stable',multiPV:5,minRank:4,maxLoss:265,normal:180,endgame:340},
-    16:{label:'R1250・ゆるふわ直感',personality:'balanced',multiPV:5,minRank:4,maxLoss:300,normal:160,endgame:310}
+    8:{label:'R1700・義知略',personality:'positional',multiPV:4,minRank:3,maxLoss:180,normal:500,endgame:700},
+    13:{label:'R1680・静穏安定',personality:'stable',multiPV:4,minRank:3,maxLoss:190,normal:460,endgame:660},
+    10:{label:'R1600・元気直感',personality:'aggressive',multiPV:4,minRank:4,maxLoss:200,normal:420,endgame:620},
+    7:{label:'R1550・慎重成長',personality:'defensive',multiPV:4,minRank:4,maxLoss:215,normal:380,endgame:580},
+    22:{label:'R1500・基本忠実',personality:'balanced',multiPV:4,minRank:4,maxLoss:230,normal:340,endgame:540},
+    6:{label:'R1450・撹乱小細工',personality:'aggressive',multiPV:4,minRank:4,maxLoss:245,normal:310,endgame:500},
+    14:{label:'R1380・応援マスコット',personality:'stable',multiPV:4,minRank:4,maxLoss:265,normal:280,endgame:460},
+    16:{label:'R1250・ゆるふわ直感',personality:'balanced',multiPV:4,minRank:4,maxLoss:300,normal:250,endgame:420}
   };
   const NAMES=INDICES.map(i=>C[i][0]),RATINGS=INDICES.map(i=>C[i][1]);
   function profileMs(s,who){const p=PROFILES[who]||PROFILES[16];return (s.log?.length||0)>=45?p.endgame:p.normal}
