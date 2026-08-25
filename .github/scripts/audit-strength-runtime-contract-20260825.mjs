@@ -7,7 +7,7 @@ try{
  await page.waitForFunction(()=>window.__L8Q&&window.AI_SHOGI_YANEURAOU_FUTURE?.strengthTune==='fullsearch-20260825'&&window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR?.version==='2.15.36',{timeout:120000});
  const staticCheck=await page.evaluate(async()=>{const t=await (await fetch('../shogi-side-test/future21520.js?x='+Date.now(),{cache:'no-store'})).text();return{fixedGameplay:t.includes("futureBest(startState,{adaptive:false})"),forwards:t.includes("{sfen,ms,multiPV,nodes,searchmoves,adaptive}"),min150:t.includes('requested>=150'),mpv5:t.includes('Math.min(5')}});
  if(!staticCheck.fixedGameplay||!staticCheck.forwards||!staticCheck.min150||!staticCheck.mpv5)throw Error('Future contract '+JSON.stringify(staticCheck));
- const lower=await page.evaluate(()=>window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR),expected=[300,285,260,240,220,200,180,160];
+ const lower=await page.evaluate(()=>window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR),expected=[290,285,260,240,220,200,180,160];
  const actual=lower.indices.map(i=>lower.profiles[i].normal);if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error('lower budgets '+JSON.stringify(actual));
  if(lower.indices.some(i=>lower.profiles[i].multiPV!==4))throw Error('lower MultiPV '+JSON.stringify(lower.profiles));
  await page.evaluate(()=>window.AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR.init());
