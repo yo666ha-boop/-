@@ -7,7 +7,7 @@
   const EXPECTED={8:'直江兼続',13:'ユリア',10:'バット',7:'しんじ',22:'リン',6:'ジャギ',14:'玉ちゃん',16:'ぺんぺん'};
   for(const i of INDICES)if(C[i]?.[0]!==EXPECTED[i]){console.error('cohort19-26 yaneura identity mismatch',i,C[i]?.[0],EXPECTED[i]);return}
   const PROFILES={
-    8:{label:'R1700・義知略',personality:'positional',multiPV:4,minRank:3,maxLoss:180,normal:300,endgame:500},
+    8:{label:'R1700・義知略',personality:'positional',multiPV:4,minRank:4,maxLoss:180,normal:290,endgame:510},
     13:{label:'R1680・静穏安定',personality:'stable',multiPV:4,minRank:3,maxLoss:190,normal:285,endgame:480},
     10:{label:'R1600・元気直感',personality:'aggressive',multiPV:4,minRank:4,maxLoss:200,normal:260,endgame:460},
     7:{label:'R1550・慎重成長',personality:'defensive',multiPV:4,minRank:4,maxLoss:215,normal:240,endgame:430},
