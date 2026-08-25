@@ -28,3 +28,4 @@ jobs:
           set -euo pipefail
           node .github/scripts/audit-boundary-duels-20260825.mjs 2>&1 | tee /tmp/bd.log
           grep -F 'PASS_BOUNDARY_DUEL_AUDIT' /tmp/bd.log
+# trigger: 2026-08-25 boundary calibration
