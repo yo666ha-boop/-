@@ -1,0 +1,30 @@
+name: Verify all26 strength hierarchy
+on:
+  push:
+    branches: [audit-all26-strength-20260825]
+permissions:
+  contents: read
+jobs:
+  all26-hierarchy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Build hierarchy page
+        run: node .github/scripts/build-lower8-quality-page-20260825.mjs
+      - name: Start hierarchy server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/a26-server.log 2>&1 &
+          sleep 1
+      - name: Run all26 8-case hierarchy audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/a26.log
+          grep -F 'PASS_ALL26_8CASE_STRENGTH_HIERARCHY' /tmp/a26.log
