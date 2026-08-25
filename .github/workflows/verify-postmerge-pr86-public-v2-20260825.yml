@@ -1,0 +1,82 @@
+name: Verify postmerge PR86 public v2 20260825
+on:
+  push:
+    branches: [validate-postmerge-pr86-public-20260825]
+permissions:
+  contents: read
+jobs:
+  public-final-v2:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Assert exact merged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = d3f71caf1e9045e2df5b17c41e18d4266ad2f95a
+          echo PASS_POSTMERGE_PR86_EXACT_MAIN d3f71caf1e9045e2df5b17c41e18d4266ad2f95a
+      - name: Wait for exact public runtime bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://yo666ha-boop.github.io/-/'
+          FILES=(shogi-side-test/future21520.js shogi-side-test/cohort7-12-yaneura21533.js shogi-side-test/cohort19-26-yaneura21536.js)
+          ok=0
+          for n in $(seq 1 60); do
+            ok=1
+            for f in "${FILES[@]}"; do
+              mkdir -p "/tmp/public/$(dirname "$f")"
+              curl -fsSL --retry 2 --connect-timeout 15 "$BASE$f?postmerge=d3f71caf-$n" -o "/tmp/public/$f" || { ok=0; break; }
+              a=$(sha256sum "$f"|awk '{print $1}'); b=$(sha256sum "/tmp/public/$f"|awk '{print $1}')
+              echo "PUBLIC_HASH $f local=$a public=$b attempt=$n"
+              [ "$a" = "$b" ] || { ok=0; break; }
+            done
+            [ "$ok" -eq 1 ] && break
+            sleep 10
+          done
+          test "$ok" -eq 1
+          echo PASS_POSTMERGE_PR86_PUBLIC_ARTIFACT_IDENTITY_EXACT
+      - name: Install browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium firefox >/dev/null
+      - name: Public four environments all26 sound and real replies
+        shell: bash
+        run: |
+          cat > public-pr86.mjs <<'NODE'
+          import {webkit,chromium,firefox} from 'playwright';
+          const base='https://yo666ha-boop.github.io/-/shogi-v21528';
+          const cases=[
+            ['IPHONE_WEBKIT',webkit,'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',{width:390,height:844},32],
+            ['FIRE_SILK',chromium,'Mozilla/5.0 (Linux; U; en-US; KFAPWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/3.13 Safari/535.19 Silk-Accelerated=true',{width:800,height:1280},48],
+            ['DESKTOP_CHROMIUM',chromium,'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',{width:1440,height:900},128],
+            ['FIREFOX',firefox,'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0',{width:1440,height:900},128]
+          ];
+          const rows=[];
+          for(const [name,type,ua,viewport,hash] of cases){
+            const browser=await type.launch({headless:true}),ctx=await browser.newContext({userAgent:ua,viewport}),page=await ctx.newPage(),errors=[];
+            page.on('pageerror',e=>errors.push('pageerror:'+String(e.message||e)));
+            page.on('console',m=>{if(m.type()==='error'&&!/favicon|Data URL decoding failed|ERR_INVALID_URL|Load request cancelled|Failed to load resource|ServiceWorker intercepted/i.test(m.text()))errors.push('console:'+m.text())});
+            await page.goto(base+'/index.html?d3f71caf='+name+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+            for(let i=0;i<2;i++){try{await page.waitForFunction(()=>crossOriginIsolated&&document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE?.strengthTune==='fullsearch-20260825'&&window.AI_SHOGI_YANEURAOU_COHORT7_12?.profiles?.[19]?.normal===650,{timeout:30000});break}catch(e){if(i)throw e;await page.reload({waitUntil:'domcontentloaded',timeout:120000})}}
+            await page.waitForFunction(()=>[...document.querySelectorAll('#chars .ch img')].every(i=>i.complete&&i.naturalWidth>0),{timeout:30000});
+            const initial=await page.evaluate(()=>({coi:crossOriginIsolated,cards:document.querySelectorAll('#chars .ch').length,unique:new Set([...document.querySelectorAll('#chars .ch')].map(x=>(x.querySelector('.chName')?.textContent||x.querySelector('img')?.alt||'').trim())).size,future:{index:AI_SHOGI_YANEURAOU_FUTURE.index,rating:AI_SHOGI_YANEURAOU_FUTURE.rating,tune:AI_SHOGI_YANEURAOU_FUTURE.strengthTune},shin:AI_SHOGI_YANEURAOU_COHORT7_12.profiles[19],overflow:document.documentElement.scrollWidth>innerWidth+1}));
+            if(!initial.coi||initial.cards!==26||initial.unique!==26||initial.future.index!==25||initial.future.rating!==3400||initial.future.tune!=='fullsearch-20260825'||initial.shin.normal!==650||initial.shin.minRank!==2||initial.shin.maxLoss!==100||initial.overflow)throw Error(name+' initial '+JSON.stringify(initial));
+            const eng=await page.evaluate(async()=>{const a=AI_SHOGI_YANEURAOU_FUTURE;await a.init();let b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let i=0;i<9;i++){b[i]={k:back[i],o:-1};b[72+i]={k:back[8-i],o:1};b[18+i]={k:'P',o:-1};b[54+i]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};const r=await a.bestMove({b,h:{1:{},'-1':{}},t:1,log:[],last:null},{ms:300,multiPV:1,adaptive:false});return{status:a.status(),result:r,info:r?.info||{}}});
+            if(!eng.status.ready||!eng.status.worker||eng.info.hashMB!==hash||eng.info.threads!==1||eng.info.adaptive!==false||(!eng.result?.move&&!eng.result?.resign&&!eng.result?.declareWin))throw Error(name+' engine '+JSON.stringify(eng));
+            await page.evaluate(()=>AI_SHOGI_PIECE_SOUND.setEnabled(false));await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.waitForFunction(()=>window.AI_SHOGI_PIECE_SOUND&&document.querySelectorAll('#chars .ch').length===26,{timeout:120000});if(await page.evaluate(()=>AI_SHOGI_PIECE_SOUND.enabled)!==false)throw Error(name+' sound persistence');await page.evaluate(()=>AI_SHOGI_PIECE_SOUND.setEnabled(true));
+            async function reply(index,label){await page.locator('#chars .ch').nth(index).click();await page.selectOption('#sideSelect2157','sente');await page.click('#newBtn');await page.waitForTimeout(120);const before=(await page.locator('#moves').textContent()||'').trim();await page.locator('#board').locator(':scope > *').nth(56).click();await page.waitForTimeout(50);await page.locator('#board').locator(':scope > *').nth(47).click();await page.waitForFunction(b=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==b;},before,{timeout:10000});const human=(await page.locator('#moves').textContent()||'').trim();await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},human,{timeout:120000});const replied=(await page.locator('#moves').textContent()||'').trim(),status=(await page.locator('#status').textContent()||'').trim(),opp=(await page.locator('#oppName').textContent()||'').trim();if(replied===human||!opp.includes(label))throw Error(name+' '+label+' reply '+JSON.stringify({human,replied,status,opp}));return{human,replied,status,opp}}
+            const shin=await reply(19,'シン'),future=await reply(25,'未来からやってきたみつき'),row={name,initial,engine:{status:eng.status,info:eng.info},soundPersist:true,shin,future,errors};if(errors.length)throw Error(name+' errors '+JSON.stringify(errors));console.log('POSTMERGE_PR86_PUBLIC_V2_ROW '+JSON.stringify(row));rows.push(row);await browser.close();
+          }
+          console.log('POSTMERGE_PR86_PUBLIC_V2_SUMMARY '+JSON.stringify(rows));
+          console.log('PASS_POSTMERGE_PR86_PUBLIC_V2_FOUR_ENV_ALL26');
+          NODE
+          node public-pr86.mjs 2>&1 | tee /tmp/public-pr86.log
+          grep -F 'PASS_POSTMERGE_PR86_PUBLIC_V2_FOUR_ENV_ALL26' /tmp/public-pr86.log
