@@ -1,0 +1,68 @@
+name: Verify PR86 candidate four environment
+on:
+  push:
+    branches: [validate-pr86-four-env-20260825]
+permissions:
+  contents: read
+jobs:
+  candidate-four-env:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax checks
+        run: |
+          set -euo pipefail
+          node --check shogi-side-test/future21520.js
+          node --check shogi-side-test/future-yaneura-worker21528.js
+          node --check shogi-side-test/cohort19-26-yaneura21536.js
+          node --check shogi-side-test/top5-yaneura21529.js
+          node --check shogi-v21528/coi-serviceworker.js
+      - name: Install browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium firefox >/dev/null
+      - name: Start COOP COEP server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/pr86-four-env-server.log 2>&1 &
+          sleep 1
+      - name: Verify iPhone Fire desktop Firefox all26 sound prewarm and real Future reply
+        run: |
+          cat >pr86-four-env.mjs <<'NODE'
+          import {webkit,chromium,firefox} from 'playwright';
+          const base='http://127.0.0.1:4239/shogi-v21528';
+          const cases=[
+            {name:'IPHONE_WEBKIT',type:webkit,ua:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844},hash:32},
+            {name:'FIRE_SILK',type:chromium,ua:'Mozilla/5.0 (Linux; U; en-US; KFAPWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/3.13 Safari/535.19 Silk-Accelerated=true',viewport:{width:800,height:1280},hash:48},
+            {name:'DESKTOP_CHROMIUM',type:chromium,ua:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',viewport:{width:1440,height:900},hash:128},
+            {name:'FIREFOX',type:firefox,ua:'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0',viewport:{width:1440,height:900},hash:128}
+          ];
+          const rows=[];
+          for(const c of cases){
+            const browser=await c.type.launch({headless:true});const ctx=await browser.newContext({userAgent:c.ua,viewport:c.viewport});const page=await ctx.newPage();const errors=[];
+            page.on('pageerror',e=>errors.push('pageerror:'+String(e.message||e)));page.on('console',m=>{if(m.type()==='error'&&!/favicon|Data URL decoding failed|ERR_INVALID_URL|Load request cancelled|Failed to load resource|A ServiceWorker intercepted the request and encountered an unexpected error/i.test(m.text()))errors.push('console:'+m.text())});
+            await page.goto(base+'/index.html?pr86='+c.name+'-'+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
+            await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE?.strengthTune==='fullsearch-20260825',{timeout:120000});
+            await page.waitForFunction(()=>[...document.querySelectorAll('#chars .ch img')].every(i=>i.complete&&i.naturalWidth>0),{timeout:30000});
+            const initial=await page.evaluate(()=>({coi:crossOriginIsolated,cards:document.querySelectorAll('#chars .ch').length,unique:new Set([...document.querySelectorAll('#chars .ch')].map(x=>(x.querySelector('.chName')?.textContent||x.querySelector('img')?.alt||'').trim())).size,future:{index:window.AI_SHOGI_YANEURAOU_FUTURE?.index,rating:window.AI_SHOGI_YANEURAOU_FUTURE?.rating,tune:window.AI_SHOGI_YANEURAOU_FUTURE?.strengthTune},overflow:document.documentElement.scrollWidth>innerWidth+1}));
+            if(!initial.coi||initial.cards!==26||initial.unique!==26||initial.future.index!==25||initial.future.rating!==3400||initial.future.tune!=='fullsearch-20260825'||initial.overflow)throw Error(c.name+' initial '+JSON.stringify(initial));
+            const eng=await page.evaluate(async()=>{const a=window.AI_SHOGI_YANEURAOU_FUTURE,t0=performance.now();await a.init();const initMs=Math.round(performance.now()-t0);const r=await a.bestMove((()=>{let b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let i=0;i<9;i++){b[i]={k:back[i],o:-1};b[72+i]={k:back[8-i],o:1};b[18+i]={k:'P',o:-1};b[54+i]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};return{b,h:{1:{},'-1':{}},t:1,log:[],last:null}})(),{ms:300,multiPV:1,adaptive:false});return{initMs,status:a.status(),result:r,info:r?.info||{}}});
+            if(!eng.status.ready||!eng.status.worker||eng.info.hashMB!==c.hash||eng.info.threads!==1||eng.info.adaptive!==false||(!eng.result?.move&&!eng.result?.resign&&!eng.result?.declareWin))throw Error(c.name+' engine '+JSON.stringify(eng));
+            const saved=await page.evaluate(()=>{window.AI_SHOGI_PIECE_SOUND.setEnabled(false);return window.AI_SHOGI_PIECE_SOUND.enabled});await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_PIECE_SOUND,{timeout:120000});const loaded=await page.evaluate(()=>({sound:window.AI_SHOGI_PIECE_SOUND?.enabled,buttons:document.querySelectorAll('[data-piece-sound-toggle="1"]').length}));if(saved!==false||loaded.sound!==false||loaded.buttons!==2)throw Error(c.name+' sound persistence '+JSON.stringify({saved,loaded}));await page.evaluate(()=>window.AI_SHOGI_PIECE_SOUND.setEnabled(true));
+            await page.locator('#chars .ch').nth(25).click();await page.selectOption('#sideSelect2157','sente');await page.click('#newBtn');await page.waitForTimeout(150);const before=(await page.locator('#moves').textContent()||'').trim();await page.locator('#board').locator(':scope > *').nth(56).click();await page.waitForTimeout(60);await page.locator('#board').locator(':scope > *').nth(47).click();await page.waitForFunction(b=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==b;},before,{timeout:10000});const human=(await page.locator('#moves').textContent()||'').trim();await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},human,{timeout:120000});const replied=(await page.locator('#moves').textContent()||'').trim(),status=(await page.locator('#status').textContent()||'').trim(),opp=(await page.locator('#oppName').textContent()||'').trim();if(replied===human||!opp.includes('未来からやってきたみつき'))throw Error(c.name+' real reply '+JSON.stringify({human,replied,status,opp}));
+            const row={name:c.name,initial,engine:{initMs:eng.initMs,status:eng.status,info:eng.info},soundPersist:loaded.sound===false,realReply:{human,replied,status,opp},errors};if(errors.length)throw Error(c.name+' errors '+JSON.stringify(errors));rows.push(row);console.log('PR86_FOUR_ENV_ROW '+JSON.stringify(row));await browser.close();
+          }
+          console.log('PR86_FOUR_ENV_SUMMARY '+JSON.stringify(rows));console.log('PASS_PR86_CANDIDATE_FOUR_ENV_ALL26');
+          NODE
+          node ./pr86-four-env.mjs 2>&1 | tee /tmp/pr86-four-env.log
+          grep -F 'PASS_PR86_CANDIDATE_FOUR_ENV_ALL26' /tmp/pr86-four-env.log
+      - name: Firefox smoke scripts
+        run: |
+          python3 -m http.server 8000 >/tmp/firefox-smoke-server.log 2>&1 &
+          sleep 2
+          node .github/scripts/shogi-v21528-smoke.js
+          node .github/scripts/shogi-top5-yaneura-smoke.js
