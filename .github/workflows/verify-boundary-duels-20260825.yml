@@ -1,0 +1,30 @@
+name: Verify boundary rolling duels
+on:
+  push:
+    branches: [audit-boundary-duels-20260825]
+permissions:
+  contents: read
+jobs:
+  boundary-duels:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Build duel page
+        run: node .github/scripts/build-boundary-duel-page-20260825.mjs
+      - name: Start duel server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/bd-server.log 2>&1 &
+          sleep 1
+      - name: Run rolling boundary duels
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-boundary-duels-20260825.mjs 2>&1 | tee /tmp/bd.log
+          grep -F 'PASS_BOUNDARY_DUEL_AUDIT' /tmp/bd.log
