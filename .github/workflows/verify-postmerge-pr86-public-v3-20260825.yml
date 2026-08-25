@@ -1,0 +1,70 @@
+name: Verify postmerge PR86 public v3 exact main
+on:
+  push:
+    branches: [validate-postmerge-pr86-public-20260825]
+permissions:
+  contents: read
+jobs:
+  public-v3:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d3f71caf1e9045e2df5b17c41e18d4266ad2f95a
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Assert exact production main checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d3f71caf1e9045e2df5b17c41e18d4266ad2f95a
+          echo PASS_POSTMERGE_PR86_EXACT_MAIN d3f71caf1e9045e2df5b17c41e18d4266ad2f95a
+      - name: Wait for exact public runtime bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://yo666ha-boop.github.io/-/'
+          FILES=(shogi-side-test/future21520.js shogi-side-test/cohort7-12-yaneura21533.js shogi-side-test/cohort19-26-yaneura21536.js)
+          ok=0
+          for n in $(seq 1 60); do
+            ok=1
+            for f in "${FILES[@]}"; do
+              mkdir -p "/tmp/public/$(dirname "$f")"
+              curl -fsSL --retry 2 --connect-timeout 15 "$BASE$f?postmerge=d3f71caf-$n" -o "/tmp/public/$f" || { ok=0; break; }
+              a=$(sha256sum "$f"|awk '{print $1}'); b=$(sha256sum "/tmp/public/$f"|awk '{print $1}')
+              echo "PUBLIC_HASH $f local=$a public=$b attempt=$n"
+              [ "$a" = "$b" ] || { ok=0; break; }
+            done
+            [ "$ok" -eq 1 ] && break
+            sleep 10
+          done
+          test "$ok" -eq 1
+          echo PASS_POSTMERGE_PR86_PUBLIC_ARTIFACT_IDENTITY_EXACT
+      - name: Install browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit chromium firefox >/dev/null
+      - name: Reuse validated four-env v2 harness against public Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL 'https://raw.githubusercontent.com/yo666ha-boop/-/5b28ae7996750785797b68dbd0d2b2e5a80faf81/.github/workflows/verify-pr86-four-env-v2-20260825.yml' -o /tmp/v2.yml
+          python3 - <<'PY'
+          import pathlib
+          s=pathlib.Path('/tmp/v2.yml').read_text()
+          a=s.index("cat >pr86-four-env-v2.mjs <<'NODE'")
+          a=s.index('\n',a)+1
+          b=s.index('\n          NODE',a)
+          lines=s[a:b].splitlines()
+          lines=[x[10:] if x.startswith('          ') else x for x in lines]
+          js='\n'.join(lines)+'\n'
+          js=js.replace('http://127.0.0.1:4239/shogi-v21528','https://yo666ha-boop.github.io/-/shogi-v21528')
+          pathlib.Path('postmerge-public-v3.mjs').write_text(js)
+          PY
+          node --check postmerge-public-v3.mjs
+          node postmerge-public-v3.mjs 2>&1 | tee /tmp/public-v3.log
+          grep -F 'PASS_PR86_CANDIDATE_FOUR_ENV_V2_ALL26_SHIN_FUTURE' /tmp/public-v3.log
+          echo PASS_POSTMERGE_PR86_PUBLIC_V3_FOUR_ENV_ALL26
