@@ -1,0 +1,36 @@
+name: Verify PR86 representative real move to AI replies v2
+on:
+  push:
+    branches: [validate-pr86-representative-v2-20260825]
+permissions:
+  contents: read
+jobs:
+  real-replies:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install WebKit
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Start COI server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/pr86-real-v2-server.log 2>&1 &
+          sleep 1
+      - name: Verify representative real replies including retuned Shin
+        run: |
+          cat >pr86-real-v2.mjs <<'NODE'
+          import {webkit} from 'playwright';
+          const browser=await webkit.launch({headless:true});const page=await browser.newPage({userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',viewport:{width:390,height:844}});const errors=[];
+          page.on('pageerror',e=>errors.push('pageerror:'+String(e.message||e)));page.on('console',m=>{if(m.type()==='error'&&!/favicon|Data URL decoding failed|ERR_INVALID_URL|Load request cancelled|Failed to load resource/i.test(m.text()))errors.push('console:'+m.text())});const txt=s=>page.locator(s).textContent().then(v=>String(v||'').trim());
+          await page.goto('http://127.0.0.1:4239/shogi-v21528/index.html?pr86realv2='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&AI_SHOGI_YANEURAOU_FUTURE?.strengthTune==='fullsearch-20260825'&&AI_SHOGI_YANEURAOU_COHORT7_12?.profiles?.[19]?.normal===650&&AI_SHOGI_YANEURAOU_COHORT13_18&&AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR,{timeout:120000});await page.waitForFunction(()=>[...document.querySelectorAll('#chars .ch img')].every(i=>i.complete&&i.naturalWidth>0),{timeout:30000});
+          async function realReply(index,label){await page.locator('#chars .ch').nth(index).click();await page.selectOption('#sideSelect2157','sente');await page.click('#newBtn');await page.waitForTimeout(120);const before=await txt('#moves');await page.locator('#board').locator(':scope > *').nth(56).click();await page.waitForTimeout(50);await page.locator('#board').locator(':scope > *').nth(47).click();await page.waitForFunction(b=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==b;},before,{timeout:10000});const human=await txt('#moves');await page.waitForFunction(h=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=(document.getElementById('status')?.textContent||'');return t!==h&&!/考えています/.test(s);},human,{timeout:120000});const replied=await txt('#moves'),status=await txt('#status'),opp=await txt('#oppName');if(replied===human||!opp.includes(label))throw Error(label+' reply '+JSON.stringify({human,replied,status,opp}));return{index,label,human,replied,status,opp}}
+          const state=await page.evaluate(()=>({coi:crossOriginIsolated,top5:AI_SHOGI_YANEURAOU_TOP5,c7:AI_SHOGI_YANEURAOU_COHORT7_12,c13:AI_SHOGI_YANEURAOU_COHORT13_18,lower:AI_SHOGI_YANEURAOU_COHORT19_26_SUPERVISOR}));if(!state.coi)throw Error('COI false');const nameAt=(g,i)=>g.names[g.indices.indexOf(i)];const routes=[];routes.push(await realReply(0,state.top5.names[0]));routes.push(await realReply(24,nameAt(state.c7,24)));routes.push(await realReply(19,'シン'));routes.push(await realReply(20,nameAt(state.c13,20)));routes.push(await realReply(8,nameAt(state.lower,8)));routes.push(await realReply(25,'未来からやってきたみつき'));const final=await page.evaluate(()=>({futureState:AI_SHOGI_YANEURAOU_FUTURE?.state||'',futureError:AI_SHOGI_YANEURAOU_FUTURE?.error||'',cards:document.querySelectorAll('#chars .ch').length,coi:crossOriginIsolated,shin:AI_SHOGI_YANEURAOU_COHORT7_12.profiles[19]}));console.log('PR86_REAL_V2_ROWS '+JSON.stringify({routes,final,errors}));if(final.cards!==26||!final.coi||final.futureError||final.shin.normal!==650||final.shin.minRank!==2||errors.length)throw Error('final '+JSON.stringify({final,errors}));console.log('PASS_PR86_REPRESENTATIVE_REAL_MOVE_AI_REPLIES_V2');await browser.close();
+          NODE
+          node ./pr86-real-v2.mjs 2>&1 | tee /tmp/pr86-real-v2.log
+          grep -F 'PASS_PR86_REPRESENTATIVE_REAL_MOVE_AI_REPLIES_V2' /tmp/pr86-real-v2.log
