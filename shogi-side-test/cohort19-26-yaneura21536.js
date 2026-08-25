@@ -14,7 +14,7 @@
     22:{label:'R1500・基本忠実',personality:'balanced',multiPV:5,minRank:4,maxLoss:230,normal:220,endgame:400},
     6:{label:'R1450・撹乱小細工',personality:'aggressive',multiPV:5,minRank:4,maxLoss:245,normal:200,endgame:370},
     14:{label:'R1380・応援マスコット',personality:'stable',multiPV:5,minRank:4,maxLoss:265,normal:180,endgame:340},
-    16:{label:'R1250・ゆるふわ直感',personality:'balanced',multiPV:5,minRank:5,maxLoss:300,normal:160,endgame:310}
+    16:{label:'R1250・ゆるふわ直感',personality:'balanced',multiPV:5,minRank:4,maxLoss:300,normal:160,endgame:310}
   };
   const NAMES=INDICES.map(i=>C[i][0]),RATINGS=INDICES.map(i=>C[i][1]);
   function profileMs(s,who){const p=PROFILES[who]||PROFILES[16];return (s.log?.length||0)>=45?p.endgame:p.normal}
