@@ -107,10 +107,11 @@
   async function initFutureEngine(){if(engineReady&&worker)return true;await callWorker('init',{},75000);engineReady=true;setEngineState('⑤成功 V9.70＋水匠5 接続済み',true);return true}
   async function futureBest(s,opts={}){
     const sfen=toSFEN(s),mobile=/iPhone|iPad|iPod|Android|Silk/i.test(navigator.userAgent),endgame=(s.log?.length||0)>=55,defaultMs=mobile?(endgame?7000:4000):(endgame?10000:7000);
-    const requested=Number(opts&&opts.ms),ms=Number.isFinite(requested)&&requested>=250?Math.max(250,Math.min(20000,Math.round(requested))):defaultMs;
-    const requestedPV=Number(opts&&opts.multiPV),multiPV=Number.isFinite(requestedPV)?Math.max(1,Math.min(4,Math.round(requestedPV))):1;
-    const r=await callWorker('bestmove',{sfen,ms,multiPV},90000);engineReady=true;const tok=String(r.token||'').trim(),info=r.info||{};
-    if(tok==='resign')return{resign:true,info};if(tok==='win')return{declareWin:true,info};const lm=legal(s),m=lm.find(x=>usi(x)===tok);if(!m)throw new Error('YaneuraOu illegal/unmapped bestmove '+tok+' for '+sfen);return{move:m,info};
+    const requested=Number(opts&&opts.ms),ms=Number.isFinite(requested)&&requested>=150?Math.max(150,Math.min(20000,Math.round(requested))):defaultMs;
+    const requestedPV=Number(opts&&opts.multiPV),multiPV=Number.isFinite(requestedPV)?Math.max(1,Math.min(5,Math.round(requestedPV))):1;
+    const nodes=Math.max(0,Math.round(Number(opts&&opts.nodes)||0)),searchmoves=Array.isArray(opts&&opts.searchmoves)?opts.searchmoves:[],adaptive=opts&&Object.prototype.hasOwnProperty.call(opts,'adaptive')?opts.adaptive!==false:true;
+    const r=await callWorker('bestmove',{sfen,ms,multiPV,nodes,searchmoves,adaptive},90000);engineReady=true;const tok=String(r.token||'').trim(),info=r.info||{};
+    if(tok==='resign')return{resign:true,info,targetMs:ms};if(tok==='win')return{declareWin:true,info,targetMs:ms};const lm=legal(s),m=lm.find(x=>usi(x)===tok);if(!m)throw new Error('YaneuraOu illegal/unmapped bestmove '+tok+' for '+sfen);return{move:m,info,targetMs:ms};
   }
 
   const aiMoveBase=aiMove;
@@ -121,13 +122,13 @@
     const startKey=posKey(st),startCi=ci,startState=clone(st),started=performance.now();
     (async()=>{
       let res=null,usedFallback=false;
-      try{res=await futureBest(startState)}catch(e){usedFallback=true;engineError=String(e&&e.message||e);console.error('Future Mitsuki worker fallback',e);setEngineState('⑤失敗 → 内蔵MAXへ退避: '+engineError);killWorker(engineError);const fb=chooseAI(clone(startState),0);res={move:fb.move,info:{...(fb.info||{}),engine:'内蔵MAX fallback',error:engineError}}}
+      try{res=await futureBest(startState,{adaptive:false})}catch(e){usedFallback=true;engineError=String(e&&e.message||e);console.error('Future Mitsuki worker fallback',e);setEngineState('⑤失敗 → 内蔵MAXへ退避: '+engineError);killWorker(engineError);const fb=chooseAI(clone(startState),0);res={move:fb.move,info:{...(fb.info||{}),engine:'内蔵MAX fallback',error:engineError}}}
       if(ci!==startCi||posKey(st)!==startKey||gameCounted){thinking=false;return}
-      lastAIInfo={...(res.info||{}),elapsed:Math.round(performance.now()-started),fallback:usedFallback};
+      lastAIInfo={...(res.info||{}),elapsed:Math.round(performance.now()-started),fallback:usedFallback,futureFullSearch:!usedFallback};
       if(res.resign){thinking=false;const delta=recordResult(1);setStatus(FUTURE_NAME+'が投了しました。あなたの勝ちです。');setResult('win','未来みつき投了・勝ち　R '+(delta>=0?'+':'')+delta);speechMood='loss';lastSpeech='';render();renderOpponent(true);refreshFutureImages();return}
       if(res.declareWin){thinking=false;const delta=recordResult(0);setStatus(FUTURE_NAME+'の入玉宣言勝ちです。');setResult('loss','未来みつき宣言勝ち・負け　R '+(delta>=0?'+':'')+delta);speechMood='win';lastSpeech='';render();renderOpponent(true);refreshFutureImages();return}
       if(res.move)push(res.move,'△');thinking=false;speechMood='auto';lastSpeech='';render();renderOpponent(true);refreshFutureImages();if(finishIfEnded())return;
-      const x=lastAIInfo||{};const engineLabel=x.fallback?'内蔵MAX退避（'+String(x.error||engineError||'原因不明').slice(0,80)+'）':'やねうら王V9.70＋水匠5';setStatus('あなたの手番です。'+engineLabel+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
+      const x=lastAIInfo||{};const engineLabel=x.fallback?'内蔵MAX退避（'+String(x.error||engineError||'原因不明').slice(0,80)+'）':'やねうら王V9.70＋水匠5';setStatus('あなたの手番です。'+engineLabel+(x.futureFullSearch?' / 固定深読み':'')+(x.depth?' / 深さ'+x.depth:'')+(x.nodes?' / '+Number(x.nodes).toLocaleString()+'局面':''));
     })();
   };
 
@@ -135,7 +136,7 @@
   const undoBase=undo;undo=function(){try{worker?.postMessage({type:'stop'})}catch(e){}const r=undoBase();setTimeout(refreshFutureImages,0);return r};
   document.getElementById('newBtn').onclick=newGame;document.getElementById('undoBtn').onclick=undo;document.getElementById('fundoBtn').onclick=undo;
 
-  window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine,toSFEN,bestMove:futureBest,status:()=>({ready:engineReady,error:engineError,crossOriginIsolated:globalThis.crossOriginIsolated,worker:!!worker})};
+  window.AI_SHOGI_YANEURAOU_FUTURE={version:VERSION,index:FUTURE_INDEX,name:FUTURE_NAME,rating:FUTURE_RATING,state:'未起動',init:initFutureEngine,toSFEN,bestMove:futureBest,status:()=>({ready:engineReady,error:engineError,crossOriginIsolated:globalThis.crossOriginIsolated,worker:!!worker}),strengthTune:'fullsearch-20260825'};
   window.AI_SHOGI_FUTURE_AUDIT21520={version:VERSION,characters:C.length,card:!!document.querySelector('[data-future-mitsuki="1"]'),sfenOK:toSFEN(initial()).startsWith('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -'),crossOriginIsolated:globalThis.crossOriginIsolated,workerURL:WORKER_URL};
   const badge=document.querySelector('.badge');if(badge)badge.textContent='v2.15.28 26キャラ・未来みつき V9.70';
   render();renderStats();renderOpponent(false);refreshFutureImages();

@@ -12,7 +12,7 @@
     21:{label:'R2180・変則支配',personality:'positional',multiPV:5,minRank:2,maxLoss:75,normal:950,endgame:1500},
     5:{label:'R2100・正統堅守',personality:'defensive',multiPV:5,minRank:2,maxLoss:80,normal:800,endgame:1450},
     17:{label:'R2050・策士安定',personality:'stable',multiPV:5,minRank:2,maxLoss:90,normal:700,endgame:1200},
-    19:{label:'R2000・速攻突破',personality:'aggressive',multiPV:5,minRank:3,maxLoss:105,normal:600,endgame:1050}
+    19:{label:'R2000・速攻突破',personality:'aggressive',multiPV:5,minRank:2,maxLoss:100,normal:650,endgame:1100}
   };
   const NAMES=INDICES.map(i=>C[i][0]),RATINGS=INDICES.map(i=>C[i][1]);
   function profileMs(s,who){const p=PROFILES[who]||PROFILES[19];return (s.log?.length||0)>=55?p.endgame:p.normal}
