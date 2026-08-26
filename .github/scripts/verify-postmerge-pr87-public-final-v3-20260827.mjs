@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { chromium, webkit, firefox } from 'playwright';
+
+const BASE='https://yo666ha-boop.github.io/-/shogi-v21528';
+const CLOUD='https://htvfcdktdjtyoyzrohji.supabase.co/functions/v1/shogi-save';
+const RUN=Date.now();
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const UA={
+  iphone:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
+  fire:'Mozilla/5.0 (Linux; U; en-US; KFAPWI Build/JDQ39) AppleWebKit/535.19 (KHTML, like Gecko) Silk/3.13 Safari/535.19 Silk-Accelerated=true',
+  chrome:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+  firefox:'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0'
+};
+const ENVS=[
+  ['IPHONE_WEBKIT',webkit,UA.iphone,{width:390,height:844},32],
+  ['FIRE_SILK',chromium,UA.fire,{width:800,height:1280},48],
+  ['DESKTOP_CHROMIUM',chromium,UA.chrome,{width:1440,height:900},128],
+  ['FIREFOX',firefox,UA.firefox,{width:1440,height:900},128]
+];
+
+function initial(){const b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let i=0;i<9;i++){b[i]={k:back[i],o:-1};b[72+i]={k:back[8-i],o:1};b[18+i]={k:'P',o:-1};b[54+i]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};return {b,h:{1:{},'-1':{}},t:1,log:[],last:null}}
+function audit(page,label){const a={label,phase:'init',pageErrors:[],requests:[],console:[]};page.on('pageerror',e=>a.pageErrors.push({phase:a.phase,message:String(e.message||e),stack:String(e.stack||'')}));page.on('requestfailed',r=>a.requests.push({phase:a.phase,url:r.url(),error:String(r.failure()?.errorText||'')}));page.on('console',m=>{if(m.type()==='error')a.console.push({phase:a.phase,text:m.text(),location:m.location()})});return a}
+function assertClean(a,{conflict=false}={}){
+  const badPage=a.pageErrors.filter(e=>!(/^open:/.test(e.phase)&&/TypeError.*Load failed|Load failed/i.test(e.message)));
+  const badReq=a.requests.filter(e=>!/NS_BINDING_ABORTED|Load request cancelled|ERR_ABORTED/i.test(e.error));
+  const badConsole=a.console.filter(e=>{
+    const t=e.text||'',u=e.location?.url||'';
+    if(/Data URL decoding failed|favicon/i.test(t))return false;
+    if(/coi-serviceworker\.js/i.test(u)&&(/save\/cloud patch inject failed|A ServiceWorker intercepted|COI fetch failed|^Error$/i.test(t)))return false;
+    if(conflict&&/409|Conflict/i.test(t))return false;
+    return true;
+  });
+  assert.deepEqual(badPage,[]);assert.deepEqual(badReq,[]);assert.deepEqual(badConsole,[]);
+  return {knownStartupPageErrors:a.pageErrors.length,knownAbortedRequests:a.requests.length,knownConsole:a.console.length};
+}
+async function waitApp(p){await p.waitForFunction(()=>crossOriginIsolated&&document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_YANEURAOU_FUTURE?.strengthTune==='fullsearch-20260825'&&window.AI_SHOGI_SAVE?.version==='21530a'&&window.AI_SHOGI_CLOUD_SAVE?.version==='21531c'&&document.getElementById('cloudSaveBtn')&&document.getElementById('cloudPullBtn'),null,{timeout:150000})}
+async function openApp(p,a,label){a.phase='open:'+label;await p.goto(`${BASE}/index.html?pr87finalv3=${label}-${RUN}-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:120000});await waitApp(p);a.phase='ready:'+label}
+async function playFuture(p,a){a.phase='future-real-reply';await p.locator('#chars .ch').nth(25).click();await p.selectOption('#sideSelect2157','sente');await p.click('#newBtn');await p.waitForTimeout(120);const before=(await p.locator('#moves').textContent()||'').trim();await p.locator('#board').locator(':scope > *').nth(56).click();await p.locator('#board').locator(':scope > *').nth(47).click();await p.waitForFunction(x=>{const t=(document.getElementById('moves')?.textContent||'').trim();return t&&t!==x},before,{timeout:10000});const human=(await p.locator('#moves').textContent()||'').trim();await p.waitForFunction(x=>{const t=(document.getElementById('moves')?.textContent||'').trim(),s=document.getElementById('status')?.textContent||'';return t!==x&&!/考えています/.test(s)},human,{timeout:120000});await p.waitForFunction(()=>window.AI_SHOGI_SAVE?.audit().savedPly>=2,null,{timeout:10000});return p.evaluate(()=>({save:window.AI_SHOGI_SAVE.audit(),data:window.AI_SHOGI_SAVE.data()}))}
+
+for(const [name,type,userAgent,viewport,hashMB] of ENVS){
+  const b=await type.launch({headless:true}),ctx=await b.newContext({userAgent,viewport}),p=await ctx.newPage(),a=audit(p,name);
+  try{
+    await openApp(p,a,name);
+    const base=await p.evaluate(()=>({coi:crossOriginIsolated,cards:document.querySelectorAll('#chars .ch').length,unique:new Set([...document.querySelectorAll('#chars .ch')].map(x=>(x.querySelector('.chName')?.textContent||x.querySelector('img')?.alt||'').trim())).size,future:{index:AI_SHOGI_YANEURAOU_FUTURE.index,rating:AI_SHOGI_YANEURAOU_FUTURE.rating,tune:AI_SHOGI_YANEURAOU_FUTURE.strengthTune},cloud:AI_SHOGI_CLOUD_SAVE.audit(),overflow:document.documentElement.scrollWidth>innerWidth+1}));
+    assert.equal(base.coi,true);assert.equal(base.cards,26);assert.equal(base.unique,26);assert.deepEqual(base.future,{index:25,rating:3400,tune:'fullsearch-20260825'});assert.equal(base.cloud.backend,'supabase-edge-cas-v1');assert.equal(base.overflow,false);
+    a.phase='engine-search';const engine=await p.evaluate(async st=>{const x=AI_SHOGI_YANEURAOU_FUTURE,t=performance.now();await x.init();const r=await x.bestMove(st,{ms:300,multiPV:1,adaptive:false});return {ms:Math.round(performance.now()-t),status:x.status(),r,info:r?.info||{}}},initial());
+    assert.equal(engine.status.ready,true);assert.equal(engine.status.worker,true);assert.equal(engine.info.hashMB,hashMB);assert.equal(engine.info.threads,1);assert.equal(engine.info.adaptive,false);assert.ok(engine.r?.move||engine.r?.resign||engine.r?.declareWin);
+    a.phase='sound-persist';assert.equal(await p.evaluate(()=>{AI_SHOGI_PIECE_SOUND.setEnabled(false);return AI_SHOGI_PIECE_SOUND.enabled}),false);await p.reload({waitUntil:'domcontentloaded',timeout:120000});await waitApp(p);assert.equal(await p.evaluate(()=>AI_SHOGI_PIECE_SOUND.enabled),false);await p.evaluate(()=>AI_SHOGI_PIECE_SOUND.setEnabled(true));
+    const played=await playFuture(p,a),ply=played.save.savedPly;assert.ok(ply>=2);assert.equal(played.save.currentPly,ply);assert.equal(played.data.ci,25);
+    a.phase='local-reload';await p.reload({waitUntil:'domcontentloaded',timeout:120000});await waitApp(p);assert.equal((await p.evaluate(()=>AI_SHOGI_SAVE.audit())).savedPly,ply);assert.equal(await p.evaluate(()=>AI_SHOGI_SAVE.load()),true);const restored=await p.evaluate(()=>({a:AI_SHOGI_SAVE.audit(),opp:document.getElementById('oppName')?.textContent||''}));assert.equal(restored.a.currentPly,ply);assert.equal(restored.a.currentCharacter,25);assert.ok(restored.opp.includes('未来からやってきたみつき'));
+    const known=assertClean(a);console.log('PR87_PUBLIC_FINAL_V3_ENV '+JSON.stringify({name,coi:true,cards:26,unique:26,hashMB,threads:1,backend:'supabase-edge-cas-v1',futureRealReply:true,soundPersist:true,savedPly:ply,reloadRestore:true,overflow:false,pageErrors:[],unexpectedRequestFailures:[],unexpectedConsoleErrors:[],knownTransient:known}));
+  }finally{await ctx.close();await b.close()}
+}
+
+async function seed(ctx,deviceId){await ctx.addInitScript(({deviceId,CLOUD})=>{localStorage.setItem('aiShogiCloudConfigV1',JSON.stringify({syncKey:'',deviceId,api:CLOUD,enabled:false}));localStorage.setItem('aiShogiCloudMetaV1',JSON.stringify({revision:0,lastSyncedSavedAt:0,pending:false,lastError:'',updatedAt:Date.now()}));localStorage.removeItem('aiShogiGameSaveV1')},{deviceId,CLOUD})}
+const wb=await webkit.launch({headless:true}),cb=await chromium.launch({headless:true});const ic=await wb.newContext({userAgent:UA.iphone,viewport:{width:390,height:844}}),pc=await cb.newContext({userAgent:UA.chrome,viewport:{width:1440,height:900}});await seed(ic,`finalv3_iphone_${RUN}`);await seed(pc,`finalv3_pc_${RUN}`);const ip=await ic.newPage(),cp=await pc.newPage(),ia=audit(ip,'IPHONE_A'),ca=audit(cp,'PC_B');
+try{
+  await openApp(ip,ia,'MIXED_IPHONE_A');const original=(await playFuture(ip,ia)).save.savedPly;const code=crypto.randomBytes(24).toString('base64url');ia.phase='iphone-push';assert.equal(await ip.evaluate(c=>AI_SHOGI_CLOUD_SAVE.enableWithCode(c),code),true);await ip.waitForFunction(()=>{const m=AI_SHOGI_CLOUD_SAVE.meta();return m.revision>=1&&!m.pending},null,{timeout:20000});const aRev=await ip.evaluate(()=>AI_SHOGI_CLOUD_SAVE.meta().revision);
+  await openApp(cp,ca,'MIXED_PC_B');ca.phase='pc-pull';assert.equal(await cp.evaluate(c=>AI_SHOGI_CLOUD_SAVE.enableWithCode(c),code),true);await cp.waitForFunction(p=>AI_SHOGI_SAVE?.audit().currentPly===p,original,{timeout:20000});await cp.waitForFunction(()=>!AI_SHOGI_CLOUD_SAVE.meta().pending,null,{timeout:20000});const pc0=await cp.evaluate(()=>({m:AI_SHOGI_CLOUD_SAVE.meta(),a:AI_SHOGI_SAVE.audit(),ci:AI_SHOGI_SAVE.data()?.ci}));assert.equal(pc0.a.currentPly,original);assert.equal(pc0.ci,25);
+  ca.phase='pc-save';await cp.evaluate(()=>{const x=AI_SHOGI_SAVE.data();x.savedAt=Date.now()+1000;x.st.log=[...(x.st.log||[]),{cloudTest:'PC-B'}];localStorage.setItem('aiShogiGameSaveV1',JSON.stringify(x));window.dispatchEvent(new Event('ai-shogi-local-save'))});await cp.waitForFunction(r=>{const m=AI_SHOGI_CLOUD_SAVE.meta();return m.revision>r&&!m.pending},pc0.m.revision,{timeout:20000});const pcRev=await cp.evaluate(()=>AI_SHOGI_CLOUD_SAVE.meta().revision);
+  ia.phase='iphone-conflict';await ip.evaluate(()=>{const x=AI_SHOGI_SAVE.data();x.savedAt=Date.now()+2000;x.st.log=[...(x.st.log||[]),{cloudTest:'IPHONE-A-PENDING'}];localStorage.setItem('aiShogiGameSaveV1',JSON.stringify(x));window.dispatchEvent(new Event('ai-shogi-local-save'))});await ip.waitForFunction(()=>{const m=AI_SHOGI_CLOUD_SAVE.meta();return m.pending&&m.lastError==='conflict'},null,{timeout:20000});const protectedPull=await ip.evaluate(()=>AI_SHOGI_CLOUD_SAVE.pull());assert.equal(protectedPull.localPending,true);assert.equal(await ip.evaluate(()=>JSON.parse(localStorage.getItem('aiShogiGameSaveV1')).st.log.at(-1).cloudTest),'IPHONE-A-PENDING');
+  ia.phase='iphone-explicit-discard';ip.once('dialog',d=>d.accept());await ip.click('#cloudPullBtn');await ip.waitForFunction(()=>{const m=AI_SHOGI_CLOUD_SAVE.meta(),x=JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null');return !m.pending&&x?.st?.log?.at(-1)?.cloudTest==='PC-B'},null,{timeout:20000});await sleep(1200);const fin=await ip.evaluate(()=>({m:AI_SHOGI_CLOUD_SAVE.meta(),x:JSON.parse(localStorage.getItem('aiShogiGameSaveV1'))}));assert.ok(fin.m.revision>=pcRev);assert.equal(fin.m.pending,false);assert.equal(fin.m.lastError,'');assert.equal(fin.x.st.log.at(-1).cloudTest,'PC-B');assert.equal(fin.x.ci,25);
+  const knownI=assertClean(ia,{conflict:true}),knownC=assertClean(ca);console.log('PR87_PUBLIC_FINAL_V3_MIXED '+JSON.stringify({from:'iPhone WebKit',to:'desktop Chromium',back:'desktop Chromium -> iPhone WebKit',originalPly:original,iphoneInitialRevision:aRev,pcRevisionAfterSave:pcRev,iphoneFinalRevision:fin.m.revision,iphoneToPcRestore:true,conflictProtected:true,explicitDiscardRestorePcToIphone:true,pending:false,lastError:'',backend:'supabase-edge-cas-v1',knownIphoneTransient:knownI,knownPcTransient:knownC}));
+}finally{await ic.close();await pc.close();await wb.close();await cb.close()}
+console.log('PASS_POSTMERGE_PR87_PUBLIC_FINAL_V3');
