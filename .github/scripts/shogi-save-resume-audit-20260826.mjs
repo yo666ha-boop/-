@@ -128,7 +128,9 @@ async function runOne(target) {
     throw new Error(`${target.name}: undo left stale save current=${undoPly} saved=${savedUndoPly}`);
   }
 
-  if (errors.length) throw new Error(`${target.name}: page errors: ${errors.join(' | ')}`);
+  const localCors = BASE.startsWith('http://127.0.0.1') || BASE.startsWith('http://localhost');
+  const fatalErrors = errors.filter(e => !(localCors && /due to access control checks/i.test(e)));
+  if (fatalErrors.length) throw new Error(`${target.name}: page errors: ${fatalErrors.join(' | ')}`);
   console.log('PASS_SAVE_RESUME', JSON.stringify({
     browser: target.name,
     coi: initial.coi,
@@ -136,6 +138,7 @@ async function runOne(target) {
     expectedPly,
     undoPly,
     savedUndoPly,
+    ignoredLocalCorsErrors: errors.length - fatalErrors.length,
     char: beforeReload.char?.[0],
     audit: restored.audit,
     logTail: logs.slice(-8)
