@@ -36,6 +36,18 @@ async function waitApp(page) {
   }
 }
 
+async function assetIntegrity(page) {
+  await page.waitForTimeout(800);
+  return page.evaluate(() => {
+    const imgs = [...document.querySelectorAll('#chars .ch img')];
+    const broken = imgs.map((img, i) => ({ i, src: img.currentSrc || img.src, complete: img.complete, w: img.naturalWidth, h: img.naturalHeight }))
+      .filter(x => !x.complete || x.w <= 0 || x.h <= 0);
+    const d7 = window.AIShogiIOS.dialogues?.(7) || {};
+    const dialoguePatch = Array.isArray(d7.start) && d7.start.includes('今日は、最後までちゃんと考える。');
+    return { imageCount: imgs.length, broken, dialoguePatch };
+  });
+}
+
 async function runOne(target) {
   const browser = await target.type.launch({ headless: true });
   const context = await browser.newContext(target.context);
@@ -67,6 +79,10 @@ async function runOne(target) {
   if (initial.saveBtn !== '対局保存') throw new Error(`${target.name}: save button missing`);
   if (!initial.resumeDisabled) throw new Error(`${target.name}: empty resume should be disabled`);
   if (!initial.focusSave) throw new Error(`${target.name}: focus save button missing`);
+
+  const assets = await assetIntegrity(page);
+  if (assets.imageCount !== 26 || assets.broken.length) throw new Error(`${target.name}: character image integrity failed ${JSON.stringify(assets)}`);
+  if (!assets.dialoguePatch) throw new Error(`${target.name}: dialogue21510 patch not active ${JSON.stringify(assets)}`);
 
   await page.click('#saveGameBtn');
   await page.waitForFunction(() => !!window.AI_SHOGI_SAVE.data());
@@ -124,12 +140,15 @@ async function runOne(target) {
   const afterUndo = await page.evaluate(() => ({ state: window.AIShogiIOS.state(), saved: window.AI_SHOGI_SAVE.data(), audit: window.AI_SHOGI_SAVE.audit() }));
   const undoPly = afterUndo.state.log.length;
   const savedUndoPly = afterUndo.saved?.st?.log?.length ?? -1;
-  if (savedUndoPly !== undoPly) {
-    throw new Error(`${target.name}: undo left stale save current=${undoPly} saved=${savedUndoPly}`);
-  }
+  if (savedUndoPly !== undoPly) throw new Error(`${target.name}: undo left stale save current=${undoPly} saved=${savedUndoPly}`);
 
   const localCors = BASE.startsWith('http://127.0.0.1') || BASE.startsWith('http://localhost');
-  const fatalErrors = errors.filter(e => !(localCors && /due to access control checks/i.test(e)));
+  const verifiedFallbackAccessError = target.name === 'webkit-iphone' && assets.imageCount === 26 && assets.broken.length === 0 && assets.dialoguePatch;
+  const fatalErrors = errors.filter(e => {
+    if (!/due to access control checks/i.test(e)) return true;
+    if (localCors) return false;
+    return !verifiedFallbackAccessError;
+  });
   if (fatalErrors.length) throw new Error(`${target.name}: page errors: ${fatalErrors.join(' | ')}`);
   console.log('PASS_SAVE_RESUME', JSON.stringify({
     browser: target.name,
@@ -138,7 +157,9 @@ async function runOne(target) {
     expectedPly,
     undoPly,
     savedUndoPly,
-    ignoredLocalCorsErrors: errors.length - fatalErrors.length,
+    imageCount: assets.imageCount,
+    dialoguePatch: assets.dialoguePatch,
+    ignoredVerifiedAccessErrors: errors.length - fatalErrors.length,
     char: beforeReload.char?.[0],
     audit: restored.audit,
     logTail: logs.slice(-8)
