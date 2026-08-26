@@ -4,7 +4,7 @@
   const CFG_KEY='aiShogiCloudConfigV1';
   const META_KEY='aiShogiCloudMetaV1';
   const SAVE_KEY='aiShogiGameSaveV1';
-  const DEFAULT_API='https://ai-shogi-yaneuraou-iphone.vercel.app/api/shogi-save';
+  const DEFAULT_API='https://htvfcdktdjtyoyzrohji.supabase.co/functions/v1/shogi-save';
   let timer=0,syncing=false;
 
   const readJson=(k,fallback=null)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??fallback}catch(e){return fallback}};
@@ -91,7 +91,7 @@
     code=String(code||'').trim();
     if(!/^[A-Za-z0-9_-]{24,128}$/.test(code))return false;
     const c=ensureDevice(),changed=c.syncKey!==code;
-    writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:c.api||DEFAULT_API});
+    writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:DEFAULT_API});
     if(changed)writeJson(META_KEY,emptyMeta());else saveMeta({lastError:''});
     cloudButtonText();
 
@@ -155,9 +155,9 @@
   setTimeout(async()=>{installUI();if(configured()&&navigator.onLine){const m=meta();if(m.pending)await pushCloud();else await pull({restore:false})}},0);
 
   window.AI_SHOGI_CLOUD_SAVE={
-    version:'21531b',setup,enableWithCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
+    version:'21531c',setup,enableWithCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
     config:()=>({...cfg(),syncKey:cfg().syncKey?'***'+cfg().syncKey.slice(-6):''}),meta,
     disable:()=>{const c=cfg();writeJson(CFG_KEY,{...c,enabled:false});cloudButtonText()},
-    audit:()=>({ok:true,configured:configured(),online:navigator.onLine,meta:meta(),hasLocal:validSave(currentSave()),buttons:{cloud:!!document.getElementById('cloudSaveBtn'),pull:!!document.getElementById('cloudPullBtn')}})
+    audit:()=>({ok:true,configured:configured(),online:navigator.onLine,backend:'supabase-edge-cas-v1',meta:meta(),hasLocal:validSave(currentSave()),buttons:{cloud:!!document.getElementById('cloudSaveBtn'),pull:!!document.getElementById('cloudPullBtn')}})
   };
 })();
