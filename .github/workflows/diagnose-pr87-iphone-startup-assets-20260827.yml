@@ -1,0 +1,47 @@
+name: Diagnose PR87 iPhone startup assets 20260827
+
+on:
+  push:
+    branches:
+      - diag-pr87-iphone-startup-assets-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  iphone-startup-assets:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact main and diagnostic-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='03abf4990cfe52c01c92401dddb2287e5919759f'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          mapfile -t changed < <(git diff --name-only "$MAIN"..HEAD)
+          printf 'DIAG_DELTA %s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | sort > /tmp/actual
+          printf '%s\n' '.github/scripts/diagnose-pr87-iphone-startup-assets-20260827.mjs' '.github/workflows/diagnose-pr87-iphone-startup-assets-20260827.yml' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528 shogi-side-test supabase
+          echo PASS_DIAG_PR87_IPHONE_STARTUP_EXACT_MAIN
+      - name: Install WebKit
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit >/dev/null
+      - name: Verify 3 fresh iPhone startup recoveries
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/diagnose-pr87-iphone-startup-assets-20260827.mjs 2>&1 | tee /tmp/diag-pr87-iphone-assets.log
+          test "$(grep -c '^PR87_IPHONE_STARTUP_ASSET_ROW ' /tmp/diag-pr87-iphone-assets.log)" -eq 3
+          grep -F 'PASS_PR87_IPHONE_STARTUP_ASSET_RECOVERY_3X' /tmp/diag-pr87-iphone-assets.log
