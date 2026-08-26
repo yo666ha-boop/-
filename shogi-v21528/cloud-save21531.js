@@ -29,7 +29,7 @@
   function configured(){const c=cfg();return !!(c.enabled&&/^[A-Za-z0-9_-]{24,128}$/.test(c.syncKey)&&c.deviceId)}
   function apiHeaders(c){return {'Authorization':'Bearer '+c.syncKey,'Content-Type':'application/json'};}
   function setStatus(text){const s=document.getElementById('status');if(s)s.textContent=text;const f=document.getElementById('fstatus');if(f)f.textContent=text;}
-  function cloudButtonText(){const b=document.getElementById('cloudSaveBtn');if(!b)return;const c=cfg(),m=meta();b.textContent=!c.enabled?'クラウド同期':m.lastError?'同期エラー':'クラウド同期 ✓';b.title=c.enabled?('revision '+m.revision+(m.pending?' / 未同期あり':'')):'別端末で続きを再開できます';}
+  function cloudButtonText(){const b=document.getElementById('cloudSaveBtn');if(!b)return;const c=cfg(),m=meta();b.textContent=!c.enabled?'クラウド同期':m.lastError?'同期エラー':'クラウド同期 ✓';b.title=c.enabled?('revision '+m.revision+(m.pending?' / 未同期あり':'')):'別端末で続きを再開できます';const q=document.getElementById('cloudCodeBtn');if(q)q.disabled=!configured();}
 
   async function request(method,body){
     const c=ensureDevice();
@@ -131,11 +131,27 @@
     await enableWithCode(answer);
   }
 
+  async function copySyncCode(){
+    if(!configured()){await setup();if(!configured())return false;}
+    const code=cfg().syncKey;
+    try{
+      if(!navigator.clipboard?.writeText)throw new Error('clipboard_unavailable');
+      await navigator.clipboard.writeText(code);
+      setStatus('クラウド同期コードをコピーしました。別端末で「クラウド同期」に貼り付けてください。');
+      return true;
+    }catch(e){
+      prompt('この同期コードをコピーして、別端末の「クラウド同期」に入力してください。',code);
+      setStatus('同期コードを表示しました。長押しまたは選択してコピーできます。');
+      return false;
+    }
+  }
+
   function installUI(){
     ensureDevice();
     const controls=document.querySelector('.controls');
     if(controls&&!document.getElementById('cloudSaveBtn')){
       const b=document.createElement('button');b.className='btn';b.id='cloudSaveBtn';b.type='button';b.textContent='クラウド同期';b.onclick=setup;controls.appendChild(b);
+      const q=document.createElement('button');q.className='btn';q.id='cloudCodeBtn';q.type='button';q.textContent='同期コードをコピー';q.onclick=copySyncCode;controls.appendChild(q);
       const p=document.createElement('button');p.className='btn';p.id='cloudPullBtn';p.type='button';p.textContent='別端末から再開';p.onclick=async()=>{
         if(!configured()){await setup();if(!configured())return;}
         let r=await pull({force:true,restore:true});
@@ -157,9 +173,9 @@
   setTimeout(async()=>{installUI();if(configured()&&navigator.onLine){const m=meta();if(m.pending)await pushCloud();else await pull({restore:false})}},0);
 
   window.AI_SHOGI_CLOUD_SAVE={
-    version:'21531c',setup,enableWithCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
+    version:'21531c',setup,enableWithCode,copySyncCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
     config:()=>({...cfg(),syncKey:cfg().syncKey?'***'+cfg().syncKey.slice(-6):''}),meta,
     disable:()=>{const c=cfg();writeJson(CFG_KEY,{...c,enabled:false});cloudButtonText()},
-    audit:()=>({ok:true,configured:configured(),online:navigator.onLine,backend:'supabase-edge-cas-v1',meta:meta(),hasLocal:validSave(currentSave()),buttons:{cloud:!!document.getElementById('cloudSaveBtn'),pull:!!document.getElementById('cloudPullBtn')}})
+    audit:()=>({ok:true,configured:configured(),online:navigator.onLine,backend:'supabase-edge-cas-v1',meta:meta(),hasLocal:validSave(currentSave()),buttons:{cloud:!!document.getElementById('cloudSaveBtn'),codeCopy:!!document.getElementById('cloudCodeBtn'),pull:!!document.getElementById('cloudPullBtn')}})
   };
 })();
