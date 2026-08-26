@@ -58,6 +58,18 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Patch validation harness to inspect real search info
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/verify-postmerge-pr88-public-final-20260827.mjs')
+          s=p.read_text()
+          old="const eng=await p.evaluate(async()=>{const x=AI_SHOGI_YANEURAOU_FUTURE;await x.init();return x.status()});assert.equal(eng.ready,true);assert.equal(eng.worker,true);assert.equal(eng.hashMB,hashMB);assert.equal(eng.threads,1);"
+          new="const eng=await p.evaluate(async()=>{const x=AI_SHOGI_YANEURAOU_FUTURE,b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let i=0;i<9;i++){b[i]={k:back[i],o:-1};b[72+i]={k:back[8-i],o:1};b[18+i]={k:'P',o:-1};b[54+i]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};await x.init();const r=await x.bestMove({b,h:{1:{},'-1':{}},t:1,log:[],last:null},{ms:300,multiPV:1,adaptive:false});return {status:x.status(),info:r?.info||{},ok:!!(r?.move||r?.resign||r?.declareWin)}});assert.equal(eng.status.ready,true);assert.equal(eng.status.worker,true);assert.equal(eng.info.hashMB,hashMB);assert.equal(eng.info.threads,1);assert.equal(eng.ok,true);"
+          assert old in s
+          p.write_text(s.replace(old,new))
+          PY
       - name: Run production four-env copy and mixed-device gate
         shell: bash
         run: |
