@@ -49,7 +49,8 @@
   function saveGame(reason='manual',flash=true){
     try{
       if(!isState(st))return false;
-      if(reason!=='manual'&&(!st.log||st.log.length===0))return false;
+      const allowEmpty=reason==='manual'||reason==='undo';
+      if(!allowEmpty&&(!st.log||st.log.length===0))return false;
       const x=snapshot(reason);
       localStorage.setItem(SAVE_KEY,JSON.stringify(x));
       updateSaveUI(flash);
