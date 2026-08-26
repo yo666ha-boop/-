@@ -1,0 +1,39 @@
+name: Validate Shogi save resume 20260826
+on:
+  push:
+    branches:
+      - validate-save-resume-20260826
+    paths:
+      - '.github/scripts/shogi-save-resume-audit-20260826.mjs'
+      - '.github/workflows/validate-shogi-save-resume-20260826.yml'
+      - 'shogi-v21528/**'
+      - 'shogi-side-test/**'
+  workflow_dispatch:
+jobs:
+  save-resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Syntax check save patch
+        run: |
+          node --check shogi-v21528/save21530.js
+          node --check shogi-v21528/coi-serviceworker.js
+      - name: Start static server
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-save-server.log 2>&1 &
+          echo $! > /tmp/shogi-save-server.pid
+          sleep 2
+      - name: Run save resume browser audit
+        run: node .github/scripts/shogi-save-resume-audit-20260826.mjs
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/shogi-save-server.log || true
