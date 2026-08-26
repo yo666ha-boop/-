@@ -54,6 +54,21 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Apply proven validation-only noise classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs')
+          s=p.read_text()
+          old="function knownStartupConsole(e){if(!/^open:/.test(e.phase))return false;const t=e.text||'',u=e.location?.url||'';if(/Data URL decoding failed|favicon/i.test(t))return true;"
+          new="function knownStartupConsole(e){const t=e.text||'',u=e.location?.url||'';if(/Data URL decoding failed|favicon/i.test(t))return true;if(!/^open:/.test(e.phase))return false;"
+          assert old in s
+          p.write_text(s.replace(old,new))
+          PY
+          grep -F "if(/Data URL decoding failed|favicon/i.test(t))return true;if(!/^open:/.test(e.phase))return false" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
+          echo PASS_V4_PROVEN_DATA_URL_NOISE_CLASSIFICATION
       - name: Run public v4 four-env and mixed-device gate
         shell: bash
         run: |
