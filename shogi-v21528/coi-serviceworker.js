@@ -28,6 +28,24 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21530)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21530=true;
+    const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
+    window.fetch=async function(...args){
+      const res=await nativeFetch(...args);
+      try{
+        const input=args[0],u=new URL(input instanceof Request?input.url:String(input),location.href);
+        if(!u.pathname.endsWith('/shogi/strong2155.js'))return res;
+        const patchURL=new URL('./save21530.js?v=21530a',scriptURL);
+        const patchRes=await nativeFetch(patchURL,{cache:'no-store'});
+        if(!patchRes.ok)return res;
+        const [baseText,patchText]=await Promise.all([res.clone().text(),patchRes.text()]);
+        const h=new Headers(res.headers);h.delete('content-length');h.delete('content-encoding');h.delete('etag');h.set('content-type','application/javascript; charset=utf-8');h.set('cache-control','no-store');
+        return new Response(baseText+'\n'+patchText,{status:res.status,statusText:res.statusText,headers:h});
+      }catch(e){console.error('save patch inject failed',e);return res}
+    };
+  })();
+  (()=>{
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
