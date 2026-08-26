@@ -46,3 +46,4 @@ jobs:
         env:
           SHOGI_URL: https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528/
         run: node .github/scripts/shogi-save-resume-audit-20260826.mjs
+# Retry uses asset-integrity proof before filtering WebKit fallback access-control warnings.
