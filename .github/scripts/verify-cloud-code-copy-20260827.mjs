@@ -62,11 +62,26 @@ async function seed(ctx,deviceId,localSave=null){
     if(localSave)localStorage.setItem('aiShogiGameSaveV1',JSON.stringify(localSave));else localStorage.removeItem('aiShogiGameSaveV1');
   },{deviceId,CLOUD,localSave});
 }
+async function proxyRealCloud(route){
+  const req=route.request();
+  const h=req.headers();
+  const headers={};
+  if(h.authorization)headers.Authorization=h.authorization;
+  if(h['content-type'])headers['Content-Type']=h['content-type'];
+  try{
+    const r=await fetch(CLOUD,{method:req.method(),headers,body:['GET','HEAD'].includes(req.method())?undefined:req.postData(),signal:AbortSignal.timeout(20000)});
+    const body=await r.text();
+    await route.fulfill({status:r.status,contentType:r.headers.get('content-type')||'application/json',body});
+  }catch(e){
+    await route.fulfill({status:599,contentType:'application/json',body:JSON.stringify({ok:false,error:'proxy_'+String(e.message||e)})});
+  }
+}
 
 const RUN=Date.now();
 const code=crypto.randomBytes(24).toString('base64url');
 const wb=await webkit.launch({headless:true}),cb=await chromium.launch({headless:true});
 const ic=await wb.newContext({userAgent:UA.iphone,viewport:{width:390,height:844}}),pc=await cb.newContext({userAgent:UA.chrome,viewport:{width:1440,height:900}});
+await ic.route(CLOUD,proxyRealCloud);await pc.route(CLOUD,proxyRealCloud);
 await seed(ic,`copygate_iphone_${RUN}`,save('IPHONE-A',RUN));
 await seed(pc,`copygate_pc_${RUN}`,null);
 const ip=await ic.newPage(),cp=await pc.newPage();
@@ -101,7 +116,7 @@ try{
   assert.equal(fin.m.revision,pRev);
   assert.equal(fin.marker,'PC-B');
   assert.ok(fin.loads>=1);
-  console.log('CLOUD_CODE_COPY_MIXED '+JSON.stringify({iphoneInitialRevision:iRev,pcRevision:pRev,conflictProtected:true,explicitDiscardRestored:true,finalMarker:fin.marker,restoreLoads:fin.loads}));
+  console.log('CLOUD_CODE_COPY_MIXED '+JSON.stringify({iphoneInitialRevision:iRev,pcRevision:pRev,realBackend:true,conflictProtected:true,explicitDiscardRestored:true,finalMarker:fin.marker,restoreLoads:fin.loads}));
 } finally {
   await ic.close();await pc.close();await wb.close();await cb.close();
 }
