@@ -1,0 +1,96 @@
+name: Verify PR87 cloud final gate v2
+
+on:
+  push:
+    branches:
+      - validate-pr87-cloud-final-v2-20260826
+    paths:
+      - '.github/scripts/verify-pr87-live-supabase-edge-20260826.mjs'
+      - '.github/scripts/verify-pr87-cross-device-browsers-20260826.mjs'
+      - '.github/scripts/verify-pr87-app-four-env-final-20260826.mjs'
+      - '.github/workflows/verify-pr87-cloud-final-v2-20260826.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-cloud-gate-v2:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact latest PR87 candidate plus validation-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE='3a3932c2fa20247a10085bdf507a16d58f0a391b'
+          test "$(git merge-base HEAD "$CANDIDATE")" = "$CANDIDATE"
+          mapfile -t changed < <(git diff --name-only "$CANDIDATE"..HEAD)
+          printf 'VALIDATION_DELTA %s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 4
+          printf '%s\n' "${changed[@]}" | sort > /tmp/actual.txt
+          printf '%s\n' \
+            '.github/scripts/verify-pr87-app-four-env-final-20260826.mjs' \
+            '.github/scripts/verify-pr87-cross-device-browsers-20260826.mjs' \
+            '.github/scripts/verify-pr87-live-supabase-edge-20260826.mjs' \
+            '.github/workflows/verify-pr87-cloud-final-v2-20260826.yml' | sort > /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          git diff --exit-code "$CANDIDATE"..HEAD -- shogi-v21528 supabase
+          test ! -e api/shogi-save.js
+          grep -F "cloud-save21531.js?v=21531c" shogi-v21528/coi-serviceworker.js
+          grep -F "https://htvfcdktdjtyoyzrohji.supabase.co/functions/v1/shogi-save" shogi-v21528/cloud-save21531.js
+          grep -F "backend:'supabase-edge-cas-v1'" shogi-v21528/cloud-save21531.js
+          test -f supabase/functions/shogi-save/index.ts
+          test -f supabase/migrations/20260826133238_create_shogi_cloud_save_cas.sql
+          test -f supabase/migrations/20260826134926_restrict_shogi_cloud_rpc_to_service_role.sql
+          grep -F 'revoke execute on function public.shogi_cloud_get(text) from public, anon, authenticated;' supabase/migrations/20260826134926_restrict_shogi_cloud_rpc_to_service_role.sql
+          grep -F 'grant execute on function public.shogi_cloud_get(text) to service_role;' supabase/migrations/20260826134926_restrict_shogi_cloud_rpc_to_service_role.sql
+          echo 'PASS_PR87_EXACT_LATEST_CANDIDATE_FINAL_VALIDATION_DELTA'
+
+      - name: Syntax checks
+        run: |
+          node --check shogi-v21528/cloud-save21531.js
+          node --check shogi-v21528/coi-serviceworker.js
+          node --check .github/scripts/verify-pr87-live-supabase-edge-20260826.mjs
+          node --check .github/scripts/verify-pr87-cross-device-browsers-20260826.mjs
+          node --check .github/scripts/verify-pr87-app-four-env-final-20260826.mjs
+          echo 'PASS_PR87_FINAL_V2_SYNTAX'
+
+      - name: Verify live Supabase Edge and Postgres CAS
+        run: |
+          node .github/scripts/verify-pr87-live-supabase-edge-20260826.mjs 2>&1 | tee /tmp/pr87-live.log
+          grep -F 'PASS_PR87_LIVE_SUPABASE_EDGE_CAS' /tmp/pr87-live.log
+
+      - name: Install Playwright browsers once
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+
+      - name: Verify two-device conflict safety in Chromium WebKit Firefox
+        run: |
+          node .github/scripts/verify-pr87-cross-device-browsers-20260826.mjs 2>&1 | tee /tmp/pr87-cross.log
+          test "$(grep -c '^PR87_CROSS_DEVICE_BROWSER_ROW ' /tmp/pr87-cross.log)" -eq 3
+          grep -F 'PASS_PR87_LEGACY_API_AUTO_MIGRATION' /tmp/pr87-cross.log
+          grep -F 'PASS_PR87_CROSS_DEVICE_THREE_BROWSERS' /tmp/pr87-cross.log
+
+      - name: Start COOP COEP server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/pr87-app-server.log 2>&1 &
+          sleep 1
+          curl -fsS http://127.0.0.1:4239/shogi-v21528/index.html >/dev/null
+          echo 'PASS_PR87_APP_SERVER'
+
+      - name: Verify candidate full app in four environments
+        run: |
+          node .github/scripts/verify-pr87-app-four-env-final-20260826.mjs 2>&1 | tee /tmp/pr87-app.log
+          test "$(grep -c '^PR87_APP_FOUR_ENV_ROW ' /tmp/pr87-app.log)" -eq 4
+          grep -F 'PASS_PR87_APP_FOUR_ENV_FINAL' /tmp/pr87-app.log
+
+      - name: Final marker
+        run: echo 'PASS_PR87_CLOUD_FINAL_GATE_V2'
