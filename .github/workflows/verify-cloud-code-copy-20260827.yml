@@ -1,0 +1,49 @@
+name: Verify cloud code copy 20260827
+on:
+  push:
+    branches:
+      - shogi-cloud-code-copy-20260827
+permissions:
+  contents: read
+jobs:
+  cloud-code-copy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify candidate is main plus expected files
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='03abf4990cfe52c01c92401dddb2287e5919759f'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN"..HEAD | sort | tee /tmp/changed
+          printf '%s\n' '.github/scripts/verify-cloud-code-copy-20260827.mjs' '.github/workflows/verify-cloud-code-copy-20260827.yml' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/changed
+          node --check shogi-v21528/cloud-save21531.js
+          node --check shogi-v21528/coi-serviceworker.js
+          grep -F "cloud-save21531.js?v=21531d" shogi-v21528/coi-serviceworker.js
+          grep -F "ai-shogi-coi-reload-21531d" shogi-v21528/coi-serviceworker.js
+          echo PASS_CLOUD_COPY_EXACT_DELTA_AND_CACHE_BUST
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run four-env copy and mixed-device cloud gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/cloud-copy-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node .github/scripts/verify-cloud-code-copy-20260827.mjs 2>&1 | tee /tmp/cloud-copy.log
+          test "$(grep -c '^CLOUD_CODE_COPY_ENV ' /tmp/cloud-copy.log)" -eq 4
+          test "$(grep -c '^CLOUD_CODE_COPY_MIXED ' /tmp/cloud-copy.log)" -eq 1
+          grep -F 'PASS_CLOUD_CODE_COPY_FOUR_ENV_MIXED' /tmp/cloud-copy.log
+      - name: Final marker
+        run: echo PASS_SHOGI_CLOUD_CODE_COPY_FOUR_ENV_MIXED_CANDIDATE
