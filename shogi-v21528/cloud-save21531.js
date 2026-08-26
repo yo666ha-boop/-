@@ -5,14 +5,13 @@
   const META_KEY='aiShogiCloudMetaV1';
   const SAVE_KEY='aiShogiGameSaveV1';
   const DEFAULT_API='https://ai-shogi-yaneuraou-iphone.vercel.app/api/shogi-save';
-  const enc=new TextEncoder();
-  const sleep=t=>new Promise(r=>setTimeout(r,t));
   let timer=0,syncing=false;
 
   const readJson=(k,fallback=null)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??fallback}catch(e){return fallback}};
   const writeJson=(k,v)=>{localStorage.setItem(k,JSON.stringify(v));return v};
+  const emptyMeta=()=>({revision:0,lastSyncedSavedAt:0,pending:false,lastError:'',updatedAt:Date.now()});
   const cfg=()=>readJson(CFG_KEY,{syncKey:'',deviceId:'',api:DEFAULT_API,enabled:false});
-  const meta=()=>readJson(META_KEY,{revision:0,lastSyncedSavedAt:0,pending:false,lastError:'',updatedAt:0});
+  const meta=()=>readJson(META_KEY,emptyMeta());
   const saveMeta=p=>writeJson(META_KEY,{...meta(),...p,updatedAt:Date.now()});
   const currentSave=()=>readJson(SAVE_KEY,null);
   const validSave=x=>!!(x&&x.version===1&&x.st&&Array.isArray(x.st.b)&&x.st.b.length===81&&x.st.h&&Array.isArray(x.st.log));
@@ -46,9 +45,10 @@
       const rec=j.record;
       if(!rec){saveMeta({lastError:''});cloudButtonText();return {ok:true,empty:true};}
       if(!validSave(rec.payload))throw new Error('invalid_cloud_payload');
-      if(m.pending&&rec.revision!==m.revision){
-        saveMeta({lastError:'conflict'});cloudButtonText();
-        return {ok:false,conflict:true,record:rec};
+      if(opts.inspectOnly)return {ok:true,record:rec,inspected:true};
+      if(m.pending&&!opts.discardLocal){
+        saveMeta({lastError:'local_pending'});cloudButtonText();
+        return {ok:false,conflict:true,localPending:true,record:rec};
       }
       const remoteNewer=rec.revision>m.revision || Number(rec.payload.savedAt||0)>Number(local?.savedAt||0);
       if(remoteNewer||opts.force){
@@ -90,11 +90,28 @@
   async function enableWithCode(code){
     code=String(code||'').trim();
     if(!/^[A-Za-z0-9_-]{24,128}$/.test(code))return false;
-    const c=ensureDevice();writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:c.api||DEFAULT_API});
-    saveMeta({lastError:''});cloudButtonText();
-    const pulled=await pull({restore:false});
-    if(pulled.ok&&pulled.record){setStatus('クラウド保存を接続しました。クラウド側に保存済み対局があります。');}
-    else{queuePush();setStatus('クラウド保存を接続しました。');}
+    const c=ensureDevice(),changed=c.syncKey!==code;
+    writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:c.api||DEFAULT_API});
+    if(changed)writeJson(META_KEY,emptyMeta());else saveMeta({lastError:''});
+    cloudButtonText();
+
+    const local=currentSave();
+    if(validSave(local)){
+      const checked=await pull({inspectOnly:true});
+      if(checked.ok&&checked.record){
+        setStatus('クラウド保存を接続しました。クラウド側にも対局があります。「別端末から再開」で選んで復元できます。');
+      }else if(checked.ok&&checked.empty){
+        queuePush();setStatus('クラウド保存を接続しました。');
+      }else{
+        queuePush();setStatus('クラウド保存を接続しました。端末内保存を保持し、接続復旧後に同期します。');
+      }
+      return true;
+    }
+
+    const pulled=await pull({force:true,restore:true});
+    if(pulled.ok&&pulled.record)setStatus('クラウド保存を接続し、保存済み対局をこの端末へ復元しました。');
+    else if(pulled.ok&&pulled.empty)setStatus('クラウド保存を接続しました。クラウドに保存済み対局はまだありません。');
+    else setStatus('クラウド保存を接続しました。接続復旧後に同期します。');
     return true;
   }
 
@@ -119,7 +136,11 @@
       const b=document.createElement('button');b.className='btn';b.id='cloudSaveBtn';b.type='button';b.textContent='クラウド同期';b.onclick=setup;controls.appendChild(b);
       const p=document.createElement('button');p.className='btn';p.id='cloudPullBtn';p.type='button';p.textContent='別端末から再開';p.onclick=async()=>{
         if(!configured()){await setup();if(!configured())return;}
-        const r=await pull({force:true,restore:true});
+        let r=await pull({force:true,restore:true});
+        if(r.localPending){
+          const discard=confirm('この端末にまだクラウドへ送れていない変更があります。\n\n端末内の未同期変更を破棄して、クラウド側の対局で置き換えますか？');
+          if(discard)r=await pull({force:true,restore:true,discardLocal:true});
+        }
         if(r.ok&&r.record)setStatus('クラウドの対局をこの端末へ復元しました。');
         else if(r.ok&&r.empty)setStatus('クラウドに保存された対局はまだありません。');
         else if(r.conflict)setStatus('この端末に未同期の変更があります。自動上書きを止めました。');
@@ -134,7 +155,7 @@
   setTimeout(async()=>{installUI();if(configured()&&navigator.onLine){const m=meta();if(m.pending)await pushCloud();else await pull({restore:false})}},0);
 
   window.AI_SHOGI_CLOUD_SAVE={
-    version:'21531a',setup,enableWithCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
+    version:'21531b',setup,enableWithCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
     config:()=>({...cfg(),syncKey:cfg().syncKey?'***'+cfg().syncKey.slice(-6):''}),meta,
     disable:()=>{const c=cfg();writeJson(CFG_KEY,{...c,enabled:false});cloudButtonText()},
     audit:()=>({ok:true,configured:configured(),online:navigator.onLine,meta:meta(),hasLocal:validSave(currentSave()),buttons:{cloud:!!document.getElementById('cloudSaveBtn'),pull:!!document.getElementById('cloudPullBtn')}})
