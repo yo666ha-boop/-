@@ -29,9 +29,9 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps webkit >/dev/null
-      - name: Run diagnostic core flow
+      - name: Run diagnostic core flow v2
         shell: bash
         run: |
           set -euo pipefail
-          node .github/scripts/diagnose-postmerge-pr87-webkit-loadfailed-20260826.mjs 2>&1 | tee /tmp/diag-pr87-webkit.log
-          grep -F 'PASS_DIAG_PR87_WEBKIT_CORE_FLOW' /tmp/diag-pr87-webkit.log
+          node .github/scripts/diagnose-postmerge-pr87-webkit-loadfailed-v2-20260826.mjs 2>&1 | tee /tmp/diag-pr87-webkit-v2.log
+          grep -F 'PASS_DIAG_PR87_WEBKIT_V2_CORE_FLOW' /tmp/diag-pr87-webkit-v2.log
