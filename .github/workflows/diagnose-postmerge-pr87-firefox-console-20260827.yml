@@ -1,0 +1,37 @@
+name: Diagnose postmerge PR87 Firefox console 20260827
+
+on:
+  push:
+    branches:
+      - diag-postmerge-pr87-firefox-console-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-firefox:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='03abf4990cfe52c01c92401dddb2287e5919759f'
+          git fetch --no-tags origin "$MAIN"
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528 supabase
+          echo PASS_DIAG_PR87_FIREFOX_PRODUCTION_UNCHANGED
+      - name: Install Firefox
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps firefox >/dev/null
+      - name: Run Firefox console diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/diagnose-postmerge-pr87-firefox-console-20260827.mjs 2>&1 | tee /tmp/diag-pr87-firefox.log
+          grep -F 'PASS_DIAG_PR87_FIREFOX_FLOW_COMPLETED' /tmp/diag-pr87-firefox.log
