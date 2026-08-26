@@ -4,13 +4,15 @@
   const CFG_KEY='aiShogiCloudConfigV1';
   const META_KEY='aiShogiCloudMetaV1';
   const SAVE_KEY='aiShogiGameSaveV1';
+  const LEGACY_API='https://ai-shogi-yaneuraou-iphone.vercel.app/api/shogi-save';
   const DEFAULT_API='https://htvfcdktdjtyoyzrohji.supabase.co/functions/v1/shogi-save';
   let timer=0,syncing=false;
 
   const readJson=(k,fallback=null)=>{try{return JSON.parse(localStorage.getItem(k)||'null')??fallback}catch(e){return fallback}};
   const writeJson=(k,v)=>{localStorage.setItem(k,JSON.stringify(v));return v};
   const emptyMeta=()=>({revision:0,lastSyncedSavedAt:0,pending:false,lastError:'',updatedAt:Date.now()});
-  const cfg=()=>readJson(CFG_KEY,{syncKey:'',deviceId:'',api:DEFAULT_API,enabled:false});
+  const normalizeApi=api=>!api||api===LEGACY_API?DEFAULT_API:api;
+  const cfg=()=>{const c=readJson(CFG_KEY,{syncKey:'',deviceId:'',api:DEFAULT_API,enabled:false});return {...c,api:normalizeApi(c.api)}};
   const meta=()=>readJson(META_KEY,emptyMeta());
   const saveMeta=p=>writeJson(META_KEY,{...meta(),...p,updatedAt:Date.now()});
   const currentSave=()=>readJson(SAVE_KEY,null);
@@ -31,7 +33,7 @@
 
   async function request(method,body){
     const c=ensureDevice();
-    const r=await fetch(c.api||DEFAULT_API,{method,headers:apiHeaders(c),cache:'no-store',body:body?JSON.stringify(body):undefined});
+    const r=await fetch(normalizeApi(c.api),{method,headers:apiHeaders(c),cache:'no-store',body:body?JSON.stringify(body):undefined});
     const j=await r.json().catch(()=>({ok:false,error:'invalid_response'}));
     return {r,j};
   }
@@ -91,7 +93,7 @@
     code=String(code||'').trim();
     if(!/^[A-Za-z0-9_-]{24,128}$/.test(code))return false;
     const c=ensureDevice(),changed=c.syncKey!==code;
-    writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:DEFAULT_API});
+    writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:normalizeApi(c.api)});
     if(changed)writeJson(META_KEY,emptyMeta());else saveMeta({lastError:''});
     cloudButtonText();
 
