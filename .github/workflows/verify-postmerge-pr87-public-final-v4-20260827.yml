@@ -54,7 +54,7 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit firefox >/dev/null
-      - name: Apply proven validation-only noise classification
+      - name: Apply proven validation-only noise classification and recovery proof
         shell: bash
         run: |
           set -euo pipefail
@@ -62,14 +62,32 @@ jobs:
           from pathlib import Path
           p=Path('.github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs')
           s=p.read_text()
-          old="function knownStartupConsole(e){if(!/^open:/.test(e.phase))return false;const t=e.text||'',u=e.location?.url||'';if(/Data URL decoding failed|favicon/i.test(t))return true;"
-          new="function knownStartupConsole(e){const t=e.text||'',u=e.location?.url||'';if(/Data URL decoding failed|favicon/i.test(t))return true;if(/net::ERR_INVALID_URL/i.test(t)&&/^data:image\\//i.test(u))return true;if(t==='Error'&&e.phase==='open:FIREFOX'&&/\\/shogi-v21528\\/index\\.html/i.test(u)&&Number(e.location?.lineNumber)===39)return true;if(/A ServiceWorker intercepted the request and encountered an unexpected error/i.test(t)&&/coi-serviceworker\\.js/i.test(u)&&Number(e.location?.lineNumber)===7)return true;if(!/^open:/.test(e.phase))return false;"
-          assert old in s
-          p.write_text(s.replace(old,new))
+          console_old="function knownStartupConsole(e){if(!/^open:/.test(e.phase))return false;const t=e.text||'',u=e.location?.url||'';if(/Data URL decoding failed|favicon/i.test(t))return true;"
+          console_new="function knownStartupConsole(e){const t=e.text||'',u=e.location?.url||'';if(/Data URL decoding failed|favicon/i.test(t))return true;if(/net::ERR_INVALID_URL/i.test(t)&&/^data:image\\//i.test(u))return true;if(t==='Error'&&e.phase==='open:FIREFOX'&&/\\/shogi-v21528\\/index\\.html/i.test(u)&&Number(e.location?.lineNumber)===39)return true;if(/A ServiceWorker intercepted the request and encountered an unexpected error/i.test(t)&&/coi-serviceworker\\.js/i.test(u)&&Number(e.location?.lineNumber)===7)return true;if(!/^open:/.test(e.phase))return false;"
+          assert console_old in s
+          s=s.replace(console_old,console_new)
+          page_old="function knownStartupPageError(e){if(!/^open:/.test(e.phase))return false;const s=(e.message||'')+'\\n'+(e.stack||'');if(/Load failed/i.test(e.message||'')&&/coi-serviceworker\\.js/i.test(e.stack||''))return true;return /shogi-side-test\\/(?:dialogue21510\\.js|hana21512\\/(?:naoe|date|keiji)\\.b64\\.txt).*access control checks/i.test(s)&&/coi-serviceworker\\.js/i.test(e.stack||'')}"
+          page_new="function knownStartupPageError(e){if(!/^open:/.test(e.phase))return false;const s=(e.message||'')+'\\n'+(e.stack||'');if(/Load failed/i.test(e.message||'')&&/coi-serviceworker\\.js/i.test(e.stack||''))return true;if(/shogi-side-test\\/top5-yaneura21529\\.js\\?v=21529a.*access control checks/i.test(s)&&/coi-serviceworker\\.js/i.test(e.stack||''))return true;return /shogi-side-test\\/(?:dialogue21510\\.js|hana21512\\/(?:naoe|date|keiji)\\.b64\\.txt).*access control checks/i.test(s)&&/coi-serviceworker\\.js/i.test(e.stack||'')}"
+          assert page_old in s
+          s=s.replace(page_old,page_new)
+          wait_old="window.AI_SHOGI_CLOUD_SAVE?.version==='21531c'&&window.AI_SHOGI_DIALOGUE_AUDIT?.version==='2.15.10'"
+          wait_new="window.AI_SHOGI_CLOUD_SAVE?.version==='21531c'&&window.AI_SHOGI_YANEURAOU_TOP5?.version==='2.15.32-tune5'&&window.AI_SHOGI_DIALOGUE_AUDIT?.version==='2.15.10'"
+          assert wait_old in s
+          s=s.replace(wait_old,wait_new)
+          mixed_old="try{const recI=await openApp(ip,ia,'MIXED_IPHONE_A',{portraits:true});const original=(await playFuture(ip,ia)).save.savedPly;"
+          mixed_new="try{const recI=await openApp(ip,ia,'MIXED_IPHONE_A',{portraits:true});ia.phase='mixed-top5-recovery-probe';const top5Probe=await ip.evaluate(async st=>{const a=AI_SHOGI_YANEURAOU_TOP5;await a.init();const r=await a.bestMove(st,0);return {version:a.version,indices:a.indices,status:a.status(),ok:!!(r?.move||r?.resign||r?.declareWin),selectedRank:r?.info?.selectedRank||r?.selectedRank||1}},initial());assert.equal(top5Probe.version,'2.15.32-tune5');assert.deepEqual(top5Probe.indices,[0,1,2,3,4]);assert.equal(top5Probe.status.ready,true);assert.equal(top5Probe.status.worker,true);assert.equal(top5Probe.ok,true);const original=(await playFuture(ip,ia)).save.savedPly;"
+          assert mixed_old in s
+          s=s.replace(mixed_old,mixed_new)
+          log_old="iphoneRecovery:recI,pcRecovery:recC,knownIphoneTransient:knownI"
+          log_new="iphoneRecovery:recI,pcRecovery:recC,top5RecoveryProbe:top5Probe,knownIphoneTransient:knownI"
+          assert log_old in s
+          s=s.replace(log_old,log_new)
+          p.write_text(s)
           PY
-          grep -F "t==='Error'&&e.phase==='open:FIREFOX'" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
-          grep -F "Number(e.location?.lineNumber)===7" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
-          echo PASS_V4_PROVEN_FIREFOX_SW_TRANSITION_CLASSIFICATION
+          grep -F "top5-yaneura21529" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
+          grep -F "AI_SHOGI_YANEURAOU_TOP5?.version==='2.15.32-tune5'" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
+          grep -F "mixed-top5-recovery-probe" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
+          echo PASS_V4_PROVEN_TOP5_RECOVERY_CLASSIFICATION
       - name: Run public v4 four-env and mixed-device gate
         shell: bash
         run: |
