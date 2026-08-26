@@ -1,0 +1,63 @@
+name: Verify postmerge PR87 public final v3 20260827
+
+on:
+  push:
+    branches:
+      - validate-postmerge-pr87-public-final-v3-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-final-v3:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact main and clean validation delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='03abf4990cfe52c01c92401dddb2287e5919759f'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          mapfile -t changed < <(git diff --name-only "$MAIN"..HEAD)
+          printf 'VALIDATION_DELTA %s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | sort > /tmp/actual
+          printf '%s\n' '.github/scripts/verify-postmerge-pr87-public-final-v3-20260827.mjs' '.github/workflows/verify-postmerge-pr87-public-final-v3-20260827.yml' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528 supabase
+          echo PASS_POSTMERGE_PR87_PUBLIC_FINAL_V3_EXACT_MAIN
+      - name: Verify public artifacts are exact merged production
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://yo666ha-boop.github.io/-/shogi-v21528'
+          for f in cloud-save21531.js coi-serviceworker.js save21530.js future-yaneura-worker21528.js; do
+            curl -fsSL --retry 8 --retry-delay 5 --connect-timeout 20 --max-time 120 "$BASE/$f?v3=$(date +%s%N)" -o "/tmp/$f"
+            L="$(sha256sum "shogi-v21528/$f"|awk '{print $1}')"; P="$(sha256sum "/tmp/$f"|awk '{print $1}')"
+            echo "PUBLIC_ARTIFACT $f local=$L public=$P"; test "$L" = "$P"
+          done
+          grep -F 'cloud-save21531.js?v=21531c' /tmp/coi-serviceworker.js
+          grep -F "backend:'supabase-edge-cas-v1'" /tmp/cloud-save21531.js
+          echo PASS_POSTMERGE_PR87_PUBLIC_FINAL_V3_ARTIFACT_IDENTITY
+      - name: Install browsers
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run public v3 four-env and mixed-device gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-postmerge-pr87-public-final-v3-20260827.mjs 2>&1 | tee /tmp/final-v3.log
+          test "$(grep -c '^PR87_PUBLIC_FINAL_V3_ENV ' /tmp/final-v3.log)" -eq 4
+          test "$(grep -c '^PR87_PUBLIC_FINAL_V3_MIXED ' /tmp/final-v3.log)" -eq 1
+          grep -F 'PASS_POSTMERGE_PR87_PUBLIC_FINAL_V3' /tmp/final-v3.log
+      - name: Final marker
+        run: echo PASS_POSTMERGE_PR87_PUBLIC_FINAL_V3_GATE
