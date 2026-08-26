@@ -78,6 +78,10 @@ jobs:
           mixed_new="try{const recI=await openApp(ip,ia,'MIXED_IPHONE_A',{portraits:true});ia.phase='mixed-top5-recovery-probe';const top5Probe=await ip.evaluate(async st=>{const a=AI_SHOGI_YANEURAOU_TOP5;await a.init();const r=await a.bestMove(st,0);return {version:a.version,indices:a.indices,status:a.status(),ok:!!(r?.move||r?.resign||r?.declareWin),selectedRank:r?.info?.selectedRank||r?.selectedRank||1}},initial());assert.equal(top5Probe.version,'2.15.32-tune5');assert.deepEqual(top5Probe.indices,[0,1,2,3,4]);assert.equal(top5Probe.status.ready,true);assert.equal(top5Probe.status.worker,true);assert.equal(top5Probe.ok,true);const original=(await playFuture(ip,ia)).save.savedPly;"
           assert mixed_old in s
           s=s.replace(mixed_old,mixed_new)
+          settle_old="await sleep(1200);const fin=await ip.evaluate(()=>({m:AI_SHOGI_CLOUD_SAVE.meta(),x:JSON.parse(localStorage.getItem('aiShogiGameSaveV1'))}));"
+          settle_new="await sleep(800);await ip.waitForFunction(()=>{const m=AI_SHOGI_CLOUD_SAVE.meta(),x=JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null');return !m.pending&&m.lastError===''&&x?.st?.log?.at(-1)?.cloudTest==='PC-B'},null,{timeout:20000});await sleep(700);const fin=await ip.evaluate(()=>({m:AI_SHOGI_CLOUD_SAVE.meta(),x:JSON.parse(localStorage.getItem('aiShogiGameSaveV1'))}));"
+          assert settle_old in s
+          s=s.replace(settle_old,settle_new)
           log_old="iphoneRecovery:recI,pcRecovery:recC,knownIphoneTransient:knownI"
           log_new="iphoneRecovery:recI,pcRecovery:recC,top5RecoveryProbe:top5Probe,knownIphoneTransient:knownI"
           assert log_old in s
@@ -87,7 +91,8 @@ jobs:
           grep -F "top5-yaneura21529" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
           grep -F "AI_SHOGI_YANEURAOU_TOP5?.version==='2.15.32-tune5'" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
           grep -F "mixed-top5-recovery-probe" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
-          echo PASS_V4_PROVEN_TOP5_RECOVERY_CLASSIFICATION
+          grep -F "x?.st?.log?.at(-1)?.cloudTest==='PC-B'" .github/scripts/verify-postmerge-pr87-public-final-v4-20260827.mjs
+          echo PASS_V4_PROVEN_TOP5_RECOVERY_AND_CLOUD_SETTLE
       - name: Run public v4 four-env and mixed-device gate
         shell: bash
         run: |
