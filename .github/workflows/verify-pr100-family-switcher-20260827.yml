@@ -1,0 +1,27 @@
+name: verify-pr100-family-switcher-20260827
+
+on:
+  push:
+    branches:
+      - validate-pr100-family-switcher-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  family-switcher-four-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify family code switching across four environments
+        run: node .github/scripts/verify-pr100-family-switcher-20260827.mjs
