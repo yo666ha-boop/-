@@ -1,0 +1,29 @@
+name: verify-pr98-slot-picker-20260827
+
+on:
+  push:
+    branches:
+      - validate-pr98-slot-picker-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  slot-picker-four-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check picker
+        run: node --check shogi-v21528/cloud-slot-picker21532.js
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify touch slot picker in four environments
+        run: node .github/scripts/verify-pr98-slot-picker-20260827.mjs
