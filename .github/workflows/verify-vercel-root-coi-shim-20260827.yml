@@ -28,3 +28,4 @@ jobs:
           npx playwright install --with-deps webkit
       - name: Verify Vercel-root compatibility shim
         run: node .github/scripts/verify-vercel-root-coi-shim-20260827.mjs
+# validation-only final release audit trigger 2026-08-27

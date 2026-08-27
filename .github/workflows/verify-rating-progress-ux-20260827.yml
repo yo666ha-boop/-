@@ -24,3 +24,4 @@ jobs:
           npx playwright install --with-deps webkit
       - name: Verify rating progress UX
         run: node .github/scripts/verify-rating-progress-ux-20260827.mjs
+# validation-only final release audit trigger 2026-08-27

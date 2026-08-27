@@ -51,3 +51,4 @@ jobs:
           set -euo pipefail
           node .github/scripts/verify-all26-strength-rank-labels-20260827.mjs 2>&1 | tee /tmp/rank-labels.log
           grep -F 'PASS_ALL26_VISIBLE_STRENGTH_RANK_LABELS' /tmp/rank-labels.log
+# validation-only final release audit trigger 2026-08-27
