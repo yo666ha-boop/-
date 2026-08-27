@@ -38,13 +38,15 @@ const errors=[];
 page.on('pageerror',e=>errors.push(String(e.message||e)));
 try{
   await page.goto('http://127.0.0.1:4239/shogi-v21528/index-lower8-quality.html?ranklabels='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_STRENGTH_RANK_LABELS?.version==='21536c',{timeout:120000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_STRENGTH_RANK_LABELS?.version==='21536d',{timeout:120000});
   const audit=await page.evaluate(expected=>({
     version:window.AI_SHOGI_STRENGTH_RANK_LABELS?.version,
     count:window.AI_SHOGI_STRENGTH_RANK_LABELS?.count,
+    provisionalMeta:window.AI_SHOGI_STRENGTH_RANK_LABELS?.provisionalMeta||[],
     rows:expected.map(([i,name,label])=>({i,name,label,actual:window.AI_SHOGI_STRENGTH_RANK_LABELS.labelFor(i)})),
   }),expected);
   if(audit.count!==26)throw Error('label count '+audit.count);
+  if(audit.provisionalMeta.length)throw Error('provisional meta '+JSON.stringify(audit.provisionalMeta));
   for(const row of audit.rows)if(row.actual!==row.label)throw Error('rank API '+JSON.stringify(row));
 
   for(const [i,name,label] of expected){
@@ -55,14 +57,27 @@ try{
     await page.waitForFunction(({name,label})=>{
       const n=(document.getElementById('oppName')?.textContent||'').trim();
       const r=(document.getElementById('oppRank')?.textContent||'').trim();
-      return n.startsWith(name)&&r===label;
-    },{name,label},{timeout:10000});
-    const ui=await page.evaluate(()=>({name:(document.getElementById('oppName')?.textContent||'').trim(),rank:(document.getElementById('oppRank')?.textContent||'').trim()}));
-    if(ui.rank.includes('仮キャラクター'))throw Error('legacy provisional label '+JSON.stringify({i,name,ui}));
+      const img=document.querySelector('#oppPortrait img');
+      return n.startsWith(name)&&r===label&&!!img&&img.complete&&img.naturalWidth>0;
+    },{name,label},{timeout:15000});
+    const ui=await page.evaluate(()=>{
+      const img=document.querySelector('#oppPortrait img');
+      return{
+        name:(document.getElementById('oppName')?.textContent||'').trim(),
+        rank:(document.getElementById('oppRank')?.textContent||'').trim(),
+        style:(document.getElementById('oppStyle')?.textContent||'').trim(),
+        portrait:{present:!!img,complete:!!img?.complete,width:Number(img?.naturalWidth||0),alt:String(img?.alt||'')},
+        provisionalPortrait:!!document.querySelector('#oppPortrait .oppTemp,#oppPortrait .placeholder'),
+      };
+    });
+    if(ui.rank.includes('仮キャラクター'))throw Error('legacy provisional rank '+JSON.stringify({i,name,ui}));
+    if(ui.style.includes('仮キャラ'))throw Error('legacy provisional meta '+JSON.stringify({i,name,ui}));
+    if(ui.provisionalPortrait||!ui.portrait.present||!ui.portrait.complete||ui.portrait.width<=0)throw Error('portrait '+JSON.stringify({i,name,ui}));
     console.log('RANK_LABEL_ROW '+JSON.stringify({i,name,label,ui}));
   }
   if(errors.length)throw Error('page errors '+errors.join(' | '));
   console.log('PASS_ALL26_VISIBLE_STRENGTH_RANK_LABELS '+JSON.stringify(audit));
+  console.log('PASS_ALL26_FINAL_OPPONENT_PORTRAITS');
 }finally{
   await browser.close();
 }
