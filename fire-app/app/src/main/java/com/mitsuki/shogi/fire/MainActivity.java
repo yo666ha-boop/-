@@ -3,6 +3,7 @@ package com.mitsuki.shogi.fire;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Build;
@@ -22,13 +23,15 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 public final class MainActivity extends Activity {
-    // Fire Stage 2 serves the exact frozen browser baseline from APK assets.
+    // Fire Stage 2.1 still serves the exact frozen browser baseline from APK assets.
     // No shogi engine/profile/rating code is weakened or replaced by the Android wrapper.
-    private static final String APP_URL = OfflineContentStore.START_URL;
     private static final String BASELINE_MAIN = OfflineContentStore.BASELINE_MAIN;
 
     private WebView webView;
     private OfflineContentStore contentStore;
+    private LoopbackHttpServer loopbackServer;
+    private String localOrigin;
+    private String appUrl;
     private boolean strengthGuardHandled;
     private boolean updateCheckStarted;
     private boolean themeInjected;
@@ -42,6 +45,15 @@ public final class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         contentStore = new OfflineContentStore(this);
+        try {
+            loopbackServer = new LoopbackHttpServer(contentStore);
+            localOrigin = loopbackServer.origin();
+            appUrl = loopbackServer.startUrl();
+        } catch (Exception e) {
+            showStartupFailure("端末内サーバーを起動できませんでした。\n" + e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
+            return;
+        }
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
         setContentView(webView);
@@ -63,7 +75,7 @@ public final class MainActivity extends Activity {
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setUserAgentString(s.getUserAgentString() + " MitsukiShogiFire/2.0 offline baseline/" + BASELINE_MAIN.substring(0, 8));
+        s.setUserAgentString(s.getUserAgentString() + " MitsukiShogiFire/2.1 loopback baseline/" + BASELINE_MAIN.substring(0, 8));
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -72,39 +84,65 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                // The new normal path is real localhost HTTP. Keep the old pseudo-HTTPS resolver only
+                // as an internal compatibility fallback for any legacy absolute asset URL.
                 WebResourceResponse local = contentStore.intercept(request.getUrl().toString());
                 return local != null ? local : super.shouldInterceptRequest(view, request);
             }
 
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (url != null && localOrigin != null && url.startsWith(localOrigin)) themeInjected = false;
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (!url.startsWith(OfflineContentStore.LOCAL_ORIGIN)) return;
+                if (localOrigin == null || url == null || !url.startsWith(localOrigin)) return;
                 injectFireTheme(view);
                 if (!updateCheckStarted) {
                     updateCheckStarted = true;
                     contentStore.checkForUpdateAsync();
                 }
-                if (strengthGuardHandled) return;
-                view.evaluateJavascript(
-                    "(function(){return !!(self.crossOriginIsolated && typeof SharedArrayBuffer==='function' && typeof WebAssembly==='object');})()",
-                    value -> {
-                        if ("true".equals(value)) {
-                            strengthGuardHandled = true;
-                        } else {
-                            strengthGuardHandled = true;
-                            refuseWeakFallback();
-                        }
-                    }
-                );
+                if (!strengthGuardHandled) checkStrengthGuard(view, 0);
             }
         });
         webView.setWebChromeClient(new WebChromeClient());
 
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
-            webView.loadUrl(APP_URL);
+            webView.loadUrl(appUrl);
         }
         enterImmersiveMode();
+    }
+
+    private void checkStrengthGuard(WebView view, int attempt) {
+        if (strengthGuardHandled || view == null) return;
+        final String script =
+            "(function(){" +
+            "var shared=false,err='';" +
+            "try{shared=(typeof SharedArrayBuffer==='function')&&(new WebAssembly.Memory({initial:1,maximum:1,shared:true}).buffer instanceof SharedArrayBuffer)}catch(e){err=String(e)}" +
+            "return 'coi='+!!self.crossOriginIsolated+'|secure='+!!self.isSecureContext+'|sab='+(typeof SharedArrayBuffer==='function')+'|wasm='+(typeof WebAssembly==='object')+'|sharedMemory='+shared+'|err='+err+'|ua='+navigator.userAgent;" +
+            "})()";
+        view.evaluateJavascript(script, value -> {
+            if (strengthGuardHandled) return;
+            String diagnostic = value == null ? "" : value;
+            boolean pass = diagnostic.contains("coi=true")
+                && diagnostic.contains("secure=true")
+                && diagnostic.contains("sab=true")
+                && diagnostic.contains("wasm=true")
+                && diagnostic.contains("sharedMemory=true");
+            if (pass) {
+                strengthGuardHandled = true;
+                return;
+            }
+            if (attempt < 3) {
+                view.postDelayed(() -> checkStrengthGuard(view, attempt + 1), 700L);
+                return;
+            }
+            strengthGuardHandled = true;
+            refuseWeakFallback(diagnostic);
+        });
     }
 
     private void injectFireTheme(WebView view) {
@@ -113,27 +151,54 @@ public final class MainActivity extends Activity {
         view.evaluateJavascript(
             "(function(){if(document.getElementById('mitsukiFireThemeScript'))return;" +
             "var s=document.createElement('script');s.id='mitsukiFireThemeScript';" +
-            "s.src='/fire/fire-theme.js?v=2';document.head.appendChild(s);})()",
+            "s.src='/fire/fire-theme.js?v=3';document.head.appendChild(s);})()",
             null
         );
     }
 
-    private void refuseWeakFallback() {
+    private String webViewVersion() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                PackageInfo info = WebView.getCurrentWebViewPackage();
+                if (info != null) return info.packageName + " " + info.versionName;
+            }
+        } catch (Throwable ignored) {}
+        return "unknown";
+    }
+
+    private void refuseWeakFallback(String diagnostic) {
         if (isFinishing() || webView == null) return;
+        final String details = "WebView: " + webViewVersion() + "\n" + diagnostic;
         webView.stopLoading();
         webView.loadDataWithBaseURL(
             null,
-            "<html><body style='background:#111;color:#fff;font-family:sans-serif;padding:24px'><h2>強さ維持条件を満たしていません</h2><p>このFireのWebViewでは、現在のやねうら王＋水匠5を同じ条件で動かせません。弱い代替動作には切り替えず停止しました。</p></body></html>",
+            "<html><body style='background:#111;color:#fff;font-family:sans-serif;padding:24px'><h2>強さ維持条件を満たしていません</h2>" +
+            "<p>このFireでは、現在のやねうら王＋水匠5が必要とする共有WebAssemblyメモリを有効にできませんでした。弱い代替動作には切り替えず停止しました。</p>" +
+            "<p style='font-size:12px;white-space:pre-wrap;color:#bbb'>" + escapeHtml(details) + "</p></body></html>",
             "text/html",
             "UTF-8",
             null
         );
         new AlertDialog.Builder(this)
             .setTitle("みつき将棋")
-            .setMessage("この端末では現在の強さを維持できる実行条件を確認できませんでした。弱くして続行せず、ここで停止します。")
+            .setMessage("同じ強さで動かす条件を確認できませんでした。\n\n" + details)
             .setCancelable(false)
             .setPositiveButton("終了", (dialog, which) -> finish())
             .show();
+    }
+
+    private void showStartupFailure(String message) {
+        new AlertDialog.Builder(this)
+            .setTitle("みつき将棋")
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton("終了", (dialog, which) -> finish())
+            .show();
+    }
+
+    private static String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 
     private final class FireInfoBridge {
@@ -145,6 +210,11 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public String getUpdateState() {
             return contentStore == null ? "端末内版" : contentStore.updateState();
+        }
+
+        @JavascriptInterface
+        public String getLocalOrigin() {
+            return localOrigin == null ? "" : localOrigin;
         }
     }
 
@@ -182,6 +252,10 @@ public final class MainActivity extends Activity {
             webView.removeJavascriptInterface("MitsukiFireNative");
             webView.destroy();
             webView = null;
+        }
+        if (loopbackServer != null) {
+            loopbackServer.close();
+            loopbackServer = null;
         }
         super.onDestroy();
     }
