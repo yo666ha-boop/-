@@ -1,0 +1,33 @@
+name: verify-postmerge-pr98-public-final-20260827
+
+on:
+  push:
+    branches:
+      - validate-postmerge-pr98-public-final-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Confirm validation branch is based on PR98 production main
+        run: |
+          git fetch origin main --depth=1
+          test "$(git rev-parse origin/main)" = "c5f2662464213fad40f4ec4baa64bed8f0954c36"
+          git diff --exit-code origin/main -- shogi-v21528/cloud-slot-picker21532.js shogi-v21528/coi-serviceworker.js shogi-v21528/cloud-save21531.js shogi-v21528/save21530.js
+          echo PASS_POSTMERGE_PR98_EXACT_MAIN
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify production artifacts and touch slot picker in four environments
+        run: node .github/scripts/verify-postmerge-pr98-public-final-20260827.mjs
