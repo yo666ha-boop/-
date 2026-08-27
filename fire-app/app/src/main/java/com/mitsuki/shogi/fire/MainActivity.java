@@ -1,6 +1,7 @@
 package com.mitsuki.shogi.fire;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.pm.ApplicationInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -24,6 +25,7 @@ public final class MainActivity extends Activity {
     private static final String BASELINE_MAIN = "813cad97b764c142bfb34b12498790c2759fd899";
 
     private WebView webView;
+    private boolean strengthGuardHandled;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,13 +61,48 @@ public final class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (!url.startsWith(APP_URL) || strengthGuardHandled) return;
+                view.evaluateJavascript(
+                    "(function(){return !!(self.crossOriginIsolated && typeof SharedArrayBuffer==='function' && typeof WebAssembly==='object');})()",
+                    value -> {
+                        if ("true".equals(value)) {
+                            strengthGuardHandled = true;
+                        } else {
+                            strengthGuardHandled = true;
+                            refuseWeakFallback();
+                        }
+                    }
+                );
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient());
 
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(APP_URL);
         }
         enterImmersiveMode();
+    }
+
+    private void refuseWeakFallback() {
+        if (isFinishing() || webView == null) return;
+        webView.stopLoading();
+        webView.loadDataWithBaseURL(
+            null,
+            "<html><body style='background:#111;color:#fff;font-family:sans-serif;padding:24px'><h2>強さ維持条件を満たしていません</h2><p>このFireのWebViewでは、現在の将棋エンジンを同じ条件で動かせません。弱い代替動作には切り替えず停止しました。</p></body></html>",
+            "text/html",
+            "UTF-8",
+            null
+        );
+        new AlertDialog.Builder(this)
+            .setTitle("みつき将棋")
+            .setMessage("この端末では現在の強さを維持できる実行条件を確認できませんでした。弱くして続行せず、ここで停止します。")
+            .setCancelable(false)
+            .setPositiveButton("終了", (dialog, which) -> finish())
+            .show();
     }
 
     @Override
