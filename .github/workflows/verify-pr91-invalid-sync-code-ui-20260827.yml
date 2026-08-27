@@ -1,0 +1,44 @@
+name: Verify PR91 invalid sync code UI 20260827
+on:
+  push:
+    branches:
+      - validate-pr91-invalid-sync-code-ui-20260827
+jobs:
+  invalid-code-ui:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify production delta and validation-only files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git diff --name-only origin/main..HEAD | sort > /tmp/actual
+          printf '%s\n' '.github/scripts/verify-pr91-invalid-sync-code-ui-20260827.mjs' '.github/workflows/verify-pr91-invalid-sync-code-ui-20260827.yml' 'shogi-v21528/cloud-save21531.js' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code origin/main..HEAD -- shogi-v21528/save21530.js shogi-v21528/coi-serviceworker.js shogi-side-test supabase
+          echo PASS_PR91_EXACT_PRODUCTION_DELTA
+      - name: Install browsers
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Start static server
+        shell: bash
+        run: |
+          python3 -m http.server 8000 > /tmp/shogi-pr91-server.log 2>&1 &
+          echo $! > /tmp/shogi-pr91-server.pid
+          sleep 2
+      - name: Run invalid sync code four-environment gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-pr91-invalid-sync-code-ui-20260827.mjs 2>&1 | tee /tmp/pr91.log
+          test "$(grep -c '^PR91_INVALID_CODE_ENV ' /tmp/pr91.log)" -eq 4
+          grep -F 'PASS_PR91_INVALID_SYNC_CODE_UI_FOUR_ENV' /tmp/pr91.log
+      - name: Final marker
+        run: echo PASS_PR91_INVALID_SYNC_CODE_UI_CANDIDATE_ALL
