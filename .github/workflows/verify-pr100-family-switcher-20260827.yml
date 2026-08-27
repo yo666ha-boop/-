@@ -18,6 +18,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Verify PR100 injection and syntax
+        run: |
+          node --check shogi-v21528/cloud-family-switcher21533.js
+          node --check shogi-v21528/coi-serviceworker.js
+          grep -F "cloud-save21531.js?v=21532a" shogi-v21528/coi-serviceworker.js
+          grep -F "cloud-slot-picker21532.js?v=21532b" shogi-v21528/coi-serviceworker.js
+          grep -F "cloud-family-switcher21533.js?v=21533a" shogi-v21528/coi-serviceworker.js
+          grep -F "ai-shogi-coi-reload-21533a" shogi-v21528/coi-serviceworker.js
+          echo PASS_PR100_INJECTION_21533A
+      - name: Verify live Supabase edge read compatibility
+        run: node .github/scripts/verify-cloud-edge-live-read-20260827.mjs
       - name: Install Playwright browsers
         run: |
           npm init -y
