@@ -8,12 +8,15 @@ const shim=fs.readFileSync('coi-serviceworker.js','utf8');
 const canonical=fs.readFileSync('shogi-v21528/coi-serviceworker.js','utf8');
 const cloud=fs.readFileSync('shogi-v21528/cloud-save21531.js','utf8');
 const family=fs.readFileSync('shogi-v21528/cloud-family-switcher21533.js','utf8');
-assert.match(shim,/document\.write\([\s\S]*\/shogi-v21528\/coi-serviceworker\.js\?v=21533a/);
-assert.match(shim,/importScripts\('\.\/shogi-v21528\/coi-serviceworker\.js\?v=21533a'\)/);
+assert.match(shim,/document\.write\([\s\S]*\/shogi-v21528\/coi-serviceworker\.js\?v=21536a/);
+assert.match(shim,/importScripts\('\.\/shogi-v21528\/coi-serviceworker\.js\?v=21536a'\)/);
+assert.match(shim,/__AI_SHOGI_ROOT_COI_SHIM_21536A/);
 assert.match(canonical,/cloud-save21531\.js\?v=21532a/);
 assert.match(canonical,/cloud-slot-picker21532\.js\?v=21532b/);
 assert.match(canonical,/cloud-family-switcher21533\.js\?v=21533a/);
-assert.match(canonical,/ai-shogi-coi-reload-21533a/);
+assert.match(canonical,/profile-stats21535\.js\?v=21535a/);
+assert.match(canonical,/rating-progress21536\.js\?v=21536a/);
+assert.match(canonical,/ai-shogi-coi-reload-21536a/);
 assert.match(cloud,/version:'21532a'/);
 assert.match(cloud,/supabase-edge-cas-multislot-v2/);
 assert.match(family,/version:'21533a'/);
@@ -44,13 +47,15 @@ try{
   page.on('pageerror',e=>bad.push(String(e.message||e)));
   const response=await page.goto('http://127.0.0.1:4197/',{waitUntil:'domcontentloaded',timeout:30000});
   assert.equal(response?.status(),200);
-  await page.waitForFunction(()=>window.AI_SHOGI_CLOUD_SAVE?.version==='21532a'&&window.AI_SHOGI_FAMILY_SWITCHER?.version==='21533a'&&!!document.getElementById('cloudPullBtn')&&!!document.getElementById('cloudFamilySwitchBtn'),null,{timeout:30000});
+  await page.waitForFunction(()=>window.AI_SHOGI_CLOUD_SAVE?.version==='21532a'&&window.AI_SHOGI_FAMILY_SWITCHER?.version==='21533a'&&window.AI_SHOGI_PROFILE_STATS?.version==='21535a'&&window.AI_SHOGI_RATING_PROGRESS?.version==='21536a'&&!!document.getElementById('cloudPullBtn')&&!!document.getElementById('cloudFamilySwitchBtn'),null,{timeout:30000});
   const audit=await page.evaluate(()=>({
     coi:crossOriginIsolated,
     cloud:window.AI_SHOGI_CLOUD_SAVE?.audit?.(),
     family:window.AI_SHOGI_FAMILY_SWITCHER?.audit?.(),
+    profile:window.AI_SHOGI_PROFILE_STATS?.audit?.(),
+    ratingProgress:window.AI_SHOGI_RATING_PROGRESS?.audit?.(),
     cards:document.querySelectorAll('#chars .ch').length,
-    shim:!!window.__AI_SHOGI_ROOT_COI_SHIM_21533A,
+    shim:!!window.__AI_SHOGI_ROOT_COI_SHIM_21536A,
     swScript:[...document.scripts].map(s=>s.src).find(s=>s.includes('/shogi-v21528/coi-serviceworker.js'))||''
   }));
   assert.equal(audit.coi,true);
@@ -61,9 +66,11 @@ try{
   assert.equal(audit.cloud?.buttons?.pull,true);
   assert.equal(audit.family?.ok,true);
   assert.equal(audit.family?.button,true);
-  assert.match(audit.swScript,/\/shogi-v21528\/coi-serviceworker\.js\?v=21533a/);
+  assert.equal(audit.profile?.ok,true);
+  assert.equal(audit.ratingProgress?.ok,true);
+  assert.match(audit.swScript,/\/shogi-v21528\/coi-serviceworker\.js\?v=21536a/);
   assert.ok(!bad.some(x=>x.includes('save/cloud patch inject failed')),bad.join('\n'));
-  console.log('PASS Vercel-root WebKit shim + family switcher',JSON.stringify(audit));
+  console.log('PASS Vercel-root WebKit shim + family/profile/rating runtime',JSON.stringify(audit));
 } finally {
   if(browser)await browser.close();
   await new Promise(r=>server.close(r));
