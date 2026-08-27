@@ -18,11 +18,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Verify exact candidate ancestry
+      - name: Verify exact candidate files
         run: |
-          git merge-base --is-ancestor 97b6bff40ce7a57f3b02d1f44a058142a1fbc932 HEAD
-          git show 97b6bff40ce7a57f3b02d1f44a058142a1fbc932:shogi-v21528/cloud-family-switcher21533.js >/tmp/candidate-family.js
-          cmp /tmp/candidate-family.js shogi-v21528/cloud-family-switcher21533.js
+          test "$(git hash-object shogi-v21528/cloud-family-switcher21533.js)" = "3d39e95761f1e034e42e2e345dd50d928bcd98ca"
+          test "$(git hash-object shogi-v21528/coi-serviceworker.js)" = "fa86521634274c360a36e36d73abda60d9eb5570"
+          test "$(git hash-object coi-serviceworker.js)" = "2d288f6aecf774e50e1fc953d68c15b37be7572e"
+          test "$(git hash-object .github/scripts/verify-vercel-root-coi-shim-20260827.mjs)" = "467f1029855196896a98b711bd7b4a71133c08da"
           echo PASS_PR100_EXACT_CANDIDATE_97B6BFF4
       - name: Verify PR100 injection and syntax
         run: |
