@@ -28,8 +28,8 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21532B)return;
-    window.__AI_SHOGI_SAVE_FETCH_PATCH_21532B=true;
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21533A)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21533A=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
     window.fetch=async function(...args){
       const res=await nativeFetch(...args);
@@ -39,11 +39,12 @@ if(typeof window==='undefined'){
         const saveURL=new URL('./save21530.js?v=21530d',scriptURL);
         const cloudURL=new URL('./cloud-save21531.js?v=21532a',scriptURL);
         const pickerURL=new URL('./cloud-slot-picker21532.js?v=21532b',scriptURL);
-        const [saveRes,cloudRes,pickerRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'})]);
-        if(!saveRes.ok||!cloudRes.ok||!pickerRes.ok)return res;
-        const [baseText,saveText,cloudText,pickerText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),pickerRes.text()]);
+        const familyURL=new URL('./cloud-family-switcher21533.js?v=21533a',scriptURL);
+        const [saveRes,cloudRes,pickerRes,familyRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'})]);
+        if(!saveRes.ok||!cloudRes.ok||!pickerRes.ok||!familyRes.ok)return res;
+        const [baseText,saveText,cloudText,pickerText,familyText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),pickerRes.text(),familyRes.text()]);
         const h=new Headers(res.headers);h.delete('content-length');h.delete('content-encoding');h.delete('etag');h.set('content-type','application/javascript; charset=utf-8');h.set('cache-control','no-store');
-        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+pickerText,{status:res.status,statusText:res.statusText,headers:h});
+        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+pickerText+'\n'+familyText,{status:res.status,statusText:res.statusText,headers:h});
       }catch(e){console.error('save/cloud patch inject failed',e);return res}
     };
   })();
@@ -51,10 +52,12 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21532a';
+    const RELOAD_KEY='ai-shogi-coi-reload-21533a';
+    const LEGACY_RELOAD_KEY='ai-shogi-coi-reload-21532a';
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
+    const clearReloadKeys=()=>{try{sessionStorage.removeItem(RELOAD_KEY);sessionStorage.removeItem(LEGACY_RELOAD_KEY)}catch(e){}};
     const fixBadge=()=>{const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
     const goRealHeaders=()=>{
       if(location.hostname!=='yo666ha-boop.github.io')return false;
@@ -63,7 +66,7 @@ if(typeof window==='undefined'){
       return true;
     };
     let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
-    if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
+    if(window.crossOriginIsolated){clearReloadKeys();show();return;}
     hide();
     let reloading=false;
     const reloadOnce=()=>{
@@ -77,7 +80,7 @@ if(typeof window==='undefined'){
     n.serviceWorker.register(src,{updateViaCache:'none'}).then(async reg=>{
       try{await reg.update()}catch(e){}
       try{await n.serviceWorker.ready}catch(e){}
-      if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
+      if(window.crossOriginIsolated){clearReloadKeys();show();return;}
       if(n.serviceWorker.controller){reloadOnce();return;}
       const sw=reg.installing||reg.waiting||reg.active;
       if(sw&&sw.state!=='activated'){
