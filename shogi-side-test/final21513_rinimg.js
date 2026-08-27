@@ -31,7 +31,7 @@ setTimeout(async()=>{
     eval(await r.text());
   }catch(e){console.error('cohort19-26 yaneura patch load failed',e)}
 },60);
-/* v2.15.36c: 未来みつき追加後の実R順で、26人全員の「強さ○位」を表示する。 */
+/* v2.15.36d: 未来みつき追加後の実R順で26人全員の順位を表示し、完成前の仮キャラ表記を除去。 */
 setTimeout(()=>{
   try{
     const baseRankText=rankText;
@@ -45,8 +45,14 @@ setTimeout(()=>{
       return '強さ'+rank+'位';
     };
     rankText=function(i){return labelFor(i)};
+    if(CHAR_META[24]&&String(CHAR_META[24].feature||'').includes('仮キャラ勢')){
+      CHAR_META[24]={...CHAR_META[24],feature:String(CHAR_META[24].feature).replace('仮キャラ勢の最上位。','26人の中でも上位。')};
+      const card=document.querySelectorAll('#chars .ch')[24];
+      if(card)card.title=C[24][0]+'｜R'+C[24][1]+'｜'+CHAR_META[24].style+'｜'+CHAR_META[24].feature;
+    }
     const labels=Object.fromEntries(C.map((c,i)=>[c?.[0]||String(i),labelFor(i)]));
-    window.AI_SHOGI_STRENGTH_RANK_LABELS={version:'21536c',count:C.length,labels,labelFor:i=>labelFor(Number(i))};
+    const provisionalMeta=C.map((c,i)=>({i,name:c?.[0]||String(i),feature:String(CHAR_META[i]?.feature||'')})).filter(x=>x.feature.includes('仮キャラ'));
+    window.AI_SHOGI_STRENGTH_RANK_LABELS={version:'21536d',count:C.length,labels,provisionalMeta,labelFor:i=>labelFor(Number(i))};
     try{renderOpponent(false)}catch(e){}
   }catch(e){console.error('all26 strength rank label patch failed',e)}
 },100);
