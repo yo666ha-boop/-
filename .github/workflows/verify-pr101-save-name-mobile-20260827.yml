@@ -1,0 +1,29 @@
+name: verify-pr101-save-name-mobile-20260827
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  save-name-four-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check PR101 addon
+        run: |
+          node --check shogi-v21528/cloud-save-name-picker21533.js
+          node --check shogi-v21528/coi-serviceworker.js
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify native-prompt-free new save naming in four environments
+        run: node .github/scripts/verify-pr101-save-name-mobile-20260827.mjs
