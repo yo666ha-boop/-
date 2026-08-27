@@ -9,16 +9,24 @@ on:
       - 'shogi-v21528/cloud-save-slot-ui21532b.js'
       - 'shogi-v21528/coi-serviceworker.js'
       - '.github/scripts/verify-cloud-new-slot-20260827.mjs'
+      - '.github/scripts/verify-cloud-new-slot-webkit-20260827.mjs'
       - '.github/workflows/verify-cloud-new-slot-20260827.yml'
 
 jobs:
   new-slot:
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Verify second named cloud save
+      - name: Verify second named cloud save logic
         run: node .github/scripts/verify-cloud-new-slot-20260827.mjs
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Verify new-save button in iPhone WebKit
+        run: node .github/scripts/verify-cloud-new-slot-webkit-20260827.mjs
