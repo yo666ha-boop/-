@@ -47,14 +47,14 @@ async function runEnv(name,type,userAgent,viewport){
     await sleep(250);
 
     const initial=await page.evaluate(()=>{
-      const hub=document.getElementById('saveResumeHub'),r=hub.getBoundingClientRect(),controls=document.querySelector('.controls');
+      const hub=document.getElementById('saveResumeHub'),r=hub.getBoundingClientRect(),opponent=document.getElementById('opponentCard');
       return {
         titles:[...hub.querySelectorAll('.saveResumeTitle')].map(x=>x.textContent.trim()),
         localButtons:[...document.querySelectorAll('#localSaveActions .btn')].map(x=>x.textContent.trim()),
         cloudButtons:[...document.querySelectorAll('#cloudSaveActions .btn')].map(x=>x.textContent.trim()),
         localState:document.getElementById('localSaveState')?.textContent||'',
         cloudGuide:document.getElementById('cloudSaveGuide')?.textContent||'',
-        hubAfterControls:controls?.nextElementSibling===hub,
+        hubBeforeOpponent:!!(hub.compareDocumentPosition(opponent)&Node.DOCUMENT_POSITION_FOLLOWING),
         hubInsideViewport:r.left>=-1&&r.right<=innerWidth+1,
         overflow:document.documentElement.scrollWidth>innerWidth+1,
         audit:AI_SHOGI_SAVE.audit(),
@@ -62,12 +62,13 @@ async function runEnv(name,type,userAgent,viewport){
         focusSave:!!document.getElementById('fsaveGameBtn')
       };
     });
+    console.log('PR90_INITIAL '+JSON.stringify({name,...initial}));
     assert.deepEqual(initial.titles,['この端末の対局','別の端末で続ける']);
     assert.deepEqual(initial.localButtons,['この端末に保存','再開できる保存なし']);
     assert.deepEqual(initial.cloudButtons,['クラウド同期','同期コードをコピー','別端末から再開']);
     assert.ok(initial.localState.includes('まだ保存されていません'));
     assert.ok(initial.cloudGuide.includes('未設定'));
-    assert.equal(initial.hubAfterControls,true);
+    assert.equal(initial.hubBeforeOpponent,true);
     assert.equal(initial.hubInsideViewport,true);
     assert.equal(initial.overflow,false);
     assert.equal(initial.audit.hub,true);
