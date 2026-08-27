@@ -38,11 +38,16 @@ jobs:
       - name: Guard frozen browser baseline and strength conditions
         run: |
           grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
-          grep -F 'LOCAL_HOST = "app.mitsuki.local"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
-          grep -F 'START_URL = LOCAL_ORIGIN + "/shogi-v21528/index.html"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
+          grep -F '127.0.0.1' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'Cross-Origin-Opener-Policy' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'Cross-Origin-Embedder-Policy' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'android:usesCleartextTraffic="true"' fire-app/app/src/main/AndroidManifest.xml
           grep -F 'crossOriginIsolated' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'SharedArrayBuffer' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'new WebAssembly.Memory({initial:1,maximum:1,shared:true})' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'refuseWeakFallback' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'shared:!0' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
+          grep -F 'instanceof SharedArrayBuffer' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
           grep -F '更新取得済み・次回起動で適用' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
           grep -F "bright:{label:'明るい木目'" fire-app/app/src/main/assets/fire/fire-theme.js
           grep -F "contrast:{label:'くっきり'" fire-app/app/src/main/assets/fire/fire-theme.js
@@ -84,11 +89,12 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
+          NOTES='Fire実機検証用 Stage 2.1。ブラウザproduction mainは変更していません。オフライン本体・水匠5・盤面テーマ切替入り。実機で偽HTTPSのCOI判定が失敗したため、127.0.0.1の実HTTPレスポンスでCOOP/COEPを処理する方式へ変更。同じやねうら王共有WASMメモリを維持し、弱いfallbackはしません。PR #121のFire branchから自動生成。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire オフライン版 テスト' --notes 'Fire実機検証用。ブラウザproduction mainは変更していません。オフライン本体・水匠5・盤面テーマ切替入り。PR #121のFire branchから自動生成。'
+            gh release edit "$TAG" --title 'みつき将棋 Fire オフライン版 テスト' --notes "$NOTES"
           else
-            gh release create "$TAG" "$ASSET" --target "$GITHUB_SHA" --title 'みつき将棋 Fire オフライン版 テスト' --notes 'Fire実機検証用。ブラウザproduction mainは変更していません。オフライン本体・水匠5・盤面テーマ切替入り。PR #121のFire branchから自動生成。' --prerelease
+            gh release create "$TAG" "$ASSET" --target "$GITHUB_SHA" --title 'みつき将棋 Fire オフライン版 テスト' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
