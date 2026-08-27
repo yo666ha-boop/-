@@ -28,8 +28,8 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21533A)return;
-    window.__AI_SHOGI_SAVE_FETCH_PATCH_21533A=true;
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21533B)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21533B=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
     window.fetch=async function(...args){
       const res=await nativeFetch(...args);
@@ -40,11 +40,12 @@ if(typeof window==='undefined'){
         const cloudURL=new URL('./cloud-save21531.js?v=21532a',scriptURL);
         const pickerURL=new URL('./cloud-slot-picker21532.js?v=21532b',scriptURL);
         const familyURL=new URL('./cloud-family-switcher21533.js?v=21533a',scriptURL);
-        const [saveRes,cloudRes,pickerRes,familyRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'})]);
-        if(!saveRes.ok||!cloudRes.ok||!pickerRes.ok||!familyRes.ok)return res;
-        const [baseText,saveText,cloudText,pickerText,familyText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),pickerRes.text(),familyRes.text()]);
+        const saveNameURL=new URL('./cloud-save-name-picker21533.js?v=21533b',scriptURL);
+        const [saveRes,cloudRes,pickerRes,familyRes,saveNameRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'}),nativeFetch(saveNameURL,{cache:'no-store'})]);
+        if(!saveRes.ok||!cloudRes.ok||!pickerRes.ok||!familyRes.ok||!saveNameRes.ok)return res;
+        const [baseText,saveText,cloudText,pickerText,familyText,saveNameText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),pickerRes.text(),familyRes.text(),saveNameRes.text()]);
         const h=new Headers(res.headers);h.delete('content-length');h.delete('content-encoding');h.delete('etag');h.set('content-type','application/javascript; charset=utf-8');h.set('cache-control','no-store');
-        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+pickerText+'\n'+familyText,{status:res.status,statusText:res.statusText,headers:h});
+        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+pickerText+'\n'+familyText+'\n'+saveNameText,{status:res.status,statusText:res.statusText,headers:h});
       }catch(e){console.error('save/cloud patch inject failed',e);return res}
     };
   })();
@@ -52,8 +53,8 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21533a';
-    const LEGACY_RELOAD_KEY='ai-shogi-coi-reload-21532a';
+    const RELOAD_KEY='ai-shogi-coi-reload-21533b';
+    const LEGACY_RELOAD_KEY='ai-shogi-coi-reload-21533a';
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
