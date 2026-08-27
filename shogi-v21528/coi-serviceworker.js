@@ -51,7 +51,7 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21532b';
+    const RELOAD_KEY='ai-shogi-coi-reload-21532a';
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
