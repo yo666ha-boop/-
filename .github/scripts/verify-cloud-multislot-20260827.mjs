@@ -113,7 +113,6 @@ async function testPushUsesActiveSlot(){
       throw new Error('unexpected '+url);
     }
   });
-  await settle();
   await env.window.AI_SHOGI_CLOUD_SAVE.push();
   assert.equal(sent.slotId,'slot_papa');
   assert.equal(sent.slotName,'パパ');
