@@ -1,0 +1,66 @@
+name: Verify cloud version candidate 20260827
+
+on:
+  push:
+    branches:
+      - shogi-cloud-version-audit-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact production delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='ce3141ca6db6d3e504b6227d93eedfb0173d1194'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN"..HEAD | sort > /tmp/actual
+          printf '%s\n' '.github/workflows/audit-shogi-cloud-version-20260827.yml' '.github/workflows/verify-cloud-version-candidate-20260827.yml' 'scripts/audit-shogi-cloud-version.mjs' 'shogi-v21528/cloud-save21531.js' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528/coi-serviceworker.js shogi-v21528/save21530.js shogi-v21528/future-yaneura-worker21528.js shogi-side-test
+          test "$(git diff --numstat "$MAIN"..HEAD -- shogi-v21528/cloud-save21531.js | awk '{print $1":"$2}')" = '1:1'
+          node --check shogi-v21528/cloud-save21531.js
+          node scripts/audit-shogi-cloud-version.mjs
+          echo PASS_CLOUD_VERSION_EXACT_DELTA
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Start static servers
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/cloud-version-4173.log 2>&1 &
+          echo $! >/tmp/cloud-version-4173.pid
+          python3 -m http.server 8000 --bind 127.0.0.1 >/tmp/cloud-version-8000.log 2>&1 &
+          echo $! >/tmp/cloud-version-8000.pid
+          for port in 4173 8000; do
+            for i in {1..30}; do curl -fsS "http://127.0.0.1:${port}/" >/dev/null && break; sleep 1; done
+          done
+      - name: Run four-env copy and mixed real Supabase gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-cloud-code-copy-20260827.mjs 2>&1 | tee /tmp/cloud-version-copy.log
+          test "$(grep -c '^CLOUD_CODE_COPY_ENV ' /tmp/cloud-version-copy.log)" -eq 4
+          test "$(grep -c '^CLOUD_CODE_COPY_MIXED ' /tmp/cloud-version-copy.log)" -eq 1
+          grep -F 'PASS_CLOUD_CODE_COPY_FOUR_ENV_MIXED' /tmp/cloud-version-copy.log
+      - name: Run full Firefox app and TOP5 smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/shogi-v21528-smoke.js 2>&1 | tee /tmp/cloud-version-firefox.log
+          grep -F 'PASS v2.15.28 Firefox' /tmp/cloud-version-firefox.log
+          node .github/scripts/shogi-top5-yaneura-smoke.js 2>&1 | tee /tmp/cloud-version-top5.log
+      - name: Final marker
+        run: echo PASS_SHOGI_CLOUD_VERSION_21531D_CANDIDATE_ALL
