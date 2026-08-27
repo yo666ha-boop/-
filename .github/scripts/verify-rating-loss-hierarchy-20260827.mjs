@@ -12,11 +12,10 @@ for(const name of order)if(!groups.has(name))throw new Error('missing group '+na
 const loss=Object.fromEntries(order.map(name=>[name,Number(groups.get(name).meanInternalLoss)]));
 for(const name of order)if(!Number.isFinite(loss[name]))throw new Error('bad meanInternalLoss '+name+' '+loss[name]);
 
-// Displayed rating bands must also be measurably separated by how much engine
-// evaluation loss their character profiles intentionally permit/choose.
-// Forced mates and obvious tactical moves may be identical for every band, so
-// this gate uses the already-recorded mean internal cp loss rather than merely
-// counting exact-best moves.
+// Forced mates and obvious tactical moves may be identical for every band.
+// Therefore rating separation is measured by the engine's own average cp loss
+// across the audit: lower displayed rating bands must intentionally choose
+// measurably less precise moves while still keeping mate correctness.
 const minGap=[
   ['future','top5',1],
   ['top5','7-12',4],
@@ -30,8 +29,8 @@ for(const [upper,lower,gap] of minGap){
 }
 
 const by=Array.isArray(summary.by)?summary.by:[];
+if(by.length!==26)fail.push('character rows '+by.length+'!=26');
 for(const row of by){
-  const maxLoss=Number(String(row.profile||'').match(/R\d+/)?Infinity:Infinity);
   if(!Number.isFinite(Number(row.meanInternalLoss)))fail.push('bad individual loss '+row.name);
   if(Number(row.mateExact)!==1)fail.push('mate regression '+row.name);
 }
