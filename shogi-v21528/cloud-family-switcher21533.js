@@ -126,7 +126,6 @@
     setStatus('家族コード「'+v+'」の保存一覧を確認しています…');
     const listed=await listSlotsForCode(v);
     if(!listed.ok){setStatus(listed.error==='offline'?'オフラインのため保存一覧を取得できません。':'この家族コードの保存一覧を取得できませんでした。');return}
-    if(validFamily(v))remember(v);
     showSlots(v,listed.slots||[]);
   }
   function openSwitcher(){
@@ -151,11 +150,15 @@
     b.title=current?'現在の家族コード「'+current+'」から別の家族コードへ切り替えます':'家族コードを設定して保存を選びます';
   }
   function attach(){
-    const controls=document.querySelector('.controls'),c=cloud();if(!controls||!c)return false;
+    const c=cloud();if(!c)return false;
+    const pull=document.getElementById('cloudPullBtn'),copy=document.getElementById('cloudCodeBtn');
+    const host=pull?.parentElement||copy?.parentElement||document.querySelector('.controls');
+    if(!host)return false;
     if(!document.getElementById('cloudFamilySwitchBtn')){
       const b=document.createElement('button');b.className='btn';b.id='cloudFamilySwitchBtn';b.type='button';b.onclick=openSwitcher;
-      const pull=document.getElementById('cloudPullBtn'),copy=document.getElementById('cloudCodeBtn');
-      if(pull)controls.insertBefore(b,pull);else if(copy?.nextSibling)controls.insertBefore(b,copy.nextSibling);else controls.appendChild(b);
+      if(pull?.parentElement===host)host.insertBefore(b,pull);
+      else if(copy?.parentElement===host)host.insertBefore(b,copy.nextSibling);
+      else host.appendChild(b);
     }
     const current=normalize(cfg().familyCode||'');if(current)remember(current);refreshButton();return true;
   }
