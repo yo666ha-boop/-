@@ -1,1 +1,0 @@
-PR97 validation trigger: root COI shim regression.
