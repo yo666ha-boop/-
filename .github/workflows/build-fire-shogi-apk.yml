@@ -38,7 +38,8 @@ jobs:
       - name: Guard frozen browser baseline and strength conditions
         run: |
           grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
-          grep -F 'https://app.mitsuki.local' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
+          grep -F 'LOCAL_HOST = "app.mitsuki.local"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
+          grep -F 'START_URL = LOCAL_ORIGIN + "/shogi-v21528/index.html"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
           grep -F 'crossOriginIsolated' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'SharedArrayBuffer' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'refuseWeakFallback' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
