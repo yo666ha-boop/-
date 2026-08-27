@@ -7,7 +7,7 @@
   const EXPECTED={8:'直江兼続',13:'ユリア',10:'バット',7:'しんじ',22:'リン',6:'ジャギ',14:'玉ちゃん',16:'ぺんぺん'};
   for(const i of INDICES)if(C[i]?.[0]!==EXPECTED[i]){console.error('cohort19-26 yaneura identity mismatch',i,C[i]?.[0],EXPECTED[i]);return}
   const PROFILES={
-    8:{label:'R1700・義知略',personality:'positional',multiPV:4,minRank:4,maxLoss:180,normal:290,endgame:510},
+    8:{label:'R1700・義知略',personality:'positional',multiPV:5,minRank:4,minLoss:55,targetLoss:82,maxLoss:180,normal:290,endgame:510},
     13:{label:'R1680・静穏安定',personality:'stable',multiPV:4,minRank:3,maxLoss:190,normal:285,endgame:480},
     10:{label:'R1600・元気直感',personality:'aggressive',multiPV:4,minRank:4,maxLoss:200,normal:260,endgame:460},
     7:{label:'R1550・慎重成長',personality:'defensive',multiPV:4,minRank:4,maxLoss:215,normal:240,endgame:430},
@@ -45,9 +45,14 @@
     if(!best)return{move:res?.move,rank:1,loss:0,forced:true,reason:p.personality};
     if(best.mate!==undefined&&best.mate!==null)return{move:best.move,rank:best.rank||1,loss:0,forced:true,reason:p.personality};
     const safe=cands.filter(c=>cpLoss(best,c)<=p.maxLoss&&!(c.mate!==undefined&&c.mate!==null&&c.mate<0));
-    const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),pool=preferred.length?preferred:(safe.length?safe:[best]);
+    const targeted=Number.isFinite(p.minLoss)?safe.filter(c=>(c.rank||1)>=p.minRank&&cpLoss(best,c)>=p.minLoss):[];
+    const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),pool=targeted.length?targeted:(preferred.length?preferred:(safe.length?safe:[best]));
     let winner=pool[0],winnerScore=-1e12;
-    for(const c of pool){const loss=cpLoss(best,c),f=moveFlags(s,c.move),rank=Math.max(1,c.rank||1),score=styleScore(p,f)-loss-(rank-1)*2;if(score>winnerScore){winnerScore=score;winner=c}}
+    for(const c of pool){
+      const loss=cpLoss(best,c),f=moveFlags(s,c.move),rank=Math.max(1,c.rank||1);
+      const score=Number.isFinite(p.targetLoss)?styleScore(p,f)-Math.abs(loss-p.targetLoss)*2-(rank-1)*2:styleScore(p,f)-loss-(rank-1)*2;
+      if(score>winnerScore){winnerScore=score;winner=c}
+    }
     return{move:winner.move,rank:winner.rank||1,loss:cpLoss(best,winner),forced:false,reason:p.personality};
   }
   async function profiledBest(s,who){
