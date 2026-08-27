@@ -1,0 +1,19 @@
+name: Audit shogi cloud version consistency 20260827
+
+on:
+  push:
+    branches:
+      - shogi-cloud-version-audit-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run cloud version consistency audit
+        run: node scripts/audit-shogi-cloud-version.mjs
