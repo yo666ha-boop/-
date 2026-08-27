@@ -28,8 +28,8 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21536A)return;
-    window.__AI_SHOGI_SAVE_FETCH_PATCH_21536A=true;
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
     window.fetch=async function(...args){
       const res=await nativeFetch(...args);
@@ -44,7 +44,7 @@ if(typeof window==='undefined'){
         const managerURL=new URL('./cloud-family-manager21534.js?v=21534a',scriptURL);
         const playerNameURL=new URL('./player-name21534b.js?v=21534b',scriptURL);
         const profileStatsURL=new URL('./profile-stats21535.js?v=21535a',scriptURL);
-        const ratingProgressURL=new URL('./rating-progress21536.js?v=21536a',scriptURL);
+        const ratingProgressURL=new URL('./rating-progress21536.js?v=21536b',scriptURL);
         const [saveRes,cloudRes,pickerRes,familyRes,saveNameRes,managerRes,playerNameRes,profileStatsRes,ratingProgressRes]=await Promise.all([
           nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'}),nativeFetch(saveNameURL,{cache:'no-store'}),nativeFetch(managerURL,{cache:'no-store'}),nativeFetch(playerNameURL,{cache:'no-store'}),nativeFetch(profileStatsURL,{cache:'no-store'}),nativeFetch(ratingProgressURL,{cache:'no-store'})
         ]);
@@ -61,8 +61,8 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21536a';
-    const LEGACY_RELOAD_KEYS=['ai-shogi-coi-reload-21535a','ai-shogi-coi-reload-21534b','ai-shogi-coi-reload-21533b','ai-shogi-coi-reload-21533a','ai-shogi-coi-reload-21532a'];
+    const RELOAD_KEY='ai-shogi-coi-reload-21536b';
+    const LEGACY_RELOAD_KEYS=['ai-shogi-coi-reload-21536a','ai-shogi-coi-reload-21535a','ai-shogi-coi-reload-21534b','ai-shogi-coi-reload-21533b','ai-shogi-coi-reload-21533a','ai-shogi-coi-reload-21532a'];
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
