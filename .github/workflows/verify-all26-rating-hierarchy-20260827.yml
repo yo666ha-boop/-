@@ -13,6 +13,7 @@ on:
       - 'shogi-side-test/final21513_rinimg.js'
       - '.github/scripts/audit-all26-hierarchy-20260825.mjs'
       - '.github/scripts/verify-rating-loss-hierarchy-20260827.mjs'
+      - '.github/scripts/verify-all26-strength-rank-labels-20260827.mjs'
       - '.github/scripts/build-lower8-quality-page-20260825.mjs'
       - '.github/scripts/coi-lower8-quality-server-20260825.mjs'
       - '.github/workflows/verify-all26-rating-hierarchy-20260827.yml'
@@ -44,3 +45,9 @@ jobs:
           grep -F 'PASS_ALL26_8CASE_STRENGTH_HIERARCHY' /tmp/all26.log
           node .github/scripts/verify-rating-loss-hierarchy-20260827.mjs /tmp/all26.log 2>&1 | tee -a /tmp/all26.log
           grep -F 'PASS_RATING_LOSS_HIERARCHY' /tmp/all26.log
+      - name: Verify all 26 visible strength rank labels on iPhone WebKit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-all26-strength-rank-labels-20260827.mjs 2>&1 | tee /tmp/rank-labels.log
+          grep -F 'PASS_ALL26_VISIBLE_STRENGTH_RANK_LABELS' /tmp/rank-labels.log

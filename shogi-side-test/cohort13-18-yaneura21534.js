@@ -7,12 +7,12 @@
   const EXPECTED={15:'まり',12:'あすか',20:'みさとさん',18:'前田慶次',9:'あやなみ',11:'伊達政宗'};
   for(const i of INDICES)if(C[i]?.[0]!==EXPECTED[i]){console.error('cohort13-18 identity mismatch',i,C[i]?.[0],EXPECTED[i]);return}
   const PROFILES={
-    15:{label:'R1950・自由猛攻',personality:'aggressive',multiPV:5,minRank:3,maxLoss:115,normal:520,endgame:820},
-    12:{label:'R1900・強気急戦',personality:'aggressive',multiPV:5,minRank:2,maxLoss:125,normal:470,endgame:760},
-    20:{label:'R1880・作戦持久',personality:'positional',multiPV:5,minRank:2,maxLoss:135,normal:430,endgame:700},
-    18:{label:'R1820・傾奇突破',personality:'aggressive',multiPV:5,minRank:3,maxLoss:145,normal:380,endgame:640},
-    9:{label:'R1800・精密静観',personality:'stable',multiPV:5,minRank:3,maxLoss:155,normal:340,endgame:580},
-    11:{label:'R1750・奇襲速攻',personality:'aggressive',multiPV:5,minRank:3,maxLoss:170,normal:300,endgame:520}
+    15:{label:'R1950・自由猛攻',personality:'aggressive',multiPV:5,minRank:4,minLoss:35,targetLoss:50,maxLoss:115,normal:520,endgame:820},
+    12:{label:'R1900・強気急戦',personality:'aggressive',multiPV:5,minRank:3,minLoss:38,targetLoss:54,maxLoss:125,normal:470,endgame:760},
+    20:{label:'R1880・作戦持久',personality:'positional',multiPV:5,minRank:3,minLoss:40,targetLoss:58,maxLoss:135,normal:430,endgame:700},
+    18:{label:'R1820・傾奇突破',personality:'aggressive',multiPV:5,minRank:4,minLoss:43,targetLoss:62,maxLoss:145,normal:380,endgame:640},
+    9:{label:'R1800・精密静観',personality:'stable',multiPV:5,minRank:4,minLoss:46,targetLoss:66,maxLoss:155,normal:340,endgame:580},
+    11:{label:'R1750・奇襲速攻',personality:'aggressive',multiPV:5,minRank:4,minLoss:50,targetLoss:72,maxLoss:170,normal:300,endgame:520}
   };
   const NAMES=INDICES.map(i=>C[i][0]),RATINGS=INDICES.map(i=>C[i][1]);
   function profileMs(s,who){const p=PROFILES[who]||PROFILES[11];return (s.log?.length||0)>=55?p.endgame:p.normal}
@@ -42,9 +42,15 @@
     if(!best)return{move:res?.move,rank:1,loss:0,forced:true,reason:p.personality};
     if(best.mate!==undefined&&best.mate!==null)return{move:best.move,rank:best.rank||1,loss:0,forced:true,reason:p.personality};
     const safe=cands.filter(c=>cpLoss(best,c)<=p.maxLoss&&!(c.mate!==undefined&&c.mate!==null&&c.mate<0));
-    const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),pool=preferred.length?preferred:(safe.length?safe:[best]);
+    const targeted=safe.filter(c=>(c.rank||1)>=p.minRank&&cpLoss(best,c)>=p.minLoss);
+    const preferred=safe.filter(c=>(c.rank||1)>=p.minRank),pool=targeted.length?targeted:(preferred.length?preferred:(safe.length?safe:[best]));
     let winner=pool[0],winnerScore=-1e12;
-    for(const c of pool){const loss=cpLoss(best,c),f=moveFlags(s,c.move),rank=Math.max(1,c.rank||1),positionalDepthBias=p.personality==='positional'?Math.max(0,rank-p.minRank)*24:0,score=styleScore(p,f)+positionalDepthBias-loss-(rank-1)*2;if(score>winnerScore){winnerScore=score;winner=c}}
+    for(const c of pool){
+      const loss=cpLoss(best,c),f=moveFlags(s,c.move),rank=Math.max(1,c.rank||1),positionalDepthBias=p.personality==='positional'?Math.max(0,rank-p.minRank)*24:0;
+      const targetPenalty=Math.abs(loss-p.targetLoss)*2;
+      const score=styleScore(p,f)+positionalDepthBias-targetPenalty-(rank-1)*2;
+      if(score>winnerScore){winnerScore=score;winner=c}
+    }
     return{move:winner.move,rank:winner.rank||1,loss:cpLoss(best,winner),forced:false,reason:p.personality};
   }
   async function profiledBest(s,who){
