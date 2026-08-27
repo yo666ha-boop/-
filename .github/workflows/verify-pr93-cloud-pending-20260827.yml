@@ -1,0 +1,71 @@
+name: Verify PR93 cloud pending 20260827
+on:
+  push:
+    branches:
+      - validate-pr93-cloud-pending-v2-20260827
+permissions:
+  contents: read
+jobs:
+  cloud-pending:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact production candidate delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='ce048f2a7528d98a3f439ae0cd5dffe0cbd08213'
+          FEATURE='a31123b525a1b1a05683672fced0b698730452ef'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git rev-parse origin/fix-cloud-pending-status-20260827)" = "$FEATURE"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN".."$FEATURE" | sort > /tmp/feature_changed
+          printf '%s\n' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/feature_expected
+          diff -u /tmp/feature_expected /tmp/feature_changed
+          git diff --name-only "$MAIN"..HEAD | sort > /tmp/all_changed
+          printf '%s\n' '.github/scripts/verify-pr93-cloud-pending-20260827.mjs' '.github/workflows/verify-pr93-cloud-pending-20260827.yml' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/all_expected
+          diff -u /tmp/all_expected /tmp/all_changed
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528/save21530.js supabase/functions/shogi-save/index.ts shogi-side-test/future21520.js
+          node --check shogi-v21528/cloud-save21531.js
+          node --check shogi-v21528/coi-serviceworker.js
+          node --check .github/scripts/verify-pr93-cloud-pending-20260827.mjs
+          grep -F "cloud-save21531.js?v=21531f" shogi-v21528/coi-serviceworker.js
+          grep -F "ai-shogi-coi-reload-21531f" shogi-v21528/coi-serviceworker.js
+          grep -F "version:'21531f'" shogi-v21528/cloud-save21531.js
+          grep -F "m.pending?'同期待ち'" shogi-v21528/cloud-save21531.js
+          grep -F "m.lastError?'同期エラー'" shogi-v21528/cloud-save21531.js
+          echo PASS_PR93_EXACT_DELTA_AND_CACHE_BUST
+      - name: Install Playwright browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run four-env pending/error/recovery and real mixed cloud gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/pr93-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node .github/scripts/verify-pr93-cloud-pending-20260827.mjs 2>&1 | tee /tmp/pr93-pending.log
+          test "$(grep -c '^PR93_PENDING_ENV ' /tmp/pr93-pending.log)" -eq 4
+          test "$(grep -c '^PR93_PENDING_MIXED ' /tmp/pr93-pending.log)" -eq 1
+          grep -F 'PASS_PR93_CLOUD_PENDING_FOUR_ENV_MIXED' /tmp/pr93-pending.log
+      - name: Run existing Firefox full app and TOP5 regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --bind 127.0.0.1 >/tmp/pr93-full-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
+          node .github/scripts/shogi-v21528-smoke.js 2>&1 | tee /tmp/pr93-full.log
+          grep -F 'PASS v2.15.28 Firefox: 26 chars' /tmp/pr93-full.log
+          node .github/scripts/shogi-top5-yaneura-smoke.js 2>&1 | tee /tmp/pr93-top5.log
+          grep -F 'PASS top5 tune5 + persistent game save/resume' /tmp/pr93-top5.log
+      - name: Final marker
+        run: echo PASS_PR93_CLOUD_PENDING_CANDIDATE_ALL
