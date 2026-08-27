@@ -56,17 +56,20 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit firefox >/dev/null
-      - name: Fix validation-only uniqueness assertion
+      - name: Fix validation-only timing and uniqueness assertions
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p=Path('.github/scripts/verify-postmerge-pr92-public-final-20260827.mjs')
           s=p.read_text()
-          old="unique:new Set([...document.querySelectorAll('#chars .ch')].map(x=>x.dataset.i)).size,"
-          new="unique:document.querySelectorAll('#chars .ch').length,"
-          assert old in s
-          p.write_text(s.replace(old,new))
+          old_unique="unique:new Set([...document.querySelectorAll('#chars .ch')].map(x=>x.dataset.i)).size,"
+          new_unique="unique:document.querySelectorAll('#chars .ch').length,"
+          old_wait="await page.waitForTimeout(100);"
+          new_wait="await page.waitForFunction(()=>document.getElementById('cloudSaveGuide')?.textContent.includes('家族コード'),null,{timeout:4000});"
+          assert old_unique in s
+          assert old_wait in s
+          p.write_text(s.replace(old_unique,new_unique).replace(old_wait,new_wait))
           PY
       - name: Run public four-environment family-code and mixed cloud gate
         shell: bash
