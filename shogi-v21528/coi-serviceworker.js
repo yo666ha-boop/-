@@ -28,8 +28,8 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21532)return;
-    window.__AI_SHOGI_SAVE_FETCH_PATCH_21532=true;
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21532B)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21532B=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
     window.fetch=async function(...args){
       const res=await nativeFetch(...args);
@@ -38,11 +38,12 @@ if(typeof window==='undefined'){
         if(!u.pathname.endsWith('/shogi/strong2155.js'))return res;
         const saveURL=new URL('./save21530.js?v=21530d',scriptURL);
         const cloudURL=new URL('./cloud-save21531.js?v=21532a',scriptURL);
-        const [saveRes,cloudRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'})]);
-        if(!saveRes.ok||!cloudRes.ok)return res;
-        const [baseText,saveText,cloudText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text()]);
+        const slotURL=new URL('./cloud-save-slot-ui21532b.js?v=21532b',scriptURL);
+        const [saveRes,cloudRes,slotRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(slotURL,{cache:'no-store'})]);
+        if(!saveRes.ok||!cloudRes.ok||!slotRes.ok)return res;
+        const [baseText,saveText,cloudText,slotText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),slotRes.text()]);
         const h=new Headers(res.headers);h.delete('content-length');h.delete('content-encoding');h.delete('etag');h.set('content-type','application/javascript; charset=utf-8');h.set('cache-control','no-store');
-        return new Response(baseText+'\n'+saveText+'\n'+cloudText,{status:res.status,statusText:res.statusText,headers:h});
+        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+slotText,{status:res.status,statusText:res.statusText,headers:h});
       }catch(e){console.error('save/cloud patch inject failed',e);return res}
     };
   })();
@@ -50,7 +51,7 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21532a';
+    const RELOAD_KEY='ai-shogi-coi-reload-21532b';
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
