@@ -58,7 +58,7 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit firefox >/dev/null
-      - name: Patch validation harness to inspect real search info
+      - name: Patch validation harness for proven runtime semantics
         shell: bash
         run: |
           python3 - <<'PY'
@@ -68,7 +68,12 @@ jobs:
           old="const eng=await p.evaluate(async()=>{const x=AI_SHOGI_YANEURAOU_FUTURE;await x.init();return x.status()});assert.equal(eng.ready,true);assert.equal(eng.worker,true);assert.equal(eng.hashMB,hashMB);assert.equal(eng.threads,1);"
           new="const eng=await p.evaluate(async()=>{const x=AI_SHOGI_YANEURAOU_FUTURE,b=Array(81).fill(null),back=['L','N','S','G','K','G','S','N','L'];for(let i=0;i<9;i++){b[i]={k:back[i],o:-1};b[72+i]={k:back[8-i],o:1};b[18+i]={k:'P',o:-1};b[54+i]={k:'P',o:1}}b[10]={k:'R',o:-1};b[16]={k:'B',o:-1};b[64]={k:'B',o:1};b[70]={k:'R',o:1};await x.init();const r=await x.bestMove({b,h:{1:{},'-1':{}},t:1,log:[],last:null},{ms:300,multiPV:1,adaptive:false});return {status:x.status(),info:r?.info||{},ok:!!(r?.move||r?.resign||r?.declareWin)}});assert.equal(eng.status.ready,true);assert.equal(eng.status.worker,true);assert.equal(eng.info.hashMB,hashMB);assert.equal(eng.info.threads,1);assert.equal(eng.ok,true);"
           assert old in s
-          p.write_text(s.replace(old,new))
+          s=s.replace(old,new)
+          old2="assert.equal(fin.m.revision,pRev);assert.equal(fin.marker,'PC-B');console.log('PR88_PUBLIC_MIXED '+JSON.stringify({iphoneInitialRevision:iRev,pcRevision:pRev,realBackend:true,conflictProtected:true,explicitDiscardRestored:true,finalMarker:fin.marker,devicePrefix:'pr88final_'}))"
+          new2="assert.ok(fin.m.revision>=pRev);assert.equal(fin.m.pending,false);assert.equal(fin.m.lastError,'');assert.equal(fin.marker,'PC-B');console.log('PR88_PUBLIC_MIXED '+JSON.stringify({iphoneInitialRevision:iRev,pcRevision:pRev,iphoneFinalRevision:fin.m.revision,realBackend:true,conflictProtected:true,explicitDiscardRestored:true,finalMarker:fin.marker,devicePrefix:'pr88final_'}))"
+          assert old2 in s
+          s=s.replace(old2,new2)
+          p.write_text(s)
           PY
       - name: Run production four-env copy and mixed-device gate
         shell: bash
