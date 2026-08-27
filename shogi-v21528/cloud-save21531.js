@@ -52,7 +52,7 @@
   function displayCode(){const c=cfg();return c.familyCode||c.syncKey||''}
   function apiHeaders(c){return {'Authorization':'Bearer '+c.syncKey,'Content-Type':'application/json'};}
   function setStatus(text){const s=document.getElementById('status');if(s)s.textContent=text;const f=document.getElementById('fstatus');if(f)f.textContent=text;}
-  function cloudButtonText(){const b=document.getElementById('cloudSaveBtn');if(!b)return;const c=cfg(),m=meta();b.textContent=!c.enabled?'クラウド同期':m.lastError?'同期エラー':'クラウド同期 ✓';b.title=c.enabled?((c.familyCode?'家族コード設定済み / ':'')+'revision '+m.revision+(m.pending?' / 未同期あり':'')):'家族コードを設定すると別端末で続きを再開できます';const q=document.getElementById('cloudCodeBtn');if(q){q.disabled=!configured();q.textContent='家族コードをコピー';}}
+  function cloudButtonText(){const b=document.getElementById('cloudSaveBtn');if(!b)return;const c=cfg(),m=meta();b.textContent=!c.enabled?'クラウド同期':m.lastError?'同期エラー':m.pending?'同期待ち':'クラウド同期 ✓';b.title=c.enabled?((c.familyCode?'家族コード設定済み / ':'')+'revision '+m.revision+(m.pending?' / 未同期あり':'')):'家族コードを設定すると別端末で続きを再開できます';const q=document.getElementById('cloudCodeBtn');if(q){q.disabled=!configured();q.textContent='家族コードをコピー';}}
 
   async function request(method,body){
     const c=ensureDevice();
@@ -197,7 +197,7 @@
   setTimeout(async()=>{installUI();if(configured()&&navigator.onLine){const m=meta();if(m.pending)await pushCloud();else await pull({restore:false})}},0);
 
   window.AI_SHOGI_CLOUD_SAVE={
-    version:'21531e',setup,enableWithCode,copySyncCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
+    version:'21531f',setup,enableWithCode,copySyncCode,push:()=>pushCloud({flash:true}),pull:()=>pull({force:true,restore:true}),
     config:()=>{const c=cfg();return {...c,syncKey:c.syncKey?'***'+c.syncKey.slice(-6):'',familyCode:c.familyCode||'',codeMode:c.familyCode?'family':(c.syncKey?'legacy':'')}} ,meta,
     disable:()=>{const c=cfg();writeJson(CFG_KEY,{...c,enabled:false});cloudButtonText()},
     audit:()=>{const c=cfg();return {ok:true,configured:configured(),online:navigator.onLine,backend:'supabase-edge-cas-v1',codeMode:c.familyCode?'family':(c.syncKey?'legacy':''),familyCodeLength:[...(c.familyCode||'')].length,meta:meta(),hasLocal:validSave(currentSave()),buttons:{cloud:!!document.getElementById('cloudSaveBtn'),codeCopy:!!document.getElementById('cloudCodeBtn'),pull:!!document.getElementById('cloudPullBtn')}}}
