@@ -1,0 +1,71 @@
+name: Verify PR92 family code 20260827
+on:
+  push:
+    branches:
+      - validate-pr92-family-code-20260827
+permissions:
+  contents: read
+jobs:
+  family-code:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact production candidate delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='add8be89ec7516841551234f7a3beaed5673e69e'
+          FEATURE='7900f826a7e105cb0ccfb50840a213e89ecb0cdf'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git rev-parse origin/feature/shogi-family-code-20260827)" = "$FEATURE"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN".."$FEATURE" | sort > /tmp/feature_changed
+          printf '%s\n' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/feature_expected
+          diff -u /tmp/feature_expected /tmp/feature_changed
+          git diff --name-only "$MAIN"..HEAD | sort > /tmp/all_changed
+          printf '%s\n' '.github/scripts/verify-pr92-family-code-20260827.mjs' '.github/workflows/verify-pr92-family-code-20260827.yml' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/all_expected
+          diff -u /tmp/all_expected /tmp/all_changed
+          git diff --exit-code "$MAIN"..HEAD -- supabase/functions/shogi-save/index.ts
+          node --check shogi-v21528/cloud-save21531.js
+          node --check shogi-v21528/coi-serviceworker.js
+          node --check .github/scripts/verify-pr92-family-code-20260827.mjs
+          grep -F "cloud-save21531.js?v=21531e" shogi-v21528/coi-serviceworker.js
+          grep -F "ai-shogi-coi-reload-21531e" shogi-v21528/coi-serviceworker.js
+          grep -F "version:'21531e'" shogi-v21528/cloud-save21531.js
+          grep -F "PBKDF2" shogi-v21528/cloud-save21531.js
+          grep -F "家族コードをコピー" shogi-v21528/cloud-save21531.js
+          echo PASS_PR92_EXACT_DELTA_AND_CACHE_BUST
+      - name: Install Playwright browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run four-env family code and real mixed cloud gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/pr92-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node .github/scripts/verify-pr92-family-code-20260827.mjs 2>&1 | tee /tmp/pr92-family.log
+          test "$(grep -c '^PR92_FAMILY_ENV ' /tmp/pr92-family.log)" -eq 4
+          test "$(grep -c '^PR92_FAMILY_MIXED ' /tmp/pr92-family.log)" -eq 1
+          grep -F 'PASS_PR92_FAMILY_CODE_FOUR_ENV_MIXED' /tmp/pr92-family.log
+      - name: Run existing Firefox full app regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --bind 127.0.0.1 >/tmp/pr92-full-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
+          node .github/scripts/shogi-v21528-smoke.js 2>&1 | tee /tmp/pr92-full.log
+          grep -F 'PASS v2.15.28 Firefox: 26 chars' /tmp/pr92-full.log
+          node .github/scripts/shogi-top5-yaneura-smoke.js 2>&1 | tee /tmp/pr92-top5.log
+          grep -F 'PASS top5 tune5 + persistent game save/resume' /tmp/pr92-top5.log
+      - name: Final marker
+        run: echo PASS_PR92_FAMILY_CODE_CANDIDATE_ALL
