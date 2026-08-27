@@ -36,7 +36,7 @@ if(typeof window==='undefined'){
       try{
         const input=args[0],u=new URL(input instanceof Request?input.url:String(input),location.href);
         if(!u.pathname.endsWith('/shogi/strong2155.js'))return res;
-        const saveURL=new URL('./save21530.js?v=21530b',scriptURL);
+        const saveURL=new URL('./save21530.js?v=21530c',scriptURL);
         const cloudURL=new URL('./cloud-save21531.js?v=21531e',scriptURL);
         const [saveRes,cloudRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'})]);
         if(!saveRes.ok||!cloudRes.ok)return res;
