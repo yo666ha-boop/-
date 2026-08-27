@@ -1,0 +1,24 @@
+name: verify-cloud-new-slot-20260827
+
+on:
+  push:
+    branches:
+      - fix/shogi-create-new-cloud-slot-20260827
+  pull_request:
+    paths:
+      - 'shogi-v21528/cloud-save-slot-ui21532b.js'
+      - 'shogi-v21528/coi-serviceworker.js'
+      - '.github/scripts/verify-cloud-new-slot-20260827.mjs'
+      - '.github/workflows/verify-cloud-new-slot-20260827.yml'
+
+jobs:
+  new-slot:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify second named cloud save
+        run: node .github/scripts/verify-cloud-new-slot-20260827.mjs
