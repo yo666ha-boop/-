@@ -72,11 +72,11 @@
     if(api){
       try{
         const a=api.audit(),m=a.meta||{};
-        if(!a.configured)next='未設定です。まず「クラウド同期」を押して同期コードを設定してください。';
+        if(!a.configured)next='未設定です。まず「クラウド同期」を押して家族コードを設定してください。';
         else if(m.lastError==='conflict'||m.lastError==='local_pending')next='未同期の変更があります。自動上書きを止めています。内容を確認してから「別端末から再開」を使ってください。';
         else if(m.lastError)next='クラウド同期でエラーがあります。端末内の保存は残っています。';
         else if(m.pending)next='クラウドへ送信待ちです。オンラインになると自動で同期します。';
-        else if(m.lastSyncedSavedAt)next='クラウド同期済み：'+savedAtText(m.lastSyncedSavedAt)+'。別端末では同期コードを入れて「別端末から再開」を押します。';
+        else if(m.lastSyncedSavedAt)next='クラウド同期済み：'+savedAtText(m.lastSyncedSavedAt)+'。別端末では同じ家族コードを入れて「別端末から再開」を押します。';
         else next='クラウド同期は設定済みです。対局を保存すると自動でクラウドへ同期します。';
       }catch(e){}
     }
