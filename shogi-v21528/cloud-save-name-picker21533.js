@@ -26,8 +26,8 @@
     panel.style.cssText='width:min(520px,100%);background:#fff;color:#111;border-radius:16px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.34);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
     const title=document.createElement('div');title.textContent='新しい保存を作る';title.style.cssText='font-size:20px;font-weight:800;margin:0 0 6px';
     const sub=document.createElement('div');sub.textContent='家族コード「'+code+'」で使う保存名を入力してください。例：パパ / みっちゃん / まま';sub.style.cssText='font-size:14px;line-height:1.5;margin:0 0 12px;color:#444';
-    const label=document.createElement('label');label.textContent='保存名';label.style.cssText='display:block;font-size:14px;font-weight:800;margin:4px 0 6px';
-    const input=document.createElement('input');input.type='text';input.autocomplete='off';input.enterKeyHint='done';input.maxLength=40;input.placeholder='保存1';
+    const label=document.createElement('label');label.textContent='保存名';label.htmlFor='aiShogiSaveNameInput';label.style.cssText='display:block;font-size:14px;font-weight:800;margin:4px 0 6px';
+    const input=document.createElement('input');input.id='aiShogiSaveNameInput';input.type='text';input.autocomplete='off';input.enterKeyHint='done';input.maxLength=40;input.placeholder='保存1';
     input.style.cssText='display:block;width:100%;box-sizing:border-box;min-height:52px;padding:11px 12px;border:1px solid #888;border-radius:10px;font-size:18px;color:#111;background:#fff';
     const error=document.createElement('div');error.setAttribute('aria-live','polite');error.style.cssText='min-height:20px;margin:6px 0 2px;color:#b00020;font-size:14px;font-weight:700';
     const button=(text,secondary=false)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.style.cssText='display:block;width:100%;min-height:52px;margin:8px 0;padding:12px 14px;border:1px solid #999;border-radius:12px;background:'+(secondary?'#f5f5f5':'#fff')+';color:#111;font-size:17px;font-weight:700;text-align:center;touch-action:manipulation';return b};
