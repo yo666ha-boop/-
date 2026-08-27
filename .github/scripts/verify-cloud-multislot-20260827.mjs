@@ -48,7 +48,7 @@ function makeEnv({config=null,metaV1=null,metaV2=null,save=null,online=true,prom
   return {context,window,store,promptCalls,elements,controls};
 }
 
-async function settle(){await new Promise(r=>setTimeout(r,20))}
+async function settle(ms=20){await new Promise(r=>setTimeout(r,ms))}
 
 async function testTwoSlotRestore(){
   const calls=[];
@@ -119,6 +119,59 @@ async function testPushUsesActiveSlot(){
   assert.equal(sent.baseRevision,5);
 }
 
+async function testOfflineReconnectPushesSameSlot(){
+  let sent=null;
+  const env=makeEnv({
+    online:false,
+    config:{syncKey:'E'.repeat(32),familyCode:'家族',codeMode:'family',deviceId:'dev_e',api:'https://example.test/shogi-save',enabled:true,activeSlotId:'slot_child',activeSlotName:'こども',multislotReady:true},
+    metaV2:{slots:{slot_child:{revision:8,lastSyncedSavedAt:8000,pending:false,lastError:'',updatedAt:1}}},
+    save:makeSave(9000,5,40),
+    fetchImpl:async (url,opts={})=>{
+      if((opts.method||'GET')!=='PUT')throw new Error('unexpected '+url);
+      sent=JSON.parse(opts.body);
+      return new Response(JSON.stringify({ok:true,record:{slotId:'slot_child',slotName:'こども',revision:9,payload:makeSave(9000,5,40)}}),{status:200});
+    }
+  });
+  await settle();
+  env.window.dispatchEvent(new env.context.Event('ai-shogi-local-save'));
+  let m=JSON.parse(env.store.get('aiShogiCloudMetaV2'));
+  assert.equal(m.slots.slot_child.pending,true,'offline local save must become pending');
+  await settle(600); // let the offline debounce attempt skip before reconnecting
+  assert.equal(sent,null,'offline debounce must not send');
+  env.context.navigator.onLine=true;
+  env.window.dispatchEvent(new env.context.Event('online'));
+  await settle(60);
+  assert.equal(sent.slotId,'slot_child');
+  assert.equal(sent.slotName,'こども');
+  assert.equal(sent.baseRevision,8);
+  m=JSON.parse(env.store.get('aiShogiCloudMetaV2'));
+  assert.equal(m.slots.slot_child.pending,false);
+  assert.equal(m.slots.slot_child.revision,9);
+}
+
+async function testConflictKeepsPendingPerSlot(){
+  const env=makeEnv({
+    online:false,
+    config:{syncKey:'F'.repeat(32),familyCode:'家族',codeMode:'family',deviceId:'dev_f',api:'https://example.test/shogi-save',enabled:true,activeSlotId:'slot_conflict',activeSlotName:'競合テスト',multislotReady:true},
+    metaV2:{slots:{slot_conflict:{revision:2,lastSyncedSavedAt:2000,pending:false,lastError:'',updatedAt:1}}},
+    save:makeSave(3000,6,15),
+    fetchImpl:async (_url,opts={})=>{
+      const body=JSON.parse(opts.body);
+      assert.equal(body.slotId,'slot_conflict');
+      assert.equal(body.baseRevision,2);
+      return new Response(JSON.stringify({ok:false,error:'revision_conflict',record:{slotId:'slot_conflict',slotName:'競合テスト',revision:3,payload:makeSave(2500,6,14)}}),{status:409});
+    }
+  });
+  await settle();
+  env.context.navigator.onLine=true;
+  const r=await env.window.AI_SHOGI_CLOUD_SAVE.push();
+  assert.equal(r.conflict,true);
+  const m=JSON.parse(env.store.get('aiShogiCloudMetaV2'));
+  assert.equal(m.slots.slot_conflict.pending,true);
+  assert.equal(m.slots.slot_conflict.lastError,'conflict');
+  assert.equal(m.slots.slot_conflict.revision,2,'conflict must not advance local base revision');
+}
+
 async function testLegacyMigratesToDefaultSlotWithoutDataLoss(){
   const local=makeSave(6000,4,25);
   const env=makeEnv({
@@ -138,10 +191,12 @@ async function testLegacyMigratesToDefaultSlotWithoutDataLoss(){
 await testTwoSlotRestore();
 await testOneSlotStillRequiresChoice();
 await testPushUsesActiveSlot();
+await testOfflineReconnectPushesSameSlot();
+await testConflictKeepsPendingPerSlot();
 await testLegacyMigratesToDefaultSlotWithoutDataLoss();
 
 const coi=fs.readFileSync('shogi-v21528/coi-serviceworker.js','utf8');
 assert.match(coi,/cloud-save21531\.js\?v=21532a/);
 assert.match(coi,/ai-shogi-coi-reload-21532a/);
 assert.match(source,/backend:'supabase-edge-cas-multislot-v2'/);
-console.log('PASS cloud multislot: selectable restore, single-slot choice, slot push, legacy migration, cache key');
+console.log('PASS cloud multislot: selectable restore, single-slot choice, slot push, offline reconnect, CAS conflict, legacy migration, cache key');
