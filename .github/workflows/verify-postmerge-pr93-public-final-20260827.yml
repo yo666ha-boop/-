@@ -1,0 +1,68 @@
+name: Verify postmerge PR93 public final 20260827
+on:
+  push:
+    branches:
+      - validate-postmerge-pr93-public-final-20260827
+permissions:
+  contents: read
+jobs:
+  public-final:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact production main and validation-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='d1e8f57c7e60bcfa715e21c7f66e095f17b069bc'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN"..HEAD | sort > /tmp/actual
+          printf '%s\n' '.github/scripts/verify-postmerge-pr93-public-final-20260827.mjs' '.github/workflows/verify-postmerge-pr93-public-final-20260827.yml' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528 shogi-side-test supabase
+          echo PASS_POSTMERGE_PR93_EXACT_MAIN
+      - name: Verify Vercel production artifacts equal main and short URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528'
+          for f in cloud-save21531.js coi-serviceworker.js save21530.js; do
+            local_sha="$(sha256sum "shogi-v21528/$f" | awk '{print $1}')"
+            ok=0
+            for i in {1..30}; do
+              if curl --fail --silent --show-error --location --connect-timeout 20 --max-time 120 "$BASE/$f?pr93artifact=$(date +%s%N)" -o "/tmp/$f"; then
+                public_sha="$(sha256sum "/tmp/$f" | awk '{print $1}')"
+                echo "PR93_ARTIFACT file=$f try=$i local=$local_sha public=$public_sha"
+                if test "$local_sha" = "$public_sha"; then ok=1; break; fi
+              fi
+              sleep 10
+            done
+            test "$ok" -eq 1
+          done
+          grep -F "version:'21531f'" /tmp/cloud-save21531.js
+          grep -F "m.pending?'同期待ち'" /tmp/cloud-save21531.js
+          grep -F "m.lastError?'同期エラー'" /tmp/cloud-save21531.js
+          grep -F "cloud-save21531.js?v=21531f" /tmp/coi-serviceworker.js
+          grep -F "ai-shogi-coi-reload-21531f" /tmp/coi-serviceworker.js
+          curl --fail --silent --show-error --location --connect-timeout 20 --max-time 120 'https://mitsuki-syogi.vercel.app/?pr93short=1' -o /tmp/short.html
+          grep -F 'https://ai-shogi-yaneuraou-iphone.vercel.app/' /tmp/short.html
+          echo PASS_POSTMERGE_PR93_ARTIFACT_IDENTITY_AND_SHORT_URL
+      - name: Install browsers
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run public four-environment pending/error/recovery and real mixed cloud gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-postmerge-pr93-public-final-20260827.mjs 2>&1 | tee /tmp/pr93-public.log
+          test "$(grep -c '^PR93_PUBLIC_ENV ' /tmp/pr93-public.log)" -eq 4
+          test "$(grep -c '^PR93_PUBLIC_MIXED ' /tmp/pr93-public.log)" -eq 1
+          grep -F 'PASS_POSTMERGE_PR93_PUBLIC_FINAL_RUNTIME_ALL' /tmp/pr93-public.log
+      - name: Final marker
+        run: echo PASS_POSTMERGE_PR93_PUBLIC_FINAL_ALL
