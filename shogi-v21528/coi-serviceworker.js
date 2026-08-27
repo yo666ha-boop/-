@@ -53,9 +53,11 @@ if(typeof window==='undefined'){
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
     const RELOAD_KEY='ai-shogi-coi-reload-21533a';
+    const LEGACY_RELOAD_KEY='ai-shogi-coi-reload-21532a';
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
+    const clearReloadKeys=()=>{try{sessionStorage.removeItem(RELOAD_KEY);sessionStorage.removeItem(LEGACY_RELOAD_KEY)}catch(e){}};
     const fixBadge=()=>{const b=document.querySelector('.badge');if(b)b.textContent='v2.15.28 26キャラ・未来みつき Worker版'};
     const goRealHeaders=()=>{
       if(location.hostname!=='yo666ha-boop.github.io')return false;
@@ -64,7 +66,7 @@ if(typeof window==='undefined'){
       return true;
     };
     let ticks=0;const timer=setInterval(()=>{fixBadge();if(++ticks>=40)clearInterval(timer)},500);
-    if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
+    if(window.crossOriginIsolated){clearReloadKeys();show();return;}
     hide();
     let reloading=false;
     const reloadOnce=()=>{
@@ -78,7 +80,7 @@ if(typeof window==='undefined'){
     n.serviceWorker.register(src,{updateViaCache:'none'}).then(async reg=>{
       try{await reg.update()}catch(e){}
       try{await n.serviceWorker.ready}catch(e){}
-      if(window.crossOriginIsolated){try{sessionStorage.removeItem(RELOAD_KEY)}catch(e){}show();return;}
+      if(window.crossOriginIsolated){clearReloadKeys();show();return;}
       if(n.serviceWorker.controller){reloadOnce();return;}
       const sw=reg.installing||reg.waiting||reg.active;
       if(sw&&sw.state!=='activated'){
