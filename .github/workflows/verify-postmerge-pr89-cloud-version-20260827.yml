@@ -1,0 +1,75 @@
+name: Verify postmerge PR89 cloud version 20260827
+
+on:
+  push:
+    branches:
+      - validate-postmerge-pr89-cloud-version-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-final:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact production main and validation-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='ec91635d77f9b906c46ad3b594f4c1f50e57b4c7'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN"..HEAD | sort > /tmp/actual
+          printf '%s\n' '.github/scripts/verify-postmerge-pr89-cloud-version-20260827.mjs' '.github/workflows/verify-postmerge-pr89-cloud-version-20260827.yml' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528 shogi-side-test supabase
+          echo PASS_POSTMERGE_PR89_EXACT_MAIN
+      - name: Verify GitHub Pages and Vercel artifacts equal main
+        shell: bash
+        run: |
+          set -euo pipefail
+          GH='https://yo666ha-boop.github.io/-/shogi-v21528'
+          VE='https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528'
+          for f in cloud-save21531.js coi-serviceworker.js save21530.js future-yaneura-worker21528.js; do
+            for origin in GH VE; do
+              base="$GH"; test "$origin" = VE && base="$VE"
+              out="/tmp/${origin}_${f}"
+              ok=0
+              for i in {1..30}; do
+                if curl --fail --silent --show-error --location --connect-timeout 20 --max-time 120 "$base/$f?pr89final=$(date +%s%N)" -o "$out"; then
+                  local_sha="$(sha256sum "shogi-v21528/$f" | awk '{print $1}')"
+                  public_sha="$(sha256sum "$out" | awk '{print $1}')"
+                  echo "PR89_ARTIFACT try=$i $origin $f local=$local_sha public=$public_sha"
+                  if test "$local_sha" = "$public_sha"; then ok=1; break; fi
+                fi
+                sleep 10
+              done
+              test "$ok" -eq 1
+            done
+          done
+          grep -F "cloud-save21531.js?v=21531d" /tmp/VE_coi-serviceworker.js
+          grep -F "ai-shogi-coi-reload-21531d" /tmp/VE_coi-serviceworker.js
+          grep -F "version:'21531d'" /tmp/VE_cloud-save21531.js
+          grep -F "backend:'supabase-edge-cas-v1'" /tmp/VE_cloud-save21531.js
+          echo PASS_POSTMERGE_PR89_ARTIFACT_IDENTITY
+      - name: Install browsers
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run production four-env and mixed-device gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-postmerge-pr89-cloud-version-20260827.mjs 2>&1 | tee /tmp/pr89-public-final.log
+          test "$(grep -c '^PR89_PUBLIC_ENV ' /tmp/pr89-public-final.log)" -eq 4
+          test "$(grep -c '^PR89_PUBLIC_MIXED ' /tmp/pr89-public-final.log)" -eq 1
+          grep -F 'PASS_POSTMERGE_PR89_CLOUD_VERSION_21531D' /tmp/pr89-public-final.log
+      - name: Final marker
+        run: echo PASS_POSTMERGE_PR89_CLOUD_VERSION_21531D_ALL
