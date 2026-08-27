@@ -1,0 +1,56 @@
+name: Verify PR90 save resume UI 20260827
+
+on:
+  push:
+    branches:
+      - validate-pr90-save-resume-ui-20260827
+
+permissions:
+  contents: read
+
+jobs:
+  four-env:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact candidate and validation-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='ec91635d77f9b906c46ad3b594f4c1f50e57b4c7'
+          FEATURE='d85daf76244f8f03c83a30bd11014f62bb2e171b'
+          test "$(git merge-base "$FEATURE" "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN".."$FEATURE" > /tmp/feature
+          printf '%s\n' 'shogi-v21528/save21530.js' > /tmp/feature_expected
+          diff -u /tmp/feature_expected /tmp/feature
+          test "$(git merge-base HEAD "$FEATURE")" = "$FEATURE"
+          git diff --name-only "$FEATURE"..HEAD | sort > /tmp/validation
+          printf '%s\n' '.github/scripts/verify-pr90-save-resume-ui-20260827.mjs' '.github/workflows/verify-pr90-save-resume-ui-20260827.yml' | sort > /tmp/validation_expected
+          diff -u /tmp/validation_expected /tmp/validation
+          git diff --exit-code "$FEATURE"..HEAD -- shogi-v21528 shogi-side-test supabase
+          echo PASS_PR90_EXACT_CANDIDATE
+      - name: Install Playwright browsers
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run local production app four-env save resume gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/pr90-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/shogi-v21528/index.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node .github/scripts/verify-pr90-save-resume-ui-20260827.mjs 2>&1 | tee /tmp/pr90.log
+          test "$(grep -c '^PR90_ENV ' /tmp/pr90.log)" -eq 4
+          grep -F 'PASS_PR90_SAVE_RESUME_UI_FOUR_ENV' /tmp/pr90.log
+      - name: Final marker
+        run: echo PASS_PR90_SAVE_RESUME_UI_CANDIDATE_ALL
