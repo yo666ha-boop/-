@@ -1,0 +1,40 @@
+name: Validate tight shogi rating boundaries
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/build-lower8-quality-page-20260825.mjs'
+      - '.github/scripts/calibrate-tight-rating-boundaries-20260827.mjs'
+      - '.github/workflows/validate-tight-rating-boundaries-20260827.yml'
+      - 'shogi-side-test/top5-yaneura21529.js'
+      - 'shogi-side-test/cohort7-12-yaneura21533.js'
+      - 'shogi-side-test/cohort13-18-yaneura21534.js'
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
+permissions:
+  contents: read
+jobs:
+  tight-rating-boundaries:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check calibration
+        run: node --check .github/scripts/calibrate-tight-rating-boundaries-20260827.mjs
+      - name: Build calibration page
+        run: node .github/scripts/build-lower8-quality-page-20260825.mjs
+      - name: Start COI server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/tight-boundary-server.log 2>&1 &
+          sleep 1
+      - name: Run tight-boundary multi-ply calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/calibrate-tight-rating-boundaries-20260827.mjs 2>&1 | tee /tmp/tight-boundaries.log
+          grep -F 'PASS_TIGHT_RATING_BOUNDARIES_DIAGNOSTIC' /tmp/tight-boundaries.log
+          grep -F 'TIGHT_RATING_BOUNDARIES_FINAL' /tmp/tight-boundaries.log
