@@ -1,0 +1,36 @@
+name: Validate R1750 R1700 balanced candidate
+on:
+  pull_request:
+    paths:
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
+      - '.github/scripts/build-lower8-quality-page-20260825.mjs'
+      - '.github/scripts/calibrate-r1750-r1700-balanced-midgames-20260827.mjs'
+      - '.github/workflows/validate-r1750-r1700-balanced-candidate-20260827.yml'
+permissions:
+  contents: read
+jobs:
+  balanced-r1750-r1700:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check calibration
+        run: node --check .github/scripts/calibrate-r1750-r1700-balanced-midgames-20260827.mjs
+      - name: Build calibration page
+        run: node .github/scripts/build-lower8-quality-page-20260825.mjs
+      - name: Start COI server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/r1750-r1700-server.log 2>&1 &
+          sleep 1
+      - name: Run focused balanced-midgame calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/calibrate-r1750-r1700-balanced-midgames-20260827.mjs 2>&1 | tee /tmp/r1750-r1700.log
+          grep -F 'PASS_R1750_R1700_BALANCED_MIDGAME_DIAGNOSTIC' /tmp/r1750-r1700.log
