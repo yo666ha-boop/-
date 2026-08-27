@@ -19,7 +19,7 @@ permissions:
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,26 +37,37 @@ jobs:
 
       - name: Guard frozen browser baseline and strength conditions
         run: |
-          grep -F 'https://ai-shogi-yaneuraou-iphone.vercel.app/' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'No shogi engine/profile/rating code is changed' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
+          grep -F 'https://app.mitsuki.local' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
           grep -F 'crossOriginIsolated' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'SharedArrayBuffer' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'refuseWeakFallback' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F '更新取得済み・次回起動で適用' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
+          grep -F "bright:{label:'明るい木目'" fire-app/app/src/main/assets/fire/fire-theme.js
+          grep -F "contrast:{label:'くっきり'" fire-app/app/src/main/assets/fire/fire-theme.js
 
-      - name: Build debug APK
+      - name: Build offline debug APK
         working-directory: fire-app
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Verify APK
+      - name: Verify offline APK payload
         run: |
-          test -s fire-app/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh fire-app/app/build/outputs/apk/debug/app-debug.apk
+          APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          test "$(stat -c%s "$APK")" -gt 60000000
+          unzip -l "$APK" > /tmp/fire-apk-list.txt
+          grep -F 'assets/shogi-v21528/index.html' /tmp/fire-apk-list.txt
+          grep -F 'assets/shogi/strong213.css' /tmp/fire-apk-list.txt
+          grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-apk-list.txt
+          grep -F 'assets/shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.wasm' /tmp/fire-apk-list.txt
+          grep -F 'assets/fire/fire-theme.js' /tmp/fire-apk-list.txt
+          sha256sum "$APK"
+          ls -lh "$APK"
 
-      - name: Upload APK
+      - name: Upload offline APK
         uses: actions/upload-artifact@v4
         with:
-          name: mitsuki-shogi-fire-debug-apk
+          name: mitsuki-shogi-fire-offline-debug-apk
           path: fire-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
