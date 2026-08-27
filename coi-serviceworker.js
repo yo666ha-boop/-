@@ -3,8 +3,8 @@
    ./coi-serviceworker.js request lands at the repository root. Load the
    canonical runtime synchronously before the game bootstrap starts. */
 if(typeof window==='undefined'){
-  importScripts('./shogi-v21528/coi-serviceworker.js?v=21533a');
-}else if(!window.__AI_SHOGI_ROOT_COI_SHIM_21533A){
-  window.__AI_SHOGI_ROOT_COI_SHIM_21533A=true;
-  document.write('<script src="/shogi-v21528/coi-serviceworker.js?v=21533a"><\/script>');
+  importScripts('./shogi-v21528/coi-serviceworker.js?v=21536a');
+}else if(!window.__AI_SHOGI_ROOT_COI_SHIM_21536A){
+  window.__AI_SHOGI_ROOT_COI_SHIM_21536A=true;
+  document.write('<script src="/shogi-v21528/coi-serviceworker.js?v=21536a"><\/script>');
 }

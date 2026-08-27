@@ -28,8 +28,8 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21535A)return;
-    window.__AI_SHOGI_SAVE_FETCH_PATCH_21535A=true;
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21536A)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21536A=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
     window.fetch=async function(...args){
       const res=await nativeFetch(...args);
@@ -44,15 +44,16 @@ if(typeof window==='undefined'){
         const managerURL=new URL('./cloud-family-manager21534.js?v=21534a',scriptURL);
         const playerNameURL=new URL('./player-name21534b.js?v=21534b',scriptURL);
         const profileStatsURL=new URL('./profile-stats21535.js?v=21535a',scriptURL);
-        const [saveRes,cloudRes,pickerRes,familyRes,saveNameRes,managerRes,playerNameRes,profileStatsRes]=await Promise.all([
-          nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'}),nativeFetch(saveNameURL,{cache:'no-store'}),nativeFetch(managerURL,{cache:'no-store'}),nativeFetch(playerNameURL,{cache:'no-store'}),nativeFetch(profileStatsURL,{cache:'no-store'})
+        const ratingProgressURL=new URL('./rating-progress21536.js?v=21536a',scriptURL);
+        const [saveRes,cloudRes,pickerRes,familyRes,saveNameRes,managerRes,playerNameRes,profileStatsRes,ratingProgressRes]=await Promise.all([
+          nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'}),nativeFetch(saveNameURL,{cache:'no-store'}),nativeFetch(managerURL,{cache:'no-store'}),nativeFetch(playerNameURL,{cache:'no-store'}),nativeFetch(profileStatsURL,{cache:'no-store'}),nativeFetch(ratingProgressURL,{cache:'no-store'})
         ]);
-        if(!saveRes.ok||!cloudRes.ok||!pickerRes.ok||!familyRes.ok||!saveNameRes.ok||!profileStatsRes.ok)return res;
-        const [baseText,saveText,cloudText,pickerText,familyText,saveNameText,profileStatsText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),pickerRes.text(),familyRes.text(),saveNameRes.text(),profileStatsRes.text()]);
+        if(!saveRes.ok||!cloudRes.ok||!pickerRes.ok||!familyRes.ok||!saveNameRes.ok||!profileStatsRes.ok||!ratingProgressRes.ok)return res;
+        const [baseText,saveText,cloudText,pickerText,familyText,saveNameText,profileStatsText,ratingProgressText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text(),pickerRes.text(),familyRes.text(),saveNameRes.text(),profileStatsRes.text(),ratingProgressRes.text()]);
         const managerText=managerRes.ok?await managerRes.text():'';
         const playerNameText=playerNameRes.ok?await playerNameRes.text():'';
         const h=new Headers(res.headers);h.delete('content-length');h.delete('content-encoding');h.delete('etag');h.set('content-type','application/javascript; charset=utf-8');h.set('cache-control','no-store');
-        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+pickerText+'\n'+familyText+'\n'+saveNameText+'\n'+managerText+'\n'+playerNameText+'\n'+profileStatsText,{status:res.status,statusText:res.statusText,headers:h});
+        return new Response(baseText+'\n'+saveText+'\n'+cloudText+'\n'+pickerText+'\n'+familyText+'\n'+saveNameText+'\n'+managerText+'\n'+playerNameText+'\n'+profileStatsText+'\n'+ratingProgressText,{status:res.status,statusText:res.statusText,headers:h});
       }catch(e){console.error('save/cloud patch inject failed',e);return res}
     };
   })();
@@ -60,8 +61,8 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21535a';
-    const LEGACY_RELOAD_KEYS=['ai-shogi-coi-reload-21534b','ai-shogi-coi-reload-21533b','ai-shogi-coi-reload-21533a','ai-shogi-coi-reload-21532a'];
+    const RELOAD_KEY='ai-shogi-coi-reload-21536a';
+    const LEGACY_RELOAD_KEYS=['ai-shogi-coi-reload-21535a','ai-shogi-coi-reload-21534b','ai-shogi-coi-reload-21533b','ai-shogi-coi-reload-21533a','ai-shogi-coi-reload-21532a'];
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};

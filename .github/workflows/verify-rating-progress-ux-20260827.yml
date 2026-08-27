@@ -1,0 +1,26 @@
+name: verify-rating-progress-ux-20260827
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/rating-progress21536.js'
+      - 'shogi-v21528/coi-serviceworker.js'
+      - 'coi-serviceworker.js'
+      - '.github/scripts/verify-rating-progress-ux-20260827.mjs'
+      - '.github/workflows/verify-rating-progress-ux-20260827.yml'
+permissions:
+  contents: read
+jobs:
+  rating-progress:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Verify rating progress UX
+        run: node .github/scripts/verify-rating-progress-ux-20260827.mjs
