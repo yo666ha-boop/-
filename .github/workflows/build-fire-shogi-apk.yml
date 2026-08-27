@@ -35,11 +35,14 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Guard frozen browser baseline
+      - name: Guard frozen browser baseline and strength conditions
         run: |
           grep -F 'https://ai-shogi-yaneuraou-iphone.vercel.app/' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'No shogi engine/profile/rating code is changed' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'crossOriginIsolated' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'SharedArrayBuffer' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'refuseWeakFallback' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
 
       - name: Build debug APK
         working-directory: fire-app
