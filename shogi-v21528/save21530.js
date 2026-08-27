@@ -114,6 +114,7 @@
       if(!allowEmpty&&(!st.log||st.log.length===0))return false;
       const x=snapshot(reason);
       localStorage.setItem(SAVE_KEY,JSON.stringify(x));
+      window.dispatchEvent(new Event('ai-shogi-local-save'));
       updateSaveUI(flash);
       return true;
     }catch(e){
@@ -193,7 +194,7 @@
   setInterval(()=>{organizeCloudUI();updateCloudGuide()},1500);
 
   window.AI_SHOGI_SAVE={
-    version:'21530a',key:SAVE_KEY,save:()=>saveGame('manual',true),load:()=>restoreGame({force:true}),restore:restoreGame,clear:clearGameSave,
+    version:'21530d',key:SAVE_KEY,save:()=>saveGame('manual',true),load:()=>restoreGame({force:true}),restore:restoreGame,clear:clearGameSave,
     data:()=>readRaw(),exportData:()=>{const x=readRaw();return x?JSON.parse(JSON.stringify(x)):null},
     audit:()=>{const x=readRaw();return{ok:true,hasSave:!!x,savedPly:x?.st?.log?.length||0,currentPly:st?.log?.length||0,savedCharacter:x?.ci??null,currentCharacter:ci,saveButtons:document.querySelectorAll('[data-game-save-btn="1"]').length,resumeButton:!!document.getElementById('resumeGameBtn'),hub:!!document.getElementById('saveResumeHub'),localState:document.getElementById('localSaveState')?.textContent||'',cloudGrouped:['cloudSaveBtn','cloudCodeBtn','cloudPullBtn'].every(id=>document.getElementById(id)?.parentElement?.id==='cloudSaveActions')}}
   };
