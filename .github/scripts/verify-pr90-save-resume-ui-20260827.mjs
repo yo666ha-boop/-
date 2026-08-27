@@ -25,15 +25,7 @@ async function runEnv(name,type,userAgent,viewport){
   await ctx.addInitScript(()=>{
     Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__copiedSyncCode=text;}}});
   });
-  await ctx.route(CLOUD,async route=>{
-    const method=route.request().method();
-    if(method==='GET')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,record:null})});
-    if(method==='PUT'){
-      const body=JSON.parse(route.request().postData()||'{}');
-      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,record:{revision:Number(body.baseRevision||0)+1,deviceId:body.deviceId||'',payload:body.payload||null}})});
-    }
-    return route.fulfill({status:405,contentType:'application/json',body:JSON.stringify({ok:false,error:'method'})});
-  });
+  await ctx.route(CLOUD,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({ok:false,error:'validation_offline'})}));
   const page=await ctx.newPage();
   const pageErrors=[];
   page.on('pageerror',e=>pageErrors.push(String(e.message||e)));
@@ -94,9 +86,10 @@ async function runEnv(name,type,userAgent,viewport){
     assert.ok(saved.localState.includes('0手'));
     assert.ok(saved.savedAt>0);
 
+    await page.evaluate(()=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false}));
     assert.equal(await page.evaluate(code=>AI_SHOGI_CLOUD_SAVE.enableWithCode(code),CODE),true);
-    await page.waitForFunction(()=>{const m=AI_SHOGI_CLOUD_SAVE.meta();return m.revision>=1&&!m.pending&&!m.lastError},null,{timeout:30000});
-    await page.waitForFunction(()=>document.getElementById('cloudSaveGuide').textContent.includes('クラウド同期済み'),null,{timeout:10000});
+    await page.waitForFunction(()=>{const a=AI_SHOGI_CLOUD_SAVE.audit(),m=a.meta||{};return a.configured&&m.pending===true},null,{timeout:10000});
+    await page.waitForFunction(()=>document.getElementById('cloudSaveGuide').textContent.includes('送信待ち'),null,{timeout:10000});
     assert.equal(await page.evaluate(()=>AI_SHOGI_CLOUD_SAVE.copySyncCode()),true);
     const cloud=await page.evaluate(()=>({
       copied:window.__copiedSyncCode,
@@ -105,17 +98,19 @@ async function runEnv(name,type,userAgent,viewport){
       codeDisabled:document.getElementById('cloudCodeBtn').disabled,
       overflow:document.documentElement.scrollWidth>innerWidth+1,
       pageWidth:document.documentElement.scrollWidth,
-      viewport:innerWidth
+      viewport:innerWidth,
+      online:navigator.onLine
     }));
     assert.equal(cloud.copied,CODE);
-    assert.ok(cloud.guide.includes('クラウド同期済み'));
+    assert.ok(cloud.guide.includes('送信待ち'));
     assert.equal(cloud.grouped,true);
     assert.equal(cloud.codeDisabled,false);
     assert.equal(cloud.overflow,false);
+    assert.equal(cloud.online,false);
 
     assert.equal(await page.evaluate(()=>AI_SHOGI_SAVE.restore()),true);
     assert.deepEqual(pageErrors,[]);
-    console.log('PR90_ENV '+JSON.stringify({name,viewport,hub:true,localSave:true,resume:true,cloudGrouped:true,cloudSyncedGuide:true,clipboardExact:true,overflow:false,pageErrors}));
+    console.log('PR90_ENV '+JSON.stringify({name,viewport,hub:true,localSave:true,resume:true,cloudGrouped:true,cloudOfflinePendingGuide:true,clipboardExact:true,overflow:false,pageErrors}));
   }finally{
     await ctx.close();await browser.close();
   }
