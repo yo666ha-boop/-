@@ -2,6 +2,15 @@ plugins {
     id("com.android.application")
 }
 
+val repoRoot = rootProject.projectDir.parentFile
+val generatedOfflineAssets = layout.buildDirectory.dir("generated/offlineAssets")
+val prepareOfflineAssets by tasks.registering(Copy::class) {
+    into(generatedOfflineAssets)
+    from(File(repoRoot, "shogi-v21528")) { into("shogi-v21528") }
+    from(File(repoRoot, "shogi")) { into("shogi") }
+    from(File(repoRoot, "shogi-side-test")) { into("shogi-side-test") }
+}
+
 android {
     namespace = "com.mitsuki.shogi.fire"
     compileSdk = 35
@@ -10,8 +19,14 @@ android {
         applicationId = "com.mitsuki.shogi.fire"
         minSdk = 22
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0-fire-webview"
+        versionCode = 2
+        versionName = "2.0-fire-offline"
+    }
+
+    sourceSets["main"].assets.srcDir(generatedOfflineAssets)
+
+    androidResources {
+        noCompress += listOf("bin", "wasm")
     }
 
     buildTypes {
@@ -24,4 +39,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(prepareOfflineAssets)
 }
