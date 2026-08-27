@@ -31,3 +31,22 @@ setTimeout(async()=>{
     eval(await r.text());
   }catch(e){console.error('cohort19-26 yaneura patch load failed',e)}
 },60);
+/* v2.15.36c: 未来みつき追加後の実R順で、26人全員の「強さ○位」を表示する。 */
+setTimeout(()=>{
+  try{
+    const baseRankText=rankText;
+    const ordered=()=>C.map((c,index)=>({index,rating:Number(c?.[1]||0)})).sort((a,b)=>b.rating-a.rating||a.index-b.index);
+    const labelFor=i=>{
+      const pos=ordered().findIndex(x=>x.index===Number(i));
+      if(pos<0)return baseRankText(i);
+      const rank=pos+1;
+      if(Number(i)===25)return '強さ'+rank+'位・未来最強';
+      if(Number(i)===0)return '強さ'+rank+'位・現代最強';
+      return '強さ'+rank+'位';
+    };
+    rankText=function(i){return labelFor(i)};
+    const labels=Object.fromEntries(C.map((c,i)=>[c?.[0]||String(i),labelFor(i)]));
+    window.AI_SHOGI_STRENGTH_RANK_LABELS={version:'21536c',count:C.length,labels,labelFor:i=>labelFor(Number(i))};
+    try{renderOpponent(false)}catch(e){}
+  }catch(e){console.error('all26 strength rank label patch failed',e)}
+},100);
