@@ -31,5 +31,5 @@ jobs:
           npx playwright install --with-deps chromium firefox webkit
       - name: Verify actual public Vercel production across four environments
         run: |
-          sed "/assert.equal(staticAudit.rootShim,true,label+' root shim guard');/d" .github/scripts/verify-pr100-public-production-20260827.mjs >/tmp/verify-pr100-public-production.mjs
-          node /tmp/verify-pr100-public-production.mjs
+          sed -i "/assert.equal(staticAudit.rootShim,true,label+' root shim guard');/d" .github/scripts/verify-pr100-public-production-20260827.mjs
+          node .github/scripts/verify-pr100-public-production-20260827.mjs
