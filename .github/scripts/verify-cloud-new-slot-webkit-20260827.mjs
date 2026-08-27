@@ -40,6 +40,11 @@ try{
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,slots})});
       return;
     }
+    if(request.method()==='GET'&&url.searchParams.get('slot')){
+      const record=backend.find(x=>x.slotId===url.searchParams.get('slot'))||null;
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,record})});
+      return;
+    }
     if(request.method()==='PUT'){
       putBody=JSON.parse(request.postData()||'{}');
       assert.notEqual(putBody.slotId,'slot_first');
@@ -65,6 +70,7 @@ try{
   await page.addScriptTag({content:slotSource});
   await page.waitForSelector('#cloudNewSlotBtn',{state:'visible',timeout:5000});
   assert.equal(await page.textContent('#cloudNewSlotBtn'),'新しい保存を作る');
+  await page.waitForTimeout(150);
 
   page.once('dialog',async dialog=>{
     assert.match(dialog.message(),/新しい保存の名前/);
