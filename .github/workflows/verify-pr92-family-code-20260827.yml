@@ -1,8 +1,8 @@
-name: Verify PR92 family code 20260827
+name: Verify PR92 family code v2 20260827
 on:
   push:
     branches:
-      - validate-pr92-family-code-20260827
+      - validate-pr92-family-code-v2-20260827
 permissions:
   contents: read
 jobs:
@@ -18,25 +18,29 @@ jobs:
         run: |
           set -euo pipefail
           MAIN='add8be89ec7516841551234f7a3beaed5673e69e'
-          FEATURE='7900f826a7e105cb0ccfb50840a213e89ecb0cdf'
+          FEATURE='939f843aa754a320e152b910c177948d01b7365d'
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
           test "$(git rev-parse origin/feature/shogi-family-code-20260827)" = "$FEATURE"
           test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
           git diff --name-only "$MAIN".."$FEATURE" | sort > /tmp/feature_changed
-          printf '%s\n' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/feature_expected
+          printf '%s\n' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' 'shogi-v21528/save21530.js' | sort > /tmp/feature_expected
           diff -u /tmp/feature_expected /tmp/feature_changed
           git diff --name-only "$MAIN"..HEAD | sort > /tmp/all_changed
-          printf '%s\n' '.github/scripts/verify-pr92-family-code-20260827.mjs' '.github/workflows/verify-pr92-family-code-20260827.yml' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' | sort > /tmp/all_expected
+          printf '%s\n' '.github/scripts/verify-pr92-family-code-20260827.mjs' '.github/workflows/verify-pr92-family-code-20260827.yml' 'shogi-v21528/cloud-save21531.js' 'shogi-v21528/coi-serviceworker.js' 'shogi-v21528/save21530.js' | sort > /tmp/all_expected
           diff -u /tmp/all_expected /tmp/all_changed
           git diff --exit-code "$MAIN"..HEAD -- supabase/functions/shogi-save/index.ts
           node --check shogi-v21528/cloud-save21531.js
           node --check shogi-v21528/coi-serviceworker.js
+          node --check shogi-v21528/save21530.js
           node --check .github/scripts/verify-pr92-family-code-20260827.mjs
+          grep -F "save21530.js?v=21530c" shogi-v21528/coi-serviceworker.js
           grep -F "cloud-save21531.js?v=21531e" shogi-v21528/coi-serviceworker.js
           grep -F "ai-shogi-coi-reload-21531e" shogi-v21528/coi-serviceworker.js
           grep -F "version:'21531e'" shogi-v21528/cloud-save21531.js
           grep -F "PBKDF2" shogi-v21528/cloud-save21531.js
           grep -F "家族コードをコピー" shogi-v21528/cloud-save21531.js
+          grep -F '家族コードを設定してください' shogi-v21528/save21530.js
+          grep -F '同じ家族コードを入れて' shogi-v21528/save21530.js
           echo PASS_PR92_EXACT_DELTA_AND_CACHE_BUST
       - name: Install Playwright browsers
         run: |
