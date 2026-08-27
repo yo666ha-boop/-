@@ -17,6 +17,8 @@
   const saveMeta=p=>writeJson(META_KEY,{...meta(),...p,updatedAt:Date.now()});
   const currentSave=()=>readJson(SAVE_KEY,null);
   const validSave=x=>!!(x&&x.version===1&&x.st&&Array.isArray(x.st.b)&&x.st.b.length===81&&x.st.h&&Array.isArray(x.st.log));
+  const validSyncCode=code=>/^[A-Za-z0-9_-]{24,128}$/.test(String(code||'').trim());
+  const syncCodeError='同期コードは半角英数字・「-」「_」だけで24〜128文字にしてください。ひらがな・漢字・全角文字は使えません。';
   const randomCode=()=>{
     const b=new Uint8Array(24);crypto.getRandomValues(b);
     return btoa(String.fromCharCode(...b)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
@@ -26,7 +28,7 @@
     return 'dev_'+Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
   };
   function ensureDevice(){const c=cfg();if(c.deviceId)return c;return writeJson(CFG_KEY,{...c,deviceId:randomDevice()})}
-  function configured(){const c=cfg();return !!(c.enabled&&/^[A-Za-z0-9_-]{24,128}$/.test(c.syncKey)&&c.deviceId)}
+  function configured(){const c=cfg();return !!(c.enabled&&validSyncCode(c.syncKey)&&c.deviceId)}
   function apiHeaders(c){return {'Authorization':'Bearer '+c.syncKey,'Content-Type':'application/json'};}
   function setStatus(text){const s=document.getElementById('status');if(s)s.textContent=text;const f=document.getElementById('fstatus');if(f)f.textContent=text;}
   function cloudButtonText(){const b=document.getElementById('cloudSaveBtn');if(!b)return;const c=cfg(),m=meta();b.textContent=!c.enabled?'クラウド同期':m.lastError?'同期エラー':'クラウド同期 ✓';b.title=c.enabled?('revision '+m.revision+(m.pending?' / 未同期あり':'')):'別端末で続きを再開できます';const q=document.getElementById('cloudCodeBtn');if(q)q.disabled=!configured();}
@@ -91,7 +93,11 @@
 
   async function enableWithCode(code){
     code=String(code||'').trim();
-    if(!/^[A-Za-z0-9_-]{24,128}$/.test(code))return false;
+    if(!validSyncCode(code)){
+      setStatus(syncCodeError);
+      const guide=document.getElementById('cloudSaveGuide');if(guide)guide.textContent=syncCodeError;
+      return false;
+    }
     const c=ensureDevice(),changed=c.syncKey!==code;
     writeJson(CFG_KEY,{...c,syncKey:code,enabled:true,api:normalizeApi(c.api)});
     if(changed)writeJson(META_KEY,emptyMeta());else saveMeta({lastError:''});
