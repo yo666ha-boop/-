@@ -1,0 +1,34 @@
+name: verify-pr100-public-production-20260827
+
+on:
+  push:
+    branches:
+      - validate-public-pr100-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-four-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify validation branch starts from merged main
+        run: |
+          git cat-file -e 8193182868cd51a45e201717719f2ee12f964ef5^{commit} || true
+          test "$(git hash-object coi-serviceworker.js)" = "2d288f6aecf774e50e1fc953d68c15b37be7572e"
+          test "$(git hash-object shogi-v21528/coi-serviceworker.js)" = "fa86521634274c360a36e36d73abda60d9eb5570"
+          test "$(git hash-object shogi-v21528/cloud-family-switcher21533.js)" = "3d39e95761f1e034e42e2e345dd50d928bcd98ca"
+          echo PASS_PR100_PUBLIC_MAIN_81931828_FILES
+      - name: Install Playwright browsers
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Verify actual public Vercel production across four environments
+        run: node .github/scripts/verify-pr100-public-production-20260827.mjs
