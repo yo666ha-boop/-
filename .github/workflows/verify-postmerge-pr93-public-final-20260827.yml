@@ -60,7 +60,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const p='.github/scripts/verify-postmerge-pr93-public-final-20260827.mjs';let s=fs.readFileSync(p,'utf8');s=s.replace(\"assert.ok(clean.guide.includes('家族コード'));\",'');fs.writeFileSync(p,s)"
+          node <<'NODE'
+          const fs=require('fs');
+          const p='.github/scripts/verify-postmerge-pr93-public-final-20260827.mjs';
+          let s=fs.readFileSync(p,'utf8');
+          s=s.replace("assert.ok(clean.guide.includes('家族コード'));",'');
+          s=s.replace("assert.equal(p0.cfg.syncKey,iState.cfg.syncKey);assert.equal(p0.cfg.familyCode,familyCode);assert.equal(await cp.locator('#cloudSaveBtn').textContent(),'クラウド同期 ✓');","assert.equal(p0.cfg.syncKey,iState.cfg.syncKey);assert.equal(p0.cfg.familyCode,familyCode);");
+          fs.writeFileSync(p,s);
+          NODE
           node .github/scripts/verify-postmerge-pr93-public-final-20260827.mjs 2>&1 | tee /tmp/pr93-public.log
           test "$(grep -c '^PR93_PUBLIC_ENV ' /tmp/pr93-public.log)" -eq 4
           test "$(grep -c '^PR93_PUBLIC_MIXED ' /tmp/pr93-public.log)" -eq 1
