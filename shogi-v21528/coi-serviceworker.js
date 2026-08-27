@@ -28,8 +28,8 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
-    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21531)return;
-    window.__AI_SHOGI_SAVE_FETCH_PATCH_21531=true;
+    if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21532)return;
+    window.__AI_SHOGI_SAVE_FETCH_PATCH_21532=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
     window.fetch=async function(...args){
       const res=await nativeFetch(...args);
@@ -37,7 +37,7 @@ if(typeof window==='undefined'){
         const input=args[0],u=new URL(input instanceof Request?input.url:String(input),location.href);
         if(!u.pathname.endsWith('/shogi/strong2155.js'))return res;
         const saveURL=new URL('./save21530.js?v=21530d',scriptURL);
-        const cloudURL=new URL('./cloud-save21531.js?v=21531f',scriptURL);
+        const cloudURL=new URL('./cloud-save21531.js?v=21532a',scriptURL);
         const [saveRes,cloudRes]=await Promise.all([nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'})]);
         if(!saveRes.ok||!cloudRes.ok)return res;
         const [baseText,saveText,cloudText]=await Promise.all([res.clone().text(),saveRes.text(),cloudRes.text()]);
@@ -50,7 +50,7 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21530d';
+    const RELOAD_KEY='ai-shogi-coi-reload-21532a';
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};

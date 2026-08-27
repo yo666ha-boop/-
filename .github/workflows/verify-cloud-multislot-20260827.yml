@@ -1,0 +1,24 @@
+name: verify-cloud-multislot-20260827
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  multislot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check cloud client
+        run: node --check shogi-v21528/cloud-save21531.js
+      - name: Verify selectable multi-slot cloud save
+        run: node .github/scripts/verify-cloud-multislot-20260827.mjs
+      - name: Verify live Supabase edge read compatibility
+        run: node .github/scripts/verify-cloud-edge-live-read-20260827.mjs
