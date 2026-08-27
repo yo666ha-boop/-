@@ -12,6 +12,7 @@ on:
       - 'shogi-side-test/cohort19-26-yaneura21536.js'
       - 'shogi-side-test/final21513_rinimg.js'
       - '.github/scripts/audit-all26-hierarchy-20260825.mjs'
+      - '.github/scripts/verify-rating-loss-hierarchy-20260827.mjs'
       - '.github/scripts/build-lower8-quality-page-20260825.mjs'
       - '.github/scripts/coi-lower8-quality-server-20260825.mjs'
       - '.github/workflows/verify-all26-rating-hierarchy-20260827.yml'
@@ -41,3 +42,5 @@ jobs:
           set -euo pipefail
           node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/all26.log
           grep -F 'PASS_ALL26_8CASE_STRENGTH_HIERARCHY' /tmp/all26.log
+          node .github/scripts/verify-rating-loss-hierarchy-20260827.mjs /tmp/all26.log
+          grep -F 'PASS_RATING_LOSS_HIERARCHY' /tmp/all26.log >/dev/null || true
