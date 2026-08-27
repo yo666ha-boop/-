@@ -1,0 +1,43 @@
+name: Verify all 26 rating hierarchy
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/index.html'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-v21528/yaneuraou/**'
+      - 'shogi-side-test/top5-yaneura21529.js'
+      - 'shogi-side-test/cohort7-12-yaneura21533.js'
+      - 'shogi-side-test/cohort13-18-yaneura21534.js'
+      - 'shogi-side-test/cohort19-26-supervisor21535.js'
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
+      - 'shogi-side-test/final21513_rinimg.js'
+      - '.github/scripts/audit-all26-hierarchy-20260825.mjs'
+      - '.github/scripts/build-lower8-quality-page-20260825.mjs'
+      - '.github/scripts/coi-lower8-quality-server-20260825.mjs'
+      - '.github/workflows/verify-all26-rating-hierarchy-20260827.yml'
+permissions:
+  contents: read
+jobs:
+  all26-hierarchy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Build strength audit page
+        run: node .github/scripts/build-lower8-quality-page-20260825.mjs
+      - name: Start COI server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/all26-server.log 2>&1 &
+          sleep 1
+      - name: Verify all 26 displayed ratings match strength hierarchy
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/all26.log
+          grep -F 'PASS_ALL26_8CASE_STRENGTH_HIERARCHY' /tmp/all26.log
