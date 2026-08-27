@@ -4,6 +4,10 @@
   window.__AI_SHOGI_FAMILY_SWITCHER_21533A=true;
 
   const HISTORY_KEY='aiShogiFamilyCodeHistoryV1';
+  const CLOUD_CFG_KEY='aiShogiCloudConfigV1';
+  const CLOUD_META1_KEY='aiShogiCloudMetaV1';
+  const CLOUD_META2_KEY='aiShogiCloudMetaV2';
+  const SAVE_KEY='aiShogiGameSaveV1';
   const FAMILY_SALT='AI_SHOGI_FAMILY_CODE_V1';
   const DEFAULT_API='https://htvfcdktdjtyoyzrohji.supabase.co/functions/v1/shogi-save';
   const LEGACY_KEY_RE=/^[A-Za-z0-9_-]{24,128}$/;
@@ -34,6 +38,21 @@
     const v=normalize(code);if(!validFamily(v))return;
     const next=[{code:v,lastUsed:Date.now()},...readHistory().filter(x=>x.code!==v)].slice(0,8);
     try{localStorage.setItem(HISTORY_KEY,JSON.stringify(next))}catch(e){}
+  }
+  function snapshotCloudState(){
+    const out={};
+    for(const key of [CLOUD_CFG_KEY,CLOUD_META1_KEY,CLOUD_META2_KEY,SAVE_KEY]){try{out[key]=localStorage.getItem(key)}catch(e){out[key]=null}}
+    return out;
+  }
+  function restoreCloudState(snapshot){
+    for(const [key,value] of Object.entries(snapshot||{})){
+      try{if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value)}catch(e){}
+    }
+  }
+  function refreshCloudButton(){
+    const b=document.getElementById('cloudSaveBtn');if(!b)return;
+    const a=audit();
+    b.textContent=!a.familyConfigured?'クラウド同期':!a.activeSlotId?'保存名を設定':a.meta?.lastError?'同期エラー':a.meta?.pending?'同期待ち':'クラウド同期 ✓';
   }
 
   async function deriveFamilySyncKey(code){
@@ -79,37 +98,47 @@
     b.style.cssText='display:block;width:100%;min-height:52px;margin:8px 0;padding:12px 14px;border:1px solid '+(secondary?'#aaa':'#999')+';border-radius:12px;background:'+(secondary?'#f5f5f5':'#fff')+';color:#111;font-size:17px;font-weight:700;text-align:left;line-height:1.35;touch-action:manipulation';
     b.onclick=onClick;panel.appendChild(b);return b;
   }
-  function confirmLeaving(targetCode,targetSlotName=''){
+  function confirmLeaving(targetCode,targetSlotId=''){
     const c=cfg(),a=audit();
     const current=normalize(c.familyCode||'');
-    const sameFamily=current&&current===normalize(targetCode);
-    const sameSlot=!targetSlotName||String(a.activeSlotName||'')===String(targetSlotName||'');
+    const sameFamily=!!current&&current===normalize(targetCode);
+    const sameSlot=!!targetSlotId&&String(a.activeSlotId||'')===String(targetSlotId||'');
     if(!a.meta?.pending||sameFamily&&sameSlot)return true;
     return confirm('現在の「'+(a.activeSlotName||'保存')+'」に未同期の変更があります。\n\n家族コードや保存先を切り替えると、その未同期変更は現在の保存先には送られません。切り替えますか？');
   }
 
   async function activateRemote(code,slot){
     const c=cloud();if(!c?.enableWithCode||!c?.pull)return;
-    if(!confirmLeaving(code,slot.slotName))return;
-    const enabled=await c.enableWithCode(code,{slotId:String(slot.slotId||''),slotName:String(slot.slotName||''),revision:Number(slot.revision||0),savedAt:Number(slot.savedAt||0)});
-    if(!enabled){setStatus('家族コードまたは保存先を切り替えできませんでした。');return}
-    if(validFamily(code))remember(code);
+    const slotId=String(slot?.slotId||''),slotName=normalize(slot?.slotName||'');
+    if(!SLOT_ID_RE.test(slotId)||!validSlotName(slotName)){setStatus('保存情報が正しくないため切り替えませんでした。');return}
+    if(!confirmLeaving(code,slotId))return;
+    const before=snapshotCloudState();
+    const enabled=await c.enableWithCode(code,{slotId,slotName,revision:Number(slot.revision||0),savedAt:Number(slot.savedAt||0)});
+    if(!enabled){restoreCloudState(before);refreshButton();refreshCloudButton();setStatus('家族コードまたは保存先を切り替えできませんでした。');return}
     const result=await c.pull();
-    refreshButton();
-    if(result?.ok)setStatus('家族コード「'+normalize(code)+'」の「'+String(slot.slotName||'保存')+'」へ切り替えて再開しました。');
-    else setStatus('選んだ保存を取得できませんでした。端末内保存は保持されています。');
+    if(result?.ok){
+      if(validFamily(code))remember(code);
+      refreshButton();refreshCloudButton();
+      setStatus('家族コード「'+normalize(code)+'」の「'+slotName+'」へ切り替えて再開しました。');
+      return;
+    }
+    restoreCloudState(before);
+    try{window.AI_SHOGI_SAVE?.load?.()}catch(e){}
+    refreshButton();refreshCloudButton();
+    setStatus('選んだ保存を取得できなかったため、元の家族コードと保存先に戻しました。端末内保存も保持されています。');
   }
   async function createNewSlot(code){
     const c=cloud();if(!c?.enableWithCode)return;
-    if(!confirmLeaving(code,''))return;
     const answer=prompt('この家族コードで新しく使う保存名を入力してください。\n例：パパ / みっちゃん / まま','保存1');
     if(answer===null)return;
     const name=normalize(answer);if(!validSlotName(name)){setStatus('保存名は1〜40文字で入力してください。');return}
-    const enabled=await c.enableWithCode(code,{slotId:randomSlotId(),slotName:name,revision:0,savedAt:0});
+    const slotId=randomSlotId();
+    if(!confirmLeaving(code,slotId))return;
+    const enabled=await c.enableWithCode(code,{slotId,slotName:name,revision:0,savedAt:0});
     if(!enabled){setStatus('新しい保存先を作れませんでした。');return}
     if(validFamily(code))remember(code);
     const pushed=await c.push?.();
-    refreshButton();removeDialog();
+    refreshButton();refreshCloudButton();removeDialog();
     if(pushed?.ok)setStatus('家族コード「'+normalize(code)+'」の新しい保存「'+name+'」へ切り替えました。');
     else setStatus('保存先「'+name+'」へ切り替えました。対局を進めるとこの保存先へ自動保存されます。');
   }
