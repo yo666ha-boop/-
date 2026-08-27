@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import { webkit } from 'playwright';
 
 const addon=await fs.readFile('shogi-v21528/profile-stats21535.js','utf8');
@@ -8,31 +9,26 @@ new Function(addon);
 assert.match(sw,/profile-stats21535\.js\?v=21535a/);
 assert.match(sw,/ai-shogi-coi-reload-21535a/);
 
+const html='<!doctype html><html><body><div id="statsMain">あなた R1500</div><div id="statsSub">0勝 0敗 0分</div><div id="sHand"><b>あなた</b></div><div id="fsHand"><b>あなた</b></div></body></html>';
+const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(html)});
+await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
+const address=server.address();
+const localUrl=`http://127.0.0.1:${address.port}/`;
+
 const browser=await webkit.launch();
 try{
   const page=await browser.newPage({viewport:{width:390,height:844}});
-  await page.setContent(`<!doctype html><html><body>
-    <div id="statsMain">あなた R1500</div><div id="statsSub">0勝 0敗 0分</div>
-    <div id="sHand"><b>あなた</b></div><div id="fsHand"><b>あなた</b></div>
-  </body></html>`);
+  await page.goto(localUrl,{waitUntil:'domcontentloaded'});
   await page.evaluate(()=>{
     const chars=Array.from({length:26},(_,i)=>({name:i===0?'みつき':'相手'+i,rating:1500+i*10}));
     window.__stats={rating:1620,w:5,l:2,d:1,chars:Array.from({length:26},()=>({w:0,l:0,d:0}))};
     window.__stats.chars[0]={w:2,l:1,d:0};
-    window.AIShogiIOS={
-      stats:()=>window.__stats,
-      characters:()=>chars,
-      char:()=>['みつき',3000],
-    };
+    window.AIShogiIOS={stats:()=>window.__stats,characters:()=>chars,char:()=>['みつき',3000]};
     const cfg={enabled:true,familyCode:'みかみ家',syncKey:'x'.repeat(32),activeSlotId:'slot_papa',activeSlotName:'パパ'};
     localStorage.setItem('aiShogiCloudConfigV1',JSON.stringify(cfg));
     const save={version:1,savedAt:Date.now(),st:{b:Array(81).fill(0),h:{},t:1,log:[{m:1}]}};
     localStorage.setItem('aiShogiGameSaveV1',JSON.stringify(save));
-    window.AI_SHOGI_SAVE={
-      load:()=>true,
-      restore:()=>true,
-      data:()=>JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null'),
-    };
+    window.AI_SHOGI_SAVE={load:()=>true,restore:()=>true,data:()=>JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null')};
     window.AI_SHOGI_CLOUD_SAVE={
       audit:()=>{const c=JSON.parse(localStorage.getItem('aiShogiCloudConfigV1')||'{}');return {activeSlotName:c.activeSlotName||'',activeSlotId:c.activeSlotId||''}},
       enableWithCode:async(code,opts={})=>{const c=JSON.parse(localStorage.getItem('aiShogiCloudConfigV1')||'{}');c.familyCode=code;c.activeSlotId=opts.slotId||'';c.activeSlotName=opts.slotName||'';localStorage.setItem('aiShogiCloudConfigV1',JSON.stringify(c));return true},
@@ -50,9 +46,7 @@ try{
   assert.equal(await page.textContent('#statsMain'),'パパ R1620');
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aiShogiGameSaveV1')).playerStats.rating),1620);
 
-  await page.evaluate(async()=>{
-    await window.AI_SHOGI_CLOUD_SAVE.enableWithCode('みかみ家',{slotId:'slot_micchan',slotName:'みっちゃん',revision:0,savedAt:0});
-  });
+  await page.evaluate(async()=>{await window.AI_SHOGI_CLOUD_SAVE.enableWithCode('みかみ家',{slotId:'slot_micchan',slotName:'みっちゃん',revision:0,savedAt:0})});
   await page.waitForTimeout(150);
   audit=await page.evaluate(()=>window.AI_SHOGI_PROFILE_STATS.audit());
   assert.equal(audit.slotName,'みっちゃん');
@@ -78,9 +72,10 @@ try{
 
   await page.evaluate(()=>window.dispatchEvent(new Event('ai-shogi-local-save')));
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aiShogiGameSaveV1')).playerStats.rating),1704);
-  console.log('PASS WebKit per-profile rating migration/new-profile/reset/cloud-restore behavior');
+  console.log('PASS WebKit per-profile rating migration/new-profile/cloud-restore behavior');
 } finally {
   await browser.close();
+  await new Promise(resolve=>server.close(resolve));
 }
 
 const url='https://htvfcdktdjtyoyzrohji.supabase.co/functions/v1/shogi-save';
