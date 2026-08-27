@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-debug-apk:
@@ -65,10 +65,30 @@ jobs:
           sha256sum "$APK"
           ls -lh "$APK"
 
-      - name: Upload offline APK
+      - name: Upload offline APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mitsuki-shogi-fire-offline-debug-apk
           path: fire-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish stable Fire sideload test link
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
+          ASSET=mitsuki-shogi-fire-offline-test.apk
+          TAG=fire-offline-test
+          cp "$APK" "$ASSET"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
+            gh release edit "$TAG" --title 'みつき将棋 Fire オフライン版 テスト' --notes 'Fire実機検証用。ブラウザproduction mainは変更していません。オフライン本体・水匠5・盤面テーマ切替入り。PR #121のFire branchから自動生成。'
+          else
+            gh release create "$TAG" "$ASSET" --target "$GITHUB_SHA" --title 'みつき将棋 Fire オフライン版 テスト' --notes 'Fire実機検証用。ブラウザproduction mainは変更していません。オフライン本体・水匠5・盤面テーマ切替入り。PR #121のFire branchから自動生成。' --prerelease
+          fi
+          echo 'Stable sideload URL:'
+          echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
