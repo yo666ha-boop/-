@@ -1,0 +1,36 @@
+name: Validate mid rating watch boundaries deeply
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/build-mid-rating-watch-page-20260827.mjs'
+      - '.github/scripts/calibrate-mid-rating-watch-deep-20260827.mjs'
+      - '.github/workflows/validate-mid-rating-watch-deep-20260827.yml'
+permissions:
+  contents: read
+jobs:
+  mid-rating-watch-deep:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check calibration
+        run: node --check .github/scripts/calibrate-mid-rating-watch-deep-20260827.mjs
+      - name: Build calibration page
+        run: node .github/scripts/build-mid-rating-watch-page-20260827.mjs
+      - name: Start COI server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/mid-watch-server.log 2>&1 &
+          sleep 1
+      - name: Run focused deep calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/calibrate-mid-rating-watch-deep-20260827.mjs 2>&1 | tee /tmp/mid-watch.log
+          grep -F 'PASS_MID_RATING_WATCH_DEEP_DIAGNOSTIC' /tmp/mid-watch.log
+          grep -F 'MID_WATCH_FINAL' /tmp/mid-watch.log
