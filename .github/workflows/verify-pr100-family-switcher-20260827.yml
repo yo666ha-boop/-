@@ -29,6 +29,8 @@ jobs:
           echo PASS_PR100_INJECTION_21533A
       - name: Verify live Supabase edge read compatibility
         run: node .github/scripts/verify-cloud-edge-live-read-20260827.mjs
+      - name: Verify live Supabase CAS conflict and update
+        run: node .github/scripts/verify-pr100-live-cas-20260827.mjs
       - name: Install Playwright browsers
         run: |
           npm init -y
