@@ -41,9 +41,8 @@
       const name=normalize(input.value);
       if(!validName(name)){error.textContent='保存名は1〜40文字で入力してください。';input.focus();return}
       const slotId=randomSlotId();
-      const a=c.audit?.()||{},cfg=c.config?.()||{};
-      const sameFamily=normalize(cfg.familyCode||'')===code;
-      if(a.meta?.pending&&!(sameFamily&&String(a.activeSlotId||'')===slotId)){
+      const a=c.audit?.()||{};
+      if(a.meta?.pending){
         const ok=confirm('現在の「'+(a.activeSlotName||'保存')+'」に未同期の変更があります。\n\n保存先を切り替えると、その未同期変更は現在の保存先には送られません。切り替えますか？');
         if(!ok)return;
       }
@@ -52,7 +51,6 @@
       if(!enabled){create.disabled=false;cancel.disabled=false;error.textContent='新しい保存先を作れませんでした。';return}
       const pushed=await c.push?.();
       removePicker();
-      try{window.AI_SHOGI_FAMILY_SWITCHER?.openCode?.(code)}catch(e){}
       if(pushed?.ok)setStatus('家族コード「'+code+'」の新しい保存「'+name+'」へ切り替えました。');
       else setStatus('保存先「'+name+'」へ切り替えました。対局を進めるとこの保存先へ自動保存されます。');
     };
