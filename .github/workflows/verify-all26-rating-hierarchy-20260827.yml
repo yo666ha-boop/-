@@ -42,5 +42,5 @@ jobs:
           set -euo pipefail
           node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/all26.log
           grep -F 'PASS_ALL26_8CASE_STRENGTH_HIERARCHY' /tmp/all26.log
-          node .github/scripts/verify-rating-loss-hierarchy-20260827.mjs /tmp/all26.log
-          grep -F 'PASS_RATING_LOSS_HIERARCHY' /tmp/all26.log >/dev/null || true
+          node .github/scripts/verify-rating-loss-hierarchy-20260827.mjs /tmp/all26.log 2>&1 | tee -a /tmp/all26.log
+          grep -F 'PASS_RATING_LOSS_HIERARCHY' /tmp/all26.log
