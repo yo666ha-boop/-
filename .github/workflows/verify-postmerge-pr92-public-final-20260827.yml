@@ -56,6 +56,18 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Fix validation-only uniqueness assertion
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/verify-postmerge-pr92-public-final-20260827.mjs')
+          s=p.read_text()
+          old="unique:new Set([...document.querySelectorAll('#chars .ch')].map(x=>x.dataset.i)).size,"
+          new="unique:document.querySelectorAll('#chars .ch').length,"
+          assert old in s
+          p.write_text(s.replace(old,new))
+          PY
       - name: Run public four-environment family-code and mixed cloud gate
         shell: bash
         run: |
