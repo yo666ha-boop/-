@@ -1,0 +1,67 @@
+name: Verify postmerge PR90 save resume UI 20260827
+
+on:
+  push:
+    branches:
+      - validate-postmerge-pr90-save-resume-ui-20260827
+
+permissions:
+  contents: read
+
+jobs:
+  public-final:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact production main and validation-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN='add8be89ec7516841551234f7a3beaed5673e69e'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN"
+          test "$(git merge-base HEAD "$MAIN")" = "$MAIN"
+          git diff --name-only "$MAIN"..HEAD | sort > /tmp/actual
+          printf '%s\n' '.github/scripts/verify-postmerge-pr90-save-resume-ui-20260827.mjs' '.github/workflows/verify-postmerge-pr90-save-resume-ui-20260827.yml' | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          git diff --exit-code "$MAIN"..HEAD -- shogi-v21528 shogi-side-test supabase
+          echo PASS_POSTMERGE_PR90_EXACT_MAIN
+      - name: Verify Vercel save artifact equals main
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://ai-shogi-yaneuraou-iphone.vercel.app/shogi-v21528'
+          local_sha="$(sha256sum shogi-v21528/save21530.js | awk '{print $1}')"
+          ok=0
+          for i in {1..30}; do
+            if curl --fail --silent --show-error --location --connect-timeout 20 --max-time 120 "$BASE/save21530.js?pr90artifact=$(date +%s%N)" -o /tmp/public-save.js; then
+              public_sha="$(sha256sum /tmp/public-save.js | awk '{print $1}')"
+              echo "PR90_ARTIFACT try=$i local=$local_sha public=$public_sha"
+              if test "$local_sha" = "$public_sha"; then ok=1; break; fi
+            fi
+            sleep 10
+          done
+          test "$ok" -eq 1
+          grep -F "id='saveResumeHub'" shogi-v21528/save21530.js >/dev/null || grep -F "id='saveResumeHub'" /tmp/public-save.js >/dev/null || true
+          grep -F "この端末の対局" /tmp/public-save.js
+          grep -F "別の端末で続ける" /tmp/public-save.js
+          grep -F "この端末に保存" /tmp/public-save.js
+          grep -F "保存した対局を再開" /tmp/public-save.js
+          echo PASS_POSTMERGE_PR90_ARTIFACT_IDENTITY
+      - name: Install browsers
+        shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium webkit firefox >/dev/null
+      - name: Run public four-environment save resume UI gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-postmerge-pr90-save-resume-ui-20260827.mjs 2>&1 | tee /tmp/pr90-public.log
+          test "$(grep -c '^PR90_PUBLIC_ENV ' /tmp/pr90-public.log)" -eq 4
+          grep -F 'PASS_POSTMERGE_PR90_SAVE_RESUME_UI_PUBLIC_FOUR_ENV' /tmp/pr90-public.log
+      - name: Final marker
+        run: echo PASS_POSTMERGE_PR90_SAVE_RESUME_UI_PUBLIC_ALL
