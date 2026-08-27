@@ -1,0 +1,30 @@
+name: verify-vercel-root-coi-shim-20260827
+
+on:
+  push:
+    branches:
+      - fix/shogi-vercel-root-coi-20260827
+  pull_request:
+    paths:
+      - 'coi-serviceworker.js'
+      - 'shogi-v21528/coi-serviceworker.js'
+      - 'shogi-v21528/cloud-save21531.js'
+      - '.github/scripts/verify-vercel-root-coi-shim-20260827.mjs'
+      - '.github/workflows/verify-vercel-root-coi-shim-20260827.yml'
+
+jobs:
+  webkit-root-shim:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright WebKit
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps webkit
+      - name: Verify Vercel-root compatibility shim
+        run: node .github/scripts/verify-vercel-root-coi-shim-20260827.mjs
