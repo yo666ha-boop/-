@@ -38,3 +38,4 @@ jobs:
           node .github/scripts/calibrate-tight-rating-boundaries-20260827.mjs 2>&1 | tee /tmp/tight-boundaries.log
           grep -F 'PASS_TIGHT_RATING_BOUNDARIES_DIAGNOSTIC' /tmp/tight-boundaries.log
           grep -F 'TIGHT_RATING_BOUNDARIES_FINAL' /tmp/tight-boundaries.log
+# retargeted to PR118 lower-tail candidate
