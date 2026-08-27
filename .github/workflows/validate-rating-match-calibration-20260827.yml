@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/scripts/build-lower8-quality-page-20260825.mjs'
       - '.github/scripts/calibrate-rating-boundary-matches-20260827.mjs'
+      - '.github/scripts/calibrate-r1750-r1700-balanced-midgames-20260827.mjs'
       - '.github/workflows/validate-rating-match-calibration-20260827.yml'
 permissions:
   contents: read
@@ -20,7 +21,9 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
       - name: Syntax check calibration
-        run: node --check .github/scripts/calibrate-rating-boundary-matches-20260827.mjs
+        run: |
+          node --check .github/scripts/calibrate-rating-boundary-matches-20260827.mjs
+          node --check .github/scripts/calibrate-r1750-r1700-balanced-midgames-20260827.mjs
       - name: Build calibration page
         run: node .github/scripts/build-lower8-quality-page-20260825.mjs
       - name: Start COI server
@@ -33,3 +36,9 @@ jobs:
           set -euo pipefail
           node .github/scripts/calibrate-rating-boundary-matches-20260827.mjs 2>&1 | tee /tmp/rating-cal.log
           grep -F 'PASS_RATING_MATCH_CALIBRATION_DIAGNOSTIC' /tmp/rating-cal.log
+      - name: Run focused balanced-midgame R1750 vs R1700 calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/calibrate-r1750-r1700-balanced-midgames-20260827.mjs 2>&1 | tee /tmp/r1750-r1700-balanced.log
+          grep -F 'PASS_R1750_R1700_BALANCED_MIDGAME_DIAGNOSTIC' /tmp/r1750-r1700-balanced.log
