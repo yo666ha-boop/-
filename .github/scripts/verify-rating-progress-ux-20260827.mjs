@@ -40,27 +40,36 @@ try{
   assert.equal(a.rating,1521);assert.equal(a.total,1);
   assert.equal(a.last.result,'勝ち');assert.equal(a.last.delta,21);
   assert.equal(a.line,'前局：勝ち　R1500 → R1521（+21）');
-  assert.ok(await page.evaluate(()=>window.__saveNowCount)>=1);
+  assert.equal(await page.evaluate(()=>window.__saveNowCount),1);
 
   await page.evaluate(()=>{window.__stats.rating=1508;window.__stats.l=1;window.dispatchEvent(new Event('ai-shogi-local-save'))});
   await page.waitForTimeout(120);
   a=await page.evaluate(()=>window.AI_SHOGI_RATING_PROGRESS.audit());
   assert.equal(a.last.result,'負け');assert.equal(a.last.delta,-13);
   assert.equal(a.line,'前局：負け　R1521 → R1508（-13）');
+  assert.equal(await page.evaluate(()=>window.__saveNowCount),2);
+
+  await page.evaluate(()=>{window.__stats.rating=1508;window.__stats.d=1;window.dispatchEvent(new Event('ai-shogi-local-save'))});
+  await page.waitForTimeout(120);
+  a=await page.evaluate(()=>window.AI_SHOGI_RATING_PROGRESS.audit());
+  assert.equal(a.rating,1508);assert.equal(a.total,3);
+  assert.equal(a.last.result,'引き分け');assert.equal(a.last.delta,0);
+  assert.equal(a.line,'前局：引き分け　R1508 → R1508（0）');
+  assert.equal(await page.evaluate(()=>window.__saveNowCount),3);
 
   await page.evaluate(()=>{window.__profile={key:'みかみ家::slot_micchan',slotName:'みっちゃん'};window.__stats={rating:1500,w:0,l:0,d:0,chars:Array.from({length:26},()=>({w:0,l:0,d:0}))}});
   await page.waitForTimeout(850);
   a=await page.evaluate(()=>window.AI_SHOGI_RATING_PROGRESS.audit());
   assert.equal(a.slotName,'みっちゃん');assert.equal(a.last,null);assert.match(a.line,/対局結果に応じてレートが増減/);
 
-  await page.evaluate(()=>{window.__profile={key:'みかみ家::slot_papa',slotName:'パパ'};window.__stats={rating:1508,w:1,l:1,d:0,chars:Array.from({length:26},()=>({w:0,l:0,d:0}))}});
+  await page.evaluate(()=>{window.__profile={key:'みかみ家::slot_papa',slotName:'パパ'};window.__stats={rating:1508,w:1,l:1,d:1,chars:Array.from({length:26},()=>({w:0,l:0,d:0}))}});
   await page.waitForTimeout(850);
   a=await page.evaluate(()=>window.AI_SHOGI_RATING_PROGRESS.audit());
-  assert.equal(a.slotName,'パパ');assert.equal(a.last.delta,-13);assert.equal(a.line,'前局：負け　R1521 → R1508（-13）');
+  assert.equal(a.slotName,'パパ');assert.equal(a.last.result,'引き分け');assert.equal(a.last.delta,0);assert.equal(a.line,'前局：引き分け　R1508 → R1508（0）');
 
   const layout=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,innerWidth:innerWidth,aria:document.getElementById('ratingProgressLine')?.getAttribute('aria-live')}));
   assert.ok(layout.scrollWidth<=layout.innerWidth,JSON.stringify(layout));assert.equal(layout.aria,'polite');
-  console.log('PASS rating delta UX/profile separation/WebKit');
+  console.log('PASS rating delta UX win/loss/draw/profile separation/WebKit');
 } finally {
   await browser.close();server.close();
 }
