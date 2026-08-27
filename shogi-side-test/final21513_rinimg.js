@@ -45,10 +45,17 @@ setTimeout(()=>{
       return '強さ'+rank+'位';
     };
     rankText=function(i){return labelFor(i)};
-    if(CHAR_META[24]&&String(CHAR_META[24].feature||'').includes('仮キャラ勢')){
-      CHAR_META[24]={...CHAR_META[24],feature:String(CHAR_META[24].feature).replace('仮キャラ勢の最上位。','26人の中でも上位。')};
-      const card=document.querySelectorAll('#chars .ch')[24];
-      if(card)card.title=C[24][0]+'｜R'+C[24][1]+'｜'+CHAR_META[24].style+'｜'+CHAR_META[24].feature;
+    for(let i=0;i<C.length;i++){
+      const meta=CHAR_META[i];
+      if(!meta)continue;
+      const before=String(meta.feature||'');
+      const after=before
+        .replace('空き仮キャラ勢の最高位。','26人の中でも上位。')
+        .replace('仮キャラ勢の最上位。','26人の中でも上位。');
+      if(after===before)continue;
+      CHAR_META[i]={...meta,feature:after};
+      const card=document.querySelectorAll('#chars .ch')[i];
+      if(card)card.title=C[i][0]+'｜R'+C[i][1]+'｜'+CHAR_META[i].style+'｜'+CHAR_META[i].feature;
     }
     const labels=Object.fromEntries(C.map((c,i)=>[c?.[0]||String(i),labelFor(i)]));
     const provisionalMeta=C.map((c,i)=>({i,name:c?.[0]||String(i),feature:String(CHAR_META[i]?.feature||'')})).filter(x=>x.feature.includes('仮キャラ'));
