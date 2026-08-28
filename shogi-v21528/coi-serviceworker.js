@@ -39,6 +39,17 @@ if(typeof window==='undefined'){
     }catch(e){console.error('board theme loader failed',e)}
   })();
   (()=>{
+    if(window.__AI_SHOGI_FIRE_BROWSER_PREWARM_LOADER_21538A)return;
+    window.__AI_SHOGI_FIRE_BROWSER_PREWARM_LOADER_21538A=true;
+    try{
+      const scriptURL=document.currentScript?.src||location.href;
+      const s=document.createElement('script');
+      s.src=new URL('./fire-browser-prewarm21538.js?v=21538a',scriptURL).href;
+      s.async=true;
+      document.head.appendChild(s);
+    }catch(e){console.error('Fire browser prewarm loader failed',e)}
+  })();
+  (()=>{
     if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B)return;
     window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
