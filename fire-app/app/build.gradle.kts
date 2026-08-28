@@ -4,11 +4,22 @@ plugins {
 
 val repoRoot = rootProject.projectDir.parentFile
 val generatedOfflineAssets = layout.buildDirectory.dir("generated/offlineAssets")
+val generatedLauncherRes = layout.buildDirectory.dir("generated/launcherRes")
+
 val prepareOfflineAssets by tasks.registering(Copy::class) {
     into(generatedOfflineAssets)
     from(File(repoRoot, "shogi-v21528")) { into("shogi-v21528") }
     from(File(repoRoot, "shogi")) { into("shogi") }
     from(File(repoRoot, "shogi-side-test")) { into("shogi-side-test") }
+}
+
+// Use the exact existing in-app Micchan character art for the Android launcher icon.
+// No regenerated/look-alike artwork is introduced here.
+val prepareLauncherIcon by tasks.registering(Copy::class) {
+    into(generatedLauncherRes.map { it.dir("drawable") })
+    from(File(repoRoot, "shogi/micchan21528.webp")) {
+        rename { "micchan_launcher.webp" }
+    }
 }
 
 android {
@@ -24,6 +35,7 @@ android {
     }
 
     sourceSets["main"].assets.srcDir(generatedOfflineAssets)
+    sourceSets["main"].res.srcDir(generatedLauncherRes)
 
     packaging {
         jniLibs {
@@ -49,4 +61,5 @@ android {
 
 tasks.named("preBuild").configure {
     dependsOn(prepareOfflineAssets)
+    dependsOn(prepareLauncherIcon)
 }
