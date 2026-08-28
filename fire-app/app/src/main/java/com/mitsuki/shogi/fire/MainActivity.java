@@ -125,9 +125,14 @@ public final class MainActivity extends Activity {
             JSONObject result = loopbackServer == null ? null : loopbackServer.nativeSelfTest();
             final String diagnostic = result == null ? "native self-test unavailable" : result.toString();
             final boolean pass = result != null && result.optBoolean("ok", false)
+                && result.optBoolean("usiok", false)
+                && result.optBoolean("readyok", false)
+                && result.optBoolean("searched", false)
+                && !result.optString("bestmove", "").isEmpty()
                 && result.optString("engine", "").contains("YaneuraOu V9.70")
                 && result.optString("runtime", "").contains("binaryExecutable=true")
-                && result.optString("runtime", "").contains("evalReady=true");
+                && result.optString("runtime", "").contains("evalReady=true")
+                && result.optString("runtime", "").contains("/eval/nn.bin");
             runOnUiThread(() -> {
                 strengthGuardRunning = false;
                 if (isFinishing() || strengthGuardHandled) return;
