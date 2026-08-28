@@ -1,15 +1,16 @@
 import { chromium } from 'playwright';
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1280,height:900},locale:'ja-JP'});
-function sq(file,rank){const col=9-Number(file),row='abcdefghi'.indexOf(rank);return{x:373+33.5+55.5*col,y:650+48.5+58.8*row}}
+const R='abcdefghi';
+async function squarePoint(sq){return page.evaluate(({sq,R})=>{const b=document.querySelector('#board_img')?.getBoundingClientRect();if(!b)throw new Error('board missing');const file=Number(sq[0]),rank=R.indexOf(sq[1]),col=9-file;return{x:b.x+33.5+55.5*col,y:b.y+48.5+58.8*rank,board:{x:b.x,y:b.y,w:b.width,h:b.height}}},{sq,R})}
 try{
  await page.goto('https://www.studiok-i.net/ps/',{waitUntil:'domcontentloaded',timeout:120000});await page.waitForTimeout(4000);
  await page.locator('#btnNewGame').click();await page.waitForTimeout(500);
  await page.locator('#selectLevelGote').selectOption({label:'Lv40 ピヨ帝 (R2610 七段)'});
  if(await page.locator('#chkRatingTarget').isChecked())await page.locator('#chkRatingTarget').uncheck();
  await page.locator('#btnDialogGameStart').click();await page.waitForTimeout(1000);
- const a=sq(7,'g'),d=sq(7,'f');await page.mouse.click(a.x,a.y);await page.waitForTimeout(150);await page.mouse.click(d.x,d.y);
- await page.waitForFunction(()=>document.querySelector('#select_kifu')?.options?.length>=3,{timeout:60000});await page.waitForTimeout(500);
+ const a=await squarePoint('7g'),d=await squarePoint('7f');console.log('PIYO_BOARD_GEOMETRY '+JSON.stringify(a.board));await page.mouse.click(a.x,a.y);await page.waitForTimeout(150);await page.mouse.click(d.x,d.y);
+ await page.waitForFunction(()=>document.querySelector('#select_kifu')?.options?.length>=3,null,{timeout:90000});await page.waitForTimeout(500);
  const out=await page.evaluate(()=>({
    kifu:[...document.querySelector('#select_kifu').options].map(o=>o.text),
    selected:document.querySelector('#select_kifu')?.value||'',
