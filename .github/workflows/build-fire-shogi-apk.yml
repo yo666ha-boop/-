@@ -19,10 +19,45 @@ permissions:
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Android NDK r23b
+        id: setup_ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r23b
+
+      - name: Build exact YaneuraOu V9.70 Android executables
+        env:
+          NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
+        run: |
+          set -euxo pipefail
+          YANE_COMMIT=76d58ef2e4cf64116784f41fd4816425ab6817ee
+          git clone --filter=blob:none https://github.com/yaneurao/YaneuraOu.git /tmp/YaneuraOu
+          cd /tmp/YaneuraOu
+          git checkout "$YANE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$YANE_COMMIT"
+          for ABI in arm64-v8a armeabi-v7a; do
+            rm -rf libs obj
+            "$NDK_HOME/ndk-build" \
+              NDK_PROJECT_PATH="$PWD" \
+              APP_BUILD_SCRIPT="$PWD/script/jni/Android.mk" \
+              NDK_APPLICATION_MK="$PWD/script/jni/Application.mk" \
+              APP_ABI="$ABI" \
+              YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE \
+              -j2 V=1
+            SRC="libs/$ABI/YaneuraOu_NNUE_$ABI"
+            test -s "$SRC"
+            file "$SRC"
+            mkdir -p "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI"
+            cp "$SRC" "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI/libyaneuraou_v970_exec.so"
+          done
+          git archive --format=tar.gz --output="$GITHUB_WORKSPACE/YaneuraOu-V9.70-source-76d58ef.tar.gz" HEAD
+          test -s "$GITHUB_WORKSPACE/YaneuraOu-V9.70-source-76d58ef.tar.gz"
+          ls -lh "$GITHUB_WORKSPACE"/fire-app/app/src/main/jniLibs/*/libyaneuraou_v970_exec.so
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -35,29 +70,31 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Guard frozen browser baseline and strength conditions
+      - name: Guard frozen browser baseline and native strength transport
         run: |
+          set -euxo pipefail
           grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
-          grep -F '127.0.0.1' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
-          grep -F 'Cross-Origin-Opener-Policy' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
-          grep -F 'Cross-Origin-Embedder-Policy' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
-          grep -F 'android:usesCleartextTraffic="true"' fire-app/app/src/main/AndroidManifest.xml
-          grep -F 'crossOriginIsolated' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'SharedArrayBuffer' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'new WebAssembly.Memory({initial:1,maximum:1,shared:true})' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'refuseWeakFallback' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'NativeEngineManager' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'YaneuraOu V9.70 Android NDK + Suisho5' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'libyaneuraou_v970_exec.so' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'yaneuraou-native-shim.js' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'binaryExecutable=true' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'evalReady=true' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'Silk/MitsukiFire' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'android:extractNativeLibs="true"' fire-app/app/src/main/AndroidManifest.xml
           grep -F 'shared:!0' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
           grep -F 'instanceof SharedArrayBuffer' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
           grep -F '更新取得済み・次回起動で適用' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
           grep -F "bright:{label:'明るい木目'" fire-app/app/src/main/assets/fire/fire-theme.js
           grep -F "contrast:{label:'くっきり'" fire-app/app/src/main/assets/fire/fire-theme.js
 
-      - name: Build offline debug APK
+      - name: Build offline native-engine debug APK
         working-directory: fire-app
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Verify offline APK payload
         run: |
+          set -euxo pipefail
           APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           test "$(stat -c%s "$APK")" -gt 60000000
@@ -65,7 +102,9 @@ jobs:
           grep -F 'assets/shogi-v21528/index.html' /tmp/fire-apk-list.txt
           grep -F 'assets/shogi/strong213.css' /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-apk-list.txt
-          grep -F 'assets/shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.wasm' /tmp/fire-apk-list.txt
+          grep -F 'assets/fire/yaneuraou-native-shim.js' /tmp/fire-apk-list.txt
+          grep -F 'lib/arm64-v8a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
+          grep -F 'lib/armeabi-v7a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
           grep -F 'assets/fire/fire-theme.js' /tmp/fire-apk-list.txt
           sha256sum "$APK"
           ls -lh "$APK"
@@ -73,8 +112,16 @@ jobs:
       - name: Upload offline APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mitsuki-shogi-fire-offline-debug-apk
+          name: mitsuki-shogi-fire-native-v970-debug-apk
           path: fire-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload corresponding YaneuraOu source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YaneuraOu-V9.70-source-76d58ef
+          path: YaneuraOu-V9.70-source-76d58ef.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -83,18 +130,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euxo pipefail
           APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
           ASSET=mitsuki-shogi-fire-offline-test.apk
+          SOURCE=YaneuraOu-V9.70-source-76d58ef.tar.gz
           TAG=fire-offline-test
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 2.1。ブラウザproduction mainは変更していません。オフライン本体・水匠5・盤面テーマ切替入り。実機で偽HTTPSのCOI判定が失敗したため、127.0.0.1の実HTTPレスポンスでCOOP/COEPを処理する方式へ変更。同じやねうら王共有WASMメモリを維持し、弱いfallbackはしません。PR #121のFire branchから自動生成。'
+          NOTES='Fire実機検証用 Stage 3。Amazon WebView 148実機で secure=true でも COI/SAB=false と確定したため、ブラウザUI・26キャラ・強さprofile・水匠5は維持し、やねうら王V9.70の計算部分だけ公式V9.70 source commit 76d58ef2e4cf64116784f41fd4816425ab6817ee のAndroid NDK native executableへ切替。弱いfallbackはしません。YaneuraOu対応sourceも同releaseで配布。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$ASSET" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire オフライン版 テスト' --notes "$NOTES"
+            gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
+            gh release edit "$TAG" --title 'みつき将棋 Fire ネイティブV9.70 テスト' --notes "$NOTES"
           else
-            gh release create "$TAG" "$ASSET" --target "$GITHUB_SHA" --title 'みつき将棋 Fire オフライン版 テスト' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire ネイティブV9.70 テスト' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
