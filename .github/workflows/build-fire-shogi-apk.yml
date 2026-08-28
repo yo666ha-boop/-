@@ -36,10 +36,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply Fire Stage 3.4 stable native runtime patch
+      - name: Apply Fire Stage 3.7 native transport v2 patch
         run: |
           set -euxo pipefail
-          python fire-app/scripts/apply-stage34-fire-runtime.py
+          python fire-app/scripts/apply-stage37-fire-transport-v2.py
           node --check shogi-v21528/future-yaneura-worker21528.js
           node --check shogi-side-test/future21520.js
           node --check shogi-side-test/top5-yaneura21529.js
@@ -47,16 +47,26 @@ jobs:
           node --check shogi-side-test/cohort13-18-yaneura21534.js
           node --check shogi-side-test/cohort19-26-yaneura21536.js
           grep -F 'JSONObject preflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
-          grep -F 'reaping ' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
-          grep -F 'nativePreflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'nativeEngine.preflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'private long warmedCursor;' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'return "warm:" + id + ":" + cursor' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'JSONObject poll(String id, long cursor, long waitMs)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 's.poll(cursor, waitMs)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'scheduleMovetimeWatchdog' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'nativeWarmup()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'waitMs = Math.max(0L, Math.min(1000L, waitMs))' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F '&wait=250' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F "__fireNativeBridgeVersion:'3.7-longpoll-cursor'" fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_THREADS=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_HASH_MB=96' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_NODE_MULTIPLIER=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'resetNativeTransport' shogi-v21528/future-yaneura-worker21528.js
           grep -F 'Fireネイティブ再起動中' shogi-side-test/future21520.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/top5-yaneura21529.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort7-12-yaneura21533.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort13-18-yaneura21534.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort19-26-yaneura21536.js
-          grep -F 'versionCode = 4' fire-app/app/build.gradle.kts
+          grep -F 'versionCode = 7' fire-app/app/build.gradle.kts
+          grep -F 'versionName = "3.7-fire-native-v970-transport-v2"' fire-app/app/build.gradle.kts
           if grep -F 'synchronized JSONObject selfTest()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java; then
             echo 'startup self-test still holds the global engine-manager monitor' >&2
             exit 1
@@ -135,7 +145,7 @@ jobs:
         working-directory: fire-app
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Verify Stage 3.4 APK payload
+      - name: Verify Stage 3.7 APK payload
         run: |
           set -euxo pipefail
           APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
@@ -154,7 +164,7 @@ jobs:
       - name: Upload offline APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mitsuki-shogi-fire-stage34-native-v970-debug-apk
+          name: mitsuki-shogi-fire-stage37-native-v970-transport-v2-debug-apk
           path: fire-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -180,12 +190,12 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3.4。ブラウザ版のAI動作は変更しません。Fireで「内蔵AI退避」がほぼ毎手発生する実機報告を受け、起動時に自己診断用と実戦用のYaneuraOuを同時起動しない軽量preflightへ変更。強制終了されたWorkerが残した古いネイティブYaneuraOuセッションは次回開始前に必ず回収し、Worker側も異常時にlocalhost sessionを明示終了します。Fireの実戦探索が失敗した場合は同じYaneuraOu V9.70git＋水匠5を1回だけ自動再起動・再探索し、それでも失敗した場合は弱い内蔵AIへ退避せず対局を停止します。Stage 3.2のThreads最低2・Hash最低96MB・Fire探索予算増加・nodes 2倍、26キャラのR/MultiPV/cp-loss/personalityは変更していません。PR #121のFire branchから自動生成。'
+          NOTES='Fire実機検証用 Stage 3.7。ブラウザ版のAI動作は変更しません。Stage 3.6で「弱い内蔵AIに切り替えず停止しました。新規対局で再試行」がほぼ即時に出続ける実機報告を受け、ネイティブ橋渡しを根本修正。事前探索済みセッションのwarmup終了cursorをAndroidからWorkerへ引き継ぎ、古いbestmoveを現在対局の返答として再読込する欠陥を除去。さらに8msごとのlocalhost高速ポーリングを廃止し、Android側250ms long-poll＋wait/notifyへ変更してFire CPUをYaneuraOu探索へ戻します。YaneuraOu V9.70git＋水匠5、26キャラR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍、Stage 3.6 watchdog、弱い内蔵AI退避禁止は維持。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.4 内蔵AI退避修正版' --notes "$NOTES"
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.7 ネイティブ通信根本修正版' --notes "$NOTES" --prerelease
           else
-            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.4 内蔵AI退避修正版' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.7 ネイティブ通信根本修正版' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
