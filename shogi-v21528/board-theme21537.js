@@ -90,33 +90,7 @@
     }
   }
 
-  /* Fire/Silk browser first-move latency fix.
-   * The shared YaneuraOu+Suisho5 engine can spend tens of seconds on its first WASM/NNUE/readyok
-   * initialization. Start that exact same initialization as soon as the dynamically-installed
-   * engine API exists, instead of charging it to the player's first AI move. Search budgets,
-   * Threads/Hash, evaluation, MultiPV/cp-loss profiles and adaptive/full-search choices are not
-   * changed here, so this is latency hiding only and does not weaken any character.
-   */
-  function installFireBrowserPrewarm(){
-    if(window.__AI_SHOGI_FIRE_BROWSER_PREWARM_21538)return;
-    if(!/\bSilk\//i.test(String(navigator.userAgent||'')))return;
-    window.__AI_SHOGI_FIRE_BROWSER_PREWARM_21538=true;
-    const state=window.AI_SHOGI_FIRE_BROWSER_PREWARM={version:'21538a',silk:true,started:false,ready:false,error:'',startedAt:0,readyAt:0};
-    let tries=0,timer=0;
-    const stop=()=>{if(timer){clearInterval(timer);timer=0}};
-    const attempt=()=>{
-      tries++;
-      if(!window.crossOriginIsolated){if(tries>=900)stop();return;}
-      const api=window.AI_SHOGI_YANEURAOU_FUTURE;
-      if(!api||typeof api.init!=='function'){if(tries>=900)stop();return;}
-      stop();state.started=true;state.startedAt=Date.now();
-      Promise.resolve().then(()=>api.init()).then(()=>{state.ready=true;state.readyAt=Date.now()}).catch(e=>{state.error=String(e&&e.message||e);console.error('Fire browser YaneuraOu prewarm',e)});
-    };
-    attempt();timer=setInterval(attempt,100);
-  }
-
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
-  installFireBrowserPrewarm();
   new MutationObserver(()=>{if(!document.getElementById('boardThemeBtn'))install()}).observe(document.documentElement,{childList:true,subtree:true});
   window.AI_SHOGI_BOARD_THEME={version:'21537a',themes:[...ORDER],get:()=>document.documentElement.dataset.boardTheme||readTheme(),set:n=>applyTheme(n)};
 })();
