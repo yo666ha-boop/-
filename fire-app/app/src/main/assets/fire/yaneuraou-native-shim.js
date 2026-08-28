@@ -1,12 +1,30 @@
-/* Fire Stage 3: worker-side shim for native Android YaneuraOu V9.70.
+/* Fire Stage 3.2: worker-side shim for native Android YaneuraOu V9.70.
  * It preserves the existing Emscripten-facing API used by the browser workers while replacing
- * only the low-level engine transport. No character/profile/rating code is changed.
+ * only the low-level engine transport. Character/profile/rating selection stays unchanged.
+ *
+ * Physical Fire feedback showed that using the browser-era single-thread/short-time budgets on
+ * the tablet made the native engine far weaker than the completed browser baseline. Fire-only
+ * transport therefore gives the SAME YaneuraOu+Suisho5 searches more native CPU budget before the
+ * unchanged character layer applies its existing MultiPV/cp-loss/personality selection.
  */
 (function(){
   'use strict';
   const realFetch=self.fetch.bind(self);
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const isEvalUrl=input=>{try{return /\/nn\.bin(?:[?#]|$)/.test(String(input&&input.url||input||''));}catch(e){return false}};
+
+  const FIRE_THREADS=2;
+  const FIRE_HASH_MB=96;
+  const FIRE_NODE_MULTIPLIER=2;
+
+  // Keep worker-side timeout compatibility: the original workers wait roughly requestedMs+10s.
+  // Short searches need the largest correction on Fire; long searches are doubled and stay below
+  // the existing timeout margin. This strengthens the underlying read without changing rank/cp-loss.
+  function boostedMovetime(ms){
+    const n=Math.max(1,Math.round(Number(ms)||1));
+    const factor=n<1000?4:n<3000?3:2;
+    return Math.min(n*factor,n+8000);
+  }
 
   // The native engine reads the real 64MB Suisho5 file from app storage. Existing workers still
   // perform their historical fetch/size check before FS.writeFile, so provide a small synthetic
@@ -27,14 +45,28 @@
     return String(xhr.responseText||'');
   }
 
-  // Browser workers were written for the Emscripten build, where nn.bin is placed at the virtual
-  // FS root and therefore they send EvalDir="." plus an Emscripten-only EvalFile option. The
-  // upstream V9.70 Android build uses EVAL_EMBEDDING=OFF and its native default is eval/nn.bin.
-  // Translate only those transport-specific commands; every strength/search option passes through.
+  // Browser workers were written for the Emscripten build. On Fire, translate only transport and
+  // CPU-budget details. The high-level character logic (MultiPV, target loss, max loss, personality,
+  // mate-best handling and displayed rating) remains untouched.
   function toNativeUSI(command){
-    const cmd=String(command||'');
+    const cmd=String(command||'').trim();
     if(/^setoption\s+name\s+EvalDir\s+value(?:\s|$)/i.test(cmd))return 'setoption name EvalDir value eval';
     if(/^setoption\s+name\s+EvalFile\s+value(?:\s|$)/i.test(cmd))return null;
+
+    let m=/^setoption\s+name\s+Threads\s+value\s+(\d+)\s*$/i.exec(cmd);
+    if(m)return 'setoption name Threads value '+Math.max(FIRE_THREADS,Number(m[1])||1);
+
+    m=/^setoption\s+name\s+USI_Hash\s+value\s+(\d+)\s*$/i.exec(cmd);
+    if(m)return 'setoption name USI_Hash value '+Math.max(FIRE_HASH_MB,Number(m[1])||1);
+
+    m=/^go\s+movetime\s+(\d+)(.*)$/i.exec(cmd);
+    if(m)return 'go movetime '+boostedMovetime(Number(m[1]))+String(m[2]||'');
+
+    m=/^go\s+nodes\s+(\d+)(.*)$/i.exec(cmd);
+    if(m){
+      const nodes=Math.max(1,Math.round((Number(m[1])||1)*FIRE_NODE_MULTIPLIER));
+      return 'go nodes '+nodes+String(m[2]||'');
+    }
     return cmd;
   }
 
@@ -88,4 +120,5 @@
   };
   self.YaneuraOu_HalfKP_noeval.__fireNative=true;
   self.YaneuraOu_HalfKP_noeval.__fireNativeEvalDir='eval';
+  self.YaneuraOu_HalfKP_noeval.__fireStrength={threads:FIRE_THREADS,hashMB:FIRE_HASH_MB,nodeMultiplier:FIRE_NODE_MULTIPLIER};
 })();
