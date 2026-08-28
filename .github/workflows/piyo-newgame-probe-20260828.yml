@@ -8,15 +8,23 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-22.04
-    timeout-minutes: 12
+    timeout-minutes: 15
     container:
       image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: |
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
-      - run: node .github/scripts/probe-piyo-newgame-20260828.mjs 2>&1 | tee /tmp/piyo-newgame.log
+      - run: |
+          set -o pipefail
+          node .github/scripts/probe-piyo-newgame-20260828.mjs 2>&1 | tee /tmp/piyo-newgame.log
+      - run: |
+          set -o pipefail
+          node .github/scripts/probe-piyo-lv40-firstmove-20260828.mjs 2>&1 | tee /tmp/piyo-lv40-firstmove.log
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -24,4 +32,6 @@ jobs:
           path: |
             /tmp/piyo-newgame.log
             /tmp/piyo-newgame.png
+            /tmp/piyo-lv40-firstmove.log
+            /tmp/piyo-lv40-firstmove.png
           if-no-files-found: warn
