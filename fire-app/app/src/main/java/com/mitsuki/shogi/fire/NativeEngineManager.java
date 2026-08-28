@@ -19,14 +19,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /** Fire-only native USI bridge.
  *
  * The physical Fire WebView exposes WebAssembly but not SharedArrayBuffer, so the threaded
- * YaneuraOu WASM build cannot run there.  This manager executes the exact YaneuraOu V9.70
+ * YaneuraOu WASM build cannot run there. This manager executes the exact YaneuraOu V9.70
  * Android/NDK binary in the app's nativeLibraryDir and keeps the existing browser worker API
  * unchanged through a localhost shim.
  */
@@ -39,6 +38,7 @@ final class NativeEngineManager implements Closeable {
 
     private final Context context;
     private final File engineDir;
+    private final File evalDir;
     private final File evalFile;
     private final File engineBinary;
     private final Map<String, Session> sessions = new HashMap<>();
@@ -46,7 +46,10 @@ final class NativeEngineManager implements Closeable {
     NativeEngineManager(Context context) {
         this.context = context.getApplicationContext();
         this.engineDir = new File(this.context.getFilesDir(), "native-yaneuraou-v970");
-        this.evalFile = new File(engineDir, "nn.bin");
+        // Upstream V9.70 Android.mk builds with EVAL_EMBEDDING=OFF and NNUE defaults EvalDir to
+        // "eval", with EvalFileDefaultName="nn.bin". Keep that exact native layout.
+        this.evalDir = new File(engineDir, "eval");
+        this.evalFile = new File(evalDir, "nn.bin");
         this.engineBinary = new File(this.context.getApplicationInfo().nativeLibraryDir, ENGINE_FILE);
     }
 
@@ -54,6 +57,7 @@ final class NativeEngineManager implements Closeable {
         return "binary=" + engineBinary.getAbsolutePath()
             + "|binaryExists=" + engineBinary.isFile()
             + "|binaryExecutable=" + engineBinary.canExecute()
+            + "|evalDir=" + evalDir.getAbsolutePath()
             + "|eval=" + evalFile.getAbsolutePath()
             + "|evalReady=" + (evalFile.isFile() && evalFile.length() == EVAL_SIZE)
             + "|abi=" + android.os.Build.SUPPORTED_ABIS[0];
@@ -63,8 +67,10 @@ final class NativeEngineManager implements Closeable {
         if (!engineBinary.isFile()) throw new IOException("Native YaneuraOu binary missing for ABI " + android.os.Build.SUPPORTED_ABIS[0]);
         if (!engineBinary.canExecute()) throw new IOException("Native YaneuraOu binary is not executable: " + engineBinary);
         if (!engineDir.exists() && !engineDir.mkdirs() && !engineDir.isDirectory()) throw new IOException("Could not create native engine dir");
+        if (!evalDir.exists() && !evalDir.mkdirs() && !evalDir.isDirectory()) throw new IOException("Could not create native eval dir");
         if (evalFile.isFile() && evalFile.length() == EVAL_SIZE) return;
-        File tmp = new File(engineDir, "nn.bin.tmp");
+
+        File tmp = new File(evalDir, "nn.bin.tmp");
         if (tmp.exists() && !tmp.delete()) throw new IOException("Could not replace stale NNUE temp file");
         try (InputStream in = context.getAssets().open(EVAL_ASSET);
              FileOutputStream out = new FileOutputStream(tmp)) {
@@ -108,32 +114,51 @@ final class NativeEngineManager implements Closeable {
         if (s != null) s.close();
     }
 
+    /**
+     * Physical-device strength gate. This deliberately goes beyond process launch/usiok:
+     * 1) USI protocol must initialize, 2) isready must load the real Suisho5 from eval/nn.bin,
+     * and 3) a real startpos search must return a legal-looking bestmove.
+     */
     synchronized JSONObject selfTest() {
         JSONObject out = new JSONObject();
         String id = null;
         try {
             id = startSession();
-            command(id, "usi");
             long cursor = 0;
-            long deadline = System.currentTimeMillis() + 12000L;
-            boolean usiok = false;
-            String name = "";
-            while (System.currentTimeMillis() < deadline && !usiok) {
-                JSONObject p = poll(id, cursor);
-                cursor = p.optLong("next", cursor);
-                JSONArray lines = p.optJSONArray("lines");
-                if (lines != null) for (int i = 0; i < lines.length(); i++) {
-                    String line = lines.optString(i, "");
-                    if (line.startsWith("id name ")) name = line.substring(8);
-                    if ("usiok".equals(line.trim())) usiok = true;
-                }
-                if (!usiok) Thread.sleep(20L);
+            StringBuilder transcript = new StringBuilder();
+
+            command(id, "usi");
+            WaitResult usi = waitFor(id, cursor, "usiok", 15000L, transcript);
+            cursor = usi.cursor;
+            String name = extractIdName(transcript.toString());
+            if (!usi.matched) throw new IOException("usiok timeout");
+
+            // With upstream V9.70's default EvalDir=eval, readyok is emitted only after the engine
+            // has completed its isready path. This catches a missing/incompatible Suisho5 file.
+            command(id, "isready");
+            WaitResult ready = waitFor(id, cursor, "readyok", 90000L, transcript);
+            cursor = ready.cursor;
+            if (!ready.matched) throw new IOException("readyok timeout while loading Suisho5 eval/nn.bin");
+
+            command(id, "usinewgame");
+            command(id, "position startpos");
+            command(id, "go movetime 120");
+            WaitResult searched = waitForPrefix(id, cursor, "bestmove ", 20000L, transcript);
+            if (!searched.matched) throw new IOException("bestmove timeout after native search");
+            String bestmove = searched.matchedLine == null ? "" : searched.matchedLine.substring("bestmove ".length()).trim();
+            if (bestmove.isEmpty() || "resign".equals(bestmove) || "win".equals(bestmove)) {
+                throw new IOException("unexpected startpos bestmove: " + bestmove);
             }
-            out.put("ok", usiok);
+
+            out.put("ok", true);
+            out.put("usiok", true);
+            out.put("readyok", true);
+            out.put("searched", true);
+            out.put("bestmove", bestmove);
             out.put("name", name);
             out.put("runtime", runtimeInfo());
             out.put("engine", "YaneuraOu V9.70 Android NDK + Suisho5");
-            if (!usiok) out.put("error", "usiok timeout");
+            out.put("transcriptTail", tail(transcript.toString(), 1800));
         } catch (Throwable e) {
             try {
                 out.put("ok", false);
@@ -144,6 +169,55 @@ final class NativeEngineManager implements Closeable {
             if (id != null) closeSession(id);
         }
         return out;
+    }
+
+    private WaitResult waitFor(String id, long cursor, String exact, long timeoutMs, StringBuilder transcript) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            JSONObject p = poll(id, cursor);
+            cursor = p.optLong("next", cursor);
+            JSONArray lines = p.optJSONArray("lines");
+            if (lines != null) for (int i = 0; i < lines.length(); i++) {
+                String line = lines.optString(i, "");
+                appendTranscript(transcript, line);
+                if (exact.equals(line.trim())) return new WaitResult(cursor, true, line);
+            }
+            if (!p.optBoolean("alive", true)) throw new IOException("native engine exited before " + exact);
+            Thread.sleep(20L);
+        }
+        return new WaitResult(cursor, false, null);
+    }
+
+    private WaitResult waitForPrefix(String id, long cursor, String prefix, long timeoutMs, StringBuilder transcript) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            JSONObject p = poll(id, cursor);
+            cursor = p.optLong("next", cursor);
+            JSONArray lines = p.optJSONArray("lines");
+            if (lines != null) for (int i = 0; i < lines.length(); i++) {
+                String line = lines.optString(i, "");
+                appendTranscript(transcript, line);
+                if (line.startsWith(prefix)) return new WaitResult(cursor, true, line);
+            }
+            if (!p.optBoolean("alive", true)) throw new IOException("native engine exited before " + prefix);
+            Thread.sleep(20L);
+        }
+        return new WaitResult(cursor, false, null);
+    }
+
+    private static void appendTranscript(StringBuilder transcript, String line) {
+        if (transcript.length() > 12000) transcript.delete(0, transcript.length() - 8000);
+        transcript.append(line).append('\n');
+    }
+
+    private static String extractIdName(String transcript) {
+        for (String line : transcript.split("\\n")) if (line.startsWith("id name ")) return line.substring(8).trim();
+        return "";
+    }
+
+    private static String tail(String text, int max) {
+        if (text == null) return "";
+        return text.length() <= max ? text : text.substring(text.length() - max);
     }
 
     @Override
@@ -179,7 +253,10 @@ final class NativeEngineManager implements Closeable {
             } catch (IOException e) {
                 if (!closed) Log.w(TAG, "stdout failed " + id, e);
             } finally {
-                if (!closed) append("info string FIRE_NATIVE_PROCESS_EXIT " + process.exitValue());
+                if (!closed) {
+                    String status = process.isAlive() ? "alive-stream-ended" : String.valueOf(process.exitValue());
+                    append("info string FIRE_NATIVE_PROCESS_EXIT " + status);
+                }
             }
         }
 
@@ -232,5 +309,16 @@ final class NativeEngineManager implements Closeable {
         final long seq;
         final String text;
         Line(long seq, String text) { this.seq = seq; this.text = text; }
+    }
+
+    private static final class WaitResult {
+        final long cursor;
+        final boolean matched;
+        final String matchedLine;
+        WaitResult(long cursor, boolean matched, String matchedLine) {
+            this.cursor = cursor;
+            this.matched = matched;
+            this.matchedLine = matchedLine;
+        }
     }
 }
