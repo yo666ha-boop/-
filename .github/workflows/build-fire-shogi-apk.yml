@@ -30,16 +30,19 @@ jobs:
         with:
           ndk-version: r23b
 
-      - name: Build exact YaneuraOu V9.70 Android executables
+      - name: Build production-matched YaneuraOu V9.70git Android executables
         env:
           NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
         run: |
           set -euxo pipefail
-          YANE_COMMIT=76d58ef2e4cf64116784f41fd4816425ab6817ee
+          # Production shogi-side-test/yaneuraou/build-info.txt identifies this exact source commit.
+          YANE_COMMIT=33ccf1f907eb7184889fa23051243f81ab0bf973
+          grep -F "commit=$YANE_COMMIT" shogi-side-test/yaneuraou/build-info.txt
           git clone --filter=blob:none https://github.com/yaneurao/YaneuraOu.git /tmp/YaneuraOu
           cd /tmp/YaneuraOu
           git checkout "$YANE_COMMIT"
           test "$(git rev-parse HEAD)" = "$YANE_COMMIT"
+          grep -F '#define ENGINE_VERSION "9.70git"' source/config.h
           grep -F 'EVAL_EMBEDDING = OFF' script/jni/Android.mk
           grep -F 'const char* default_eval_dir = "eval"' source/eval/nnue/evaluate_nnue.cpp
           grep -F '#define EvalFileDefaultName "nn.bin"' source/eval/nnue/evaluate_nnue.h
@@ -58,8 +61,8 @@ jobs:
             mkdir -p "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI"
             cp "$SRC" "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI/libyaneuraou_v970_exec.so"
           done
-          git archive --format=tar.gz --output="$GITHUB_WORKSPACE/YaneuraOu-V9.70-source-76d58ef.tar.gz" HEAD
-          test -s "$GITHUB_WORKSPACE/YaneuraOu-V9.70-source-76d58ef.tar.gz"
+          git archive --format=tar.gz --output="$GITHUB_WORKSPACE/YaneuraOu-V9.70git-source-33ccf1f.tar.gz" HEAD
+          test -s "$GITHUB_WORKSPACE/YaneuraOu-V9.70git-source-33ccf1f.tar.gz"
           ls -lh "$GITHUB_WORKSPACE"/fire-app/app/src/main/jniLibs/*/libyaneuraou_v970_exec.so
 
       - name: Set up Java 17
@@ -85,6 +88,8 @@ jobs:
           grep -F 'waitFor(id, cursor, "readyok"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'go movetime 120' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'bestmove timeout after native search' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F "return 'setoption name EvalDir value eval'" fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'EvalFile' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'yaneuraou-native-shim.js' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
           grep -F 'result.optBoolean("readyok", false)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'result.optBoolean("searched", false)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
@@ -129,8 +134,8 @@ jobs:
       - name: Upload corresponding YaneuraOu source artifact
         uses: actions/upload-artifact@v4
         with:
-          name: YaneuraOu-V9.70-source-76d58ef
-          path: YaneuraOu-V9.70-source-76d58ef.tar.gz
+          name: YaneuraOu-V9.70git-source-33ccf1f
+          path: YaneuraOu-V9.70git-source-33ccf1f.tar.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -142,17 +147,17 @@ jobs:
           set -euxo pipefail
           APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
           ASSET=mitsuki-shogi-fire-offline-test.apk
-          SOURCE=YaneuraOu-V9.70-source-76d58ef.tar.gz
+          SOURCE=YaneuraOu-V9.70git-source-33ccf1f.tar.gz
           TAG=fire-offline-test
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3。Amazon WebView 148実機で secure=true でも COI/SAB=false と確定したため、ブラウザUI・26キャラ・強さprofileは維持し、やねうら王V9.70の計算部分だけ公式V9.70 source commit 76d58ef2e4cf64116784f41fd4816425ab6817ee のAndroid NDK native executableへ切替。実機自己診断は eval/nn.bin の水匠5を isready/readyok で実ロードし、startposの実bestmoveまで確認してから合格します。弱いfallbackはしません。YaneuraOu対応sourceも同releaseで配布。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
+          NOTES='Fire実機検証用 Stage 3。Amazon WebView 148実機で secure=true でも COI/SAB=false と確定したため、ブラウザUI・26キャラ・強さprofileは維持し、やねうら王の計算部分だけAndroid NDK native executableへ切替。ネイティブも完成版WASMのbuild-infoと同じYaneuraOu source commit 33ccf1f907eb7184889fa23051243f81ab0bf973（ENGINE_VERSION 9.70git）を使用。実機自己診断は eval/nn.bin の水匠5を isready/readyok で実ロードし、startposの実bestmoveまで確認してから合格します。WASM用EvalDir/EvalFile指定だけFire bridgeでnative配置へ変換し、その他の強さ・探索USI設定はそのまま通します。弱いfallbackはしません。対応sourceも同releaseで配布。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire ネイティブV9.70 テスト' --notes "$NOTES"
+            gh release edit "$TAG" --title 'みつき将棋 Fire ネイティブV9.70git テスト' --notes "$NOTES"
           else
-            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire ネイティブV9.70 テスト' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire ネイティブV9.70git テスト' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
