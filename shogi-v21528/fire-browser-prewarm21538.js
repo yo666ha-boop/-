@@ -9,19 +9,20 @@
   let tries=0,timer=0;
   const stop=()=>{if(timer){clearInterval(timer);timer=0}};
   const attempt=()=>{
+    if(state.started){stop();return;}
     tries++;
     if(!window.crossOriginIsolated){if(tries>=900)stop();return;}
     const api=window.AI_SHOGI_YANEURAOU_FUTURE;
     if(!api||typeof api.init!=='function'){if(tries>=900)stop();return;}
-    stop();
     state.started=true;
     state.startedAt=Date.now();
+    stop();
     Promise.resolve()
       .then(()=>api.init())
       .then(()=>{state.ready=true;state.readyAt=Date.now()})
       .catch(e=>{state.error=String(e&&e.message||e);console.error('Fire browser YaneuraOu prewarm',e)});
   };
 
-  attempt();
   timer=setInterval(attempt,100);
+  attempt();
 })();
