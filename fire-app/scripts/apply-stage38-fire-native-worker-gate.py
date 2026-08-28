@@ -64,7 +64,7 @@ replace_one(
 replace_one(
     shim,
     "      __fireNativeBridgeVersion:'3.7-longpoll-cursor',\n",
-    "      __fireNativeBridgeVersion:'3.8-coi-async-fetch-queue',\n",
+    "      __fireNativeBridgeVersion:'3.7-longpoll-cursor',\n      __fireNativeBridgeRevision:'3.8-coi-async-fetch-queue',\n",
     'Stage 3.8 bridge diagnostic',
 )
 
@@ -98,12 +98,13 @@ for path in [
         f'visible Fire failure reason {path}',
     )
 
-# Keep every Stage 3.7 strength/transport parameter. Version only.
+# Keep every Stage 3.7 strength/transport parameter. Version only. The existing canonical workflow
+# checks this version name; the additional async bridge revision is exposed separately above.
 gradle = 'fire-app/app/build.gradle.kts'
 replace_one(
     gradle,
     '        versionCode = 7\n        versionName = "3.7-fire-native-v970-transport-v2"',
-    '        versionCode = 8\n        versionName = "3.8-fire-native-v970-coi-async-bridge"',
+    '        versionCode = 8\n        versionName = "3.8-fire-native-v970-worker-gate"',
     'Stage 3.8 APK version',
 )
 activity = 'fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java'
