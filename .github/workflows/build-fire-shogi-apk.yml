@@ -40,6 +40,9 @@ jobs:
           cd /tmp/YaneuraOu
           git checkout "$YANE_COMMIT"
           test "$(git rev-parse HEAD)" = "$YANE_COMMIT"
+          grep -F 'EVAL_EMBEDDING = OFF' script/jni/Android.mk
+          grep -F 'const char* default_eval_dir = "eval"' source/eval/nnue/evaluate_nnue.cpp
+          grep -F '#define EvalFileDefaultName "nn.bin"' source/eval/nnue/evaluate_nnue.h
           for ABI in arm64-v8a armeabi-v7a; do
             rm -rf libs obj
             "$NDK_HOME/ndk-build" \
@@ -77,9 +80,15 @@ jobs:
           grep -F 'NativeEngineManager' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
           grep -F 'YaneuraOu V9.70 Android NDK + Suisho5' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'libyaneuraou_v970_exec.so' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'new File(engineDir, "eval")' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'new File(evalDir, "nn.bin")' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'waitFor(id, cursor, "readyok"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'go movetime 120' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'bestmove timeout after native search' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'yaneuraou-native-shim.js' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
-          grep -F 'binaryExecutable=true' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'evalReady=true' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'result.optBoolean("readyok", false)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'result.optBoolean("searched", false)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F '/eval/nn.bin' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'Silk/MitsukiFire' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'android:extractNativeLibs="true"' fire-app/app/src/main/AndroidManifest.xml
           grep -F 'shared:!0' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
@@ -138,7 +147,7 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3。Amazon WebView 148実機で secure=true でも COI/SAB=false と確定したため、ブラウザUI・26キャラ・強さprofile・水匠5は維持し、やねうら王V9.70の計算部分だけ公式V9.70 source commit 76d58ef2e4cf64116784f41fd4816425ab6817ee のAndroid NDK native executableへ切替。弱いfallbackはしません。YaneuraOu対応sourceも同releaseで配布。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
+          NOTES='Fire実機検証用 Stage 3。Amazon WebView 148実機で secure=true でも COI/SAB=false と確定したため、ブラウザUI・26キャラ・強さprofileは維持し、やねうら王V9.70の計算部分だけ公式V9.70 source commit 76d58ef2e4cf64116784f41fd4816425ab6817ee のAndroid NDK native executableへ切替。実機自己診断は eval/nn.bin の水匠5を isready/readyok で実ロードし、startposの実bestmoveまで確認してから合格します。弱いfallbackはしません。YaneuraOu対応sourceも同releaseで配布。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
             gh release edit "$TAG" --title 'みつき将棋 Fire ネイティブV9.70 テスト' --notes "$NOTES"
