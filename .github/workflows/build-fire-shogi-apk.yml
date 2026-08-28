@@ -24,6 +24,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fire Stage 3.3 prevent startup self-test from blocking gameplay
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java')
+          s=p.read_text()
+          old='    synchronized JSONObject selfTest() {'
+          new='    JSONObject selfTest() {'
+          if s.count(old) != 1:
+              raise SystemExit('expected exactly one synchronized selfTest declaration')
+          p.write_text(s.replace(old,new,1))
+          PY
+          grep -F '    JSONObject selfTest() {' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          if grep -F 'synchronized JSONObject selfTest()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java; then
+            echo 'startup self-test still holds the global engine-manager monitor' >&2
+            exit 1
+          fi
+
       - name: Set up Android NDK r23b
         id: setup_ndk
         uses: nttld/setup-ndk@v1
@@ -88,6 +107,7 @@ jobs:
           grep -F 'waitFor(id, cursor, "readyok"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'go movetime 120' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'bestmove timeout after native search' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F '    JSONObject selfTest() {' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F "return 'setoption name EvalDir value eval'" fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'EvalFile' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'yaneuraou-native-shim.js' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
@@ -152,12 +172,12 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3。Amazon WebView 148実機で secure=true でも COI/SAB=false と確定したため、ブラウザUI・26キャラ・強さprofileは維持し、やねうら王の計算部分だけAndroid NDK native executableへ切替。ネイティブも完成版WASMのbuild-infoと同じYaneuraOu source commit 33ccf1f907eb7184889fa23051243f81ab0bf973（ENGINE_VERSION 9.70git）を使用。実機自己診断は eval/nn.bin の水匠5を isready/readyok で実ロードし、startposの実bestmoveまで確認してから合格します。WASM用EvalDir/EvalFile指定だけFire bridgeでnative配置へ変換し、その他の強さ・探索USI設定はそのまま通します。弱いfallbackはしません。対応sourceも同releaseで配布。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
+          NOTES='Fire実機検証用 Stage 3.3。Stage 3.2のThreads最低2・Hash最低96MB・Fire専用探索予算増加はそのまま維持し、棋力・26キャラprofile・水匠5・やねうら王V9.70gitは一切弱くしていません。実機で初手から1分以上待つ原因として、起動時のネイティブ自己診断 selfTest が最大90秒 readyok を待つ間 NativeEngineManager 全体の synchronized ロックを保持し、実戦用セッション開始を塞いでいた競合を特定。Stage 3.3では自己診断の長い待機中にグローバルロックを保持しないようビルド時に修正し、実戦エンジンと自己診断を分離します。自己診断自体、実bestmove確認、弱いfallback禁止方針は維持。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire ネイティブV9.70git テスト' --notes "$NOTES"
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.3 初手待ち修正版' --notes "$NOTES"
           else
-            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire ネイティブV9.70git テスト' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.3 初手待ち修正版' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
