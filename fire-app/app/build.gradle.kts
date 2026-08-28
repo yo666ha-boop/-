@@ -19,11 +19,17 @@ android {
         applicationId = "com.mitsuki.shogi.fire"
         minSdk = 22
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0-fire-offline"
+        versionCode = 3
+        versionName = "3.0-fire-native-v970"
     }
 
     sourceSets["main"].assets.srcDir(generatedOfflineAssets)
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 
     androidResources {
         noCompress += listOf("bin", "wasm")
