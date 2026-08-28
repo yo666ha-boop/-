@@ -26,6 +26,20 @@ function buildSfen(moves){
 
 function samePiece(a,b){return !!a&&!!b&&a.side===b.side&&a.k===b.k}
 function basePiece(k){return k?.startsWith('+')?k.slice(1):k}
+function promotedPiece(k){const b=basePiece(k);return ['P','L','N','S','B','R'].includes(b)?'+'+b:k}
+function applyOwnMove(before,usi){
+  const next=Object.fromEntries(Object.entries(before).map(([sq,pc])=>[sq,{...pc}]));
+  if(usi.includes('*')){
+    const k=usi[0],dest=usi.slice(2,4);
+    next[dest]={side:'b',k};
+    return next;
+  }
+  const src=usi.slice(0,2),dest=usi.slice(2,4),pc=next[src];
+  if(!pc||pc.side!=='b')throw Error('cannot apply Future move '+usi+' to '+JSON.stringify(before));
+  delete next[src];
+  next[dest]={side:'b',k:usi.endsWith('+')?promotedPiece(pc.k):pc.k};
+  return next;
+}
 function deriveOpponentMove(before,after){
   const changed=[];for(let rank=0;rank<9;rank++)for(let file=9;file>=1;file--){const sq=''+file+R[rank],a=before[sq]||null,b=after[sq]||null;if(!samePiece(a,b))changed.push({sq,a,b});}
   const arrivals=changed.filter(x=>x.b?.side==='w' && x.a?.side!=='w');
@@ -104,7 +118,7 @@ try{
     const usi=res?.move?await ai.evaluate(m=>window.__L8Q.usi(m),res.move):String(res?.info?.bestmove||'');
     if(!usi||usi==='resign'||usi==='win')throw Error('Future returned '+usi+' '+JSON.stringify(res?.info||{}));
     const think=Date.now()-t,beforeLen=await piyo.locator('#select_kifu option').count();
-    await playOurMove(piyo,usi);moves.push(usi);audit.push({ply,side:'future',usi,think,depth:res?.info?.depth||0,nodes:res?.info?.nodes||0,cp:res?.info?.cp??null,mate:res?.info?.mate??null});console.log('PIYO_MATCH_MOVE '+JSON.stringify(audit.at(-1)));ply++;
+    await playOurMove(piyo,usi);moves.push(usi);board=applyOwnMove(board,usi);audit.push({ply,side:'future',usi,think,depth:res?.info?.depth||0,nodes:res?.info?.nodes||0,cp:res?.info?.cp??null,mate:res?.info?.mate??null});console.log('PIYO_MATCH_MOVE '+JSON.stringify(audit.at(-1)));ply++;
     const terminalNow=await resultText(piyo);if(terminalNow.length&&await piyo.locator('#select_kifu option').count()<beforeLen+2){console.log('PIYO_MATCH_RESULT_AFTER_FUTURE '+JSON.stringify(terminalNow));break;}
     await piyo.waitForFunction(n=>document.querySelectorAll('#select_kifu option').length>=n+2,beforeLen,{timeout:90000}).catch(()=>{});
     const after=await snapshotBoard(piyo);let opp='';
