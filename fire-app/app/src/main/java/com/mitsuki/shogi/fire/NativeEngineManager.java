@@ -35,6 +35,8 @@ final class NativeEngineManager implements Closeable {
     private static final String EVAL_ASSET = "shogi-side-test/yaneuraou/nn.bin";
     private static final long EVAL_SIZE = 64217066L;
     private static final int MAX_LINES = 5000;
+    private static final String EVAL_DIR_OPTION = "setoption name EvalDir value";
+    private static final String EVAL_FILE_OPTION = "setoption name EvalFile value";
 
     private final Context context;
     private final File engineDir;
@@ -46,8 +48,9 @@ final class NativeEngineManager implements Closeable {
     NativeEngineManager(Context context) {
         this.context = context.getApplicationContext();
         this.engineDir = new File(this.context.getFilesDir(), "native-yaneuraou-v970");
-        // Upstream V9.70 Android.mk builds with EVAL_EMBEDDING=OFF and NNUE defaults EvalDir to
-        // "eval", with EvalFileDefaultName="nn.bin". Keep that exact native layout.
+        // The NNUE is copied to app-private storage. YaneuraOu resolves a relative EvalDir from
+        // the executable directory (nativeLibraryDir), not from ProcessBuilder.directory(), so
+        // every EvalDir command is rewritten below to this absolute app-private directory.
         this.evalDir = new File(engineDir, "eval");
         this.evalFile = new File(evalDir, "nn.bin");
         this.engineBinary = new File(this.context.getApplicationInfo().nativeLibraryDir, ENGINE_FILE);
@@ -99,8 +102,29 @@ final class NativeEngineManager implements Closeable {
     synchronized int command(String id, String command) throws IOException {
         Session s = sessions.get(id);
         if (s == null) throw new IOException("Unknown engine session");
-        s.command(command);
+        String nativeCommand = normalizeCommand(command);
+        if (nativeCommand != null) s.command(nativeCommand);
         return 0;
+    }
+
+    /**
+     * Browser/WASM workers historically send EvalDir=. and an Emscripten-only EvalFile option.
+     * The native executable resolves relative EvalDir values against its executable directory,
+     * which is the APK's nativeLibraryDir. The real NNUE lives under app-private files instead,
+     * so always force an absolute EvalDir here. This is transport-only and does not alter any
+     * strength/search option. EvalFile remains ignored because upstream native V9.70 uses nn.bin.
+     */
+    private String normalizeCommand(String command) {
+        String cmd = command == null ? "" : command.trim();
+        if (startsWithIgnoreCase(cmd, EVAL_DIR_OPTION)) {
+            return EVAL_DIR_OPTION + " " + evalDir.getAbsolutePath();
+        }
+        if (startsWithIgnoreCase(cmd, EVAL_FILE_OPTION)) return null;
+        return cmd;
+    }
+
+    private static boolean startsWithIgnoreCase(String value, String prefix) {
+        return value.length() >= prefix.length() && value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     synchronized JSONObject poll(String id, long cursor) throws Exception {
@@ -122,10 +146,10 @@ final class NativeEngineManager implements Closeable {
     synchronized JSONObject selfTest() {
         JSONObject out = new JSONObject();
         String id = null;
+        StringBuilder transcript = new StringBuilder();
         try {
             id = startSession();
             long cursor = 0;
-            StringBuilder transcript = new StringBuilder();
 
             command(id, "usi");
             WaitResult usi = waitFor(id, cursor, "usiok", 15000L, transcript);
@@ -133,8 +157,9 @@ final class NativeEngineManager implements Closeable {
             String name = extractIdName(transcript.toString());
             if (!usi.matched) throw new IOException("usiok timeout");
 
-            // With upstream V9.70's default EvalDir=eval, readyok is emitted only after the engine
-            // has completed its isready path. This catches a missing/incompatible Suisho5 file.
+            // Do not rely on a relative native EvalDir. YaneuraOu resolves it from the executable
+            // directory, while the packaged Suisho5 is copied to app-private files/eval/nn.bin.
+            command(id, EVAL_DIR_OPTION + " " + evalDir.getAbsolutePath());
             command(id, "isready");
             WaitResult ready = waitFor(id, cursor, "readyok", 90000L, transcript);
             cursor = ready.cursor;
@@ -164,6 +189,7 @@ final class NativeEngineManager implements Closeable {
                 out.put("ok", false);
                 out.put("error", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
                 out.put("runtime", runtimeInfo());
+                out.put("transcriptTail", tail(transcript.toString(), 2200));
             } catch (Exception ignored) {}
         } finally {
             if (id != null) closeSession(id);
@@ -182,7 +208,7 @@ final class NativeEngineManager implements Closeable {
                 appendTranscript(transcript, line);
                 if (exact.equals(line.trim())) return new WaitResult(cursor, true, line);
             }
-            if (!p.optBoolean("alive", true)) throw new IOException("native engine exited before " + exact);
+            if (!p.optBoolean("alive", true)) throw new IOException("native engine exited before " + exact + "; tail=" + tail(transcript.toString(), 900));
             Thread.sleep(20L);
         }
         return new WaitResult(cursor, false, null);
@@ -199,7 +225,7 @@ final class NativeEngineManager implements Closeable {
                 appendTranscript(transcript, line);
                 if (line.startsWith(prefix)) return new WaitResult(cursor, true, line);
             }
-            if (!p.optBoolean("alive", true)) throw new IOException("native engine exited before " + prefix);
+            if (!p.optBoolean("alive", true)) throw new IOException("native engine exited before " + prefix + "; tail=" + tail(transcript.toString(), 900));
             Thread.sleep(20L);
         }
         return new WaitResult(cursor, false, null);
@@ -286,6 +312,7 @@ final class NativeEngineManager implements Closeable {
             out.put("next", next);
             out.put("lines", outLines);
             out.put("alive", process.isAlive());
+            if (!process.isAlive()) out.put("exitCode", process.exitValue());
             return out;
         }
 
