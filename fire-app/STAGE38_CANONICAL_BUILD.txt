@@ -1,0 +1,14 @@
+Fire Stage 3.8 canonical physical-test rebuild
+
+Required fixes in this build:
+- Fire-native crossOriginIsolated gate bypass only; browser/WASM gate unchanged
+- Stage 3.7 warmup cursor handoff + Android long-poll retained
+- synchronous XMLHttpRequest removed from Fire native worker bridge
+- async fetch + serialized native command queue
+- Stage 3.6 native search watchdog retained
+- YaneuraOu V9.70git + Suisho5 retained
+- Threads >= 2, Hash >= 96 MB, nodes multiplier x2 retained
+- no weak built-in AI fallback on Fire
+- launcher icon uses existing in-app Micchan asset shogi/micchan21528.webp
+
+This file exists to force the stable Fire APK to be rebuilt from the exact combined Stage 3.8 branch state rather than leaving the stable release on an earlier Stage 3.8 commit.
