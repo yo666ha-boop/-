@@ -1,6 +1,6 @@
 /* Fire Stage 3: worker-side shim for native Android YaneuraOu V9.70.
  * It preserves the existing Emscripten-facing API used by the browser workers while replacing
- * only the low-level engine transport.  No character/profile/rating code is changed.
+ * only the low-level engine transport. No character/profile/rating code is changed.
  */
 (function(){
   'use strict';
@@ -25,6 +25,17 @@
     xhr.send(null);
     if(xhr.status<200||xhr.status>=300)throw new Error('native bridge HTTP '+xhr.status+' '+String(xhr.responseText||''));
     return String(xhr.responseText||'');
+  }
+
+  // Browser workers were written for the Emscripten build, where nn.bin is placed at the virtual
+  // FS root and therefore they send EvalDir="." plus an Emscripten-only EvalFile option. The
+  // upstream V9.70 Android build uses EVAL_EMBEDDING=OFF and its native default is eval/nn.bin.
+  // Translate only those transport-specific commands; every strength/search option passes through.
+  function toNativeUSI(command){
+    const cmd=String(command||'');
+    if(/^setoption\s+name\s+EvalDir\s+value(?:\s|$)/i.test(cmd))return 'setoption name EvalDir value eval';
+    if(/^setoption\s+name\s+EvalFile\s+value(?:\s|$)/i.test(cmd))return null;
+    return cmd;
   }
 
   self.YaneuraOu_HalfKP_noeval=async function(){
@@ -60,8 +71,9 @@
       FS:{unlink(){},writeFile(){}},
       ccall(name,ret,argTypes,args){
         if(name!=='usi_command')throw new Error('unsupported native ccall '+name);
-        const cmd=String(args&&args[0]||'');
-        return Number(syncGet('/__native_engine/cmd?id='+encodeURIComponent(session)+'&q='+encodeURIComponent(cmd)))||0;
+        const translated=toNativeUSI(args&&args[0]);
+        if(translated===null)return 0;
+        return Number(syncGet('/__native_engine/cmd?id='+encodeURIComponent(session)+'&q='+encodeURIComponent(translated)))||0;
       },
       addMessageListener(fn){if(typeof fn==='function'&&!listeners.includes(fn))listeners.push(fn)},
       removeMessageListener(fn){listeners=listeners.filter(x=>x!==fn)},
@@ -75,4 +87,5 @@
     return engine;
   };
   self.YaneuraOu_HalfKP_noeval.__fireNative=true;
+  self.YaneuraOu_HalfKP_noeval.__fireNativeEvalDir='eval';
 })();
