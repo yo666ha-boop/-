@@ -8,8 +8,8 @@ const sw=await fs.readFile('shogi-v21528/coi-serviceworker.js','utf8');
 const root=await fs.readFile('coi-serviceworker.js','utf8');
 new Function(addon);
 assert.match(sw,/rating-progress21536\.js\?v=21536b/);
-assert.match(sw,/ai-shogi-coi-reload-21536b/);
-assert.match(root,/coi-serviceworker\.js\?v=21536b/);
+assert.match(sw,/ai-shogi-coi-reload-21537a/);
+assert.match(root,/coi-serviceworker\.js\?v=21537a/);
 
 const html='<!doctype html><html><body><div id="statsMain">パパ R1500</div><div id="statsSub">0勝 0敗 0分</div></body></html>';
 const server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html)});

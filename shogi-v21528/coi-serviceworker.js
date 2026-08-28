@@ -28,6 +28,17 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
+    if(window.__AI_SHOGI_BOARD_THEME_LOADER_21537A)return;
+    window.__AI_SHOGI_BOARD_THEME_LOADER_21537A=true;
+    try{
+      const scriptURL=document.currentScript?.src||location.href;
+      const s=document.createElement('script');
+      s.src=new URL('./board-theme21537.js?v=21537a',scriptURL).href;
+      s.async=false;
+      document.head.appendChild(s);
+    }catch(e){console.error('board theme loader failed',e)}
+  })();
+  (()=>{
     if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B)return;
     window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
@@ -61,8 +72,8 @@ if(typeof window==='undefined'){
     const n=navigator;
     if(!window.isSecureContext||!n.serviceWorker)return;
     const src=document.currentScript.src;
-    const RELOAD_KEY='ai-shogi-coi-reload-21536b';
-    const LEGACY_RELOAD_KEYS=['ai-shogi-coi-reload-21536a','ai-shogi-coi-reload-21535a','ai-shogi-coi-reload-21534b','ai-shogi-coi-reload-21533b','ai-shogi-coi-reload-21533a','ai-shogi-coi-reload-21532a'];
+    const RELOAD_KEY='ai-shogi-coi-reload-21537a';
+    const LEGACY_RELOAD_KEYS=['ai-shogi-coi-reload-21536b','ai-shogi-coi-reload-21536a','ai-shogi-coi-reload-21535a','ai-shogi-coi-reload-21534b','ai-shogi-coi-reload-21533b','ai-shogi-coi-reload-21533a','ai-shogi-coi-reload-21532a'];
     const VERCEL='https://ai-shogi-yaneuraou-iphone.vercel.app';
     const show=()=>{document.documentElement.style.visibility=''};
     const hide=()=>{if(!window.crossOriginIsolated)document.documentElement.style.visibility='hidden'};
