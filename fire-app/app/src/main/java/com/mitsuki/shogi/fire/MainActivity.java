@@ -22,9 +22,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONObject;
+
 public final class MainActivity extends Activity {
-    // Fire Stage 2.1 still serves the exact frozen browser baseline from APK assets.
-    // No shogi engine/profile/rating code is weakened or replaced by the Android wrapper.
+    // Browser production remains frozen. Fire Stage 3 changes only the Fire execution transport:
+    // shared-WASM -> the same YaneuraOu V9.70 source built as an Android NDK executable.
     private static final String BASELINE_MAIN = OfflineContentStore.BASELINE_MAIN;
 
     private WebView webView;
@@ -33,6 +35,7 @@ public final class MainActivity extends Activity {
     private String localOrigin;
     private String appUrl;
     private boolean strengthGuardHandled;
+    private boolean strengthGuardRunning;
     private boolean updateCheckStarted;
     private boolean themeInjected;
 
@@ -46,7 +49,7 @@ public final class MainActivity extends Activity {
 
         contentStore = new OfflineContentStore(this);
         try {
-            loopbackServer = new LoopbackHttpServer(contentStore);
+            loopbackServer = new LoopbackHttpServer(this, contentStore);
             localOrigin = loopbackServer.origin();
             appUrl = loopbackServer.startUrl();
         } catch (Exception e) {
@@ -75,7 +78,8 @@ public final class MainActivity extends Activity {
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setUserAgentString(s.getUserAgentString() + " MitsukiShogiFire/2.1 loopback baseline/" + BASELINE_MAIN.substring(0, 8));
+        // Existing worker code recognizes Silk/ as the Fire memory profile (Hash 48MB + adaptive mode).
+        s.setUserAgentString(s.getUserAgentString() + " Silk/MitsukiFire MitsukiShogiFire/3.0 native-v970 baseline/" + BASELINE_MAIN.substring(0, 8));
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -84,8 +88,6 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                // The new normal path is real localhost HTTP. Keep the old pseudo-HTTPS resolver only
-                // as an internal compatibility fallback for any legacy absolute asset URL.
                 WebResourceResponse local = contentStore.intercept(request.getUrl().toString());
                 return local != null ? local : super.shouldInterceptRequest(view, request);
             }
@@ -105,7 +107,7 @@ public final class MainActivity extends Activity {
                     updateCheckStarted = true;
                     contentStore.checkForUpdateAsync();
                 }
-                if (!strengthGuardHandled) checkStrengthGuard(view, 0);
+                checkNativeStrengthGuard();
             }
         });
         webView.setWebChromeClient(new WebChromeClient());
@@ -116,33 +118,23 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
     }
 
-    private void checkStrengthGuard(WebView view, int attempt) {
-        if (strengthGuardHandled || view == null) return;
-        final String script =
-            "(function(){" +
-            "var shared=false,err='';" +
-            "try{shared=(typeof SharedArrayBuffer==='function')&&(new WebAssembly.Memory({initial:1,maximum:1,shared:true}).buffer instanceof SharedArrayBuffer)}catch(e){err=String(e)}" +
-            "return 'coi='+!!self.crossOriginIsolated+'|secure='+!!self.isSecureContext+'|sab='+(typeof SharedArrayBuffer==='function')+'|wasm='+(typeof WebAssembly==='object')+'|sharedMemory='+shared+'|err='+err+'|ua='+navigator.userAgent;" +
-            "})()";
-        view.evaluateJavascript(script, value -> {
-            if (strengthGuardHandled) return;
-            String diagnostic = value == null ? "" : value;
-            boolean pass = diagnostic.contains("coi=true")
-                && diagnostic.contains("secure=true")
-                && diagnostic.contains("sab=true")
-                && diagnostic.contains("wasm=true")
-                && diagnostic.contains("sharedMemory=true");
-            if (pass) {
+    private void checkNativeStrengthGuard() {
+        if (strengthGuardHandled || strengthGuardRunning || loopbackServer == null) return;
+        strengthGuardRunning = true;
+        new Thread(() -> {
+            JSONObject result = loopbackServer == null ? null : loopbackServer.nativeSelfTest();
+            final String diagnostic = result == null ? "native self-test unavailable" : result.toString();
+            final boolean pass = result != null && result.optBoolean("ok", false)
+                && result.optString("engine", "").contains("YaneuraOu V9.70")
+                && result.optString("runtime", "").contains("binaryExecutable=true")
+                && result.optString("runtime", "").contains("evalReady=true");
+            runOnUiThread(() -> {
+                strengthGuardRunning = false;
+                if (isFinishing() || strengthGuardHandled) return;
                 strengthGuardHandled = true;
-                return;
-            }
-            if (attempt < 3) {
-                view.postDelayed(() -> checkStrengthGuard(view, attempt + 1), 700L);
-                return;
-            }
-            strengthGuardHandled = true;
-            refuseWeakFallback(diagnostic);
-        });
+                if (!pass) refuseWeakFallback(diagnostic);
+            });
+        }, "mitsuki-native-strength-guard").start();
     }
 
     private void injectFireTheme(WebView view) {
@@ -168,12 +160,13 @@ public final class MainActivity extends Activity {
 
     private void refuseWeakFallback(String diagnostic) {
         if (isFinishing() || webView == null) return;
-        final String details = "WebView: " + webViewVersion() + "\n" + diagnostic;
+        final String runtime = loopbackServer == null ? "native runtime unavailable" : loopbackServer.nativeRuntimeInfo();
+        final String details = "WebView: " + webViewVersion() + "\n" + runtime + "\n" + diagnostic;
         webView.stopLoading();
         webView.loadDataWithBaseURL(
             null,
-            "<html><body style='background:#111;color:#fff;font-family:sans-serif;padding:24px'><h2>強さ維持条件を満たしていません</h2>" +
-            "<p>このFireでは、現在のやねうら王＋水匠5が必要とする共有WebAssemblyメモリを有効にできませんでした。弱い代替動作には切り替えず停止しました。</p>" +
+            "<html><body style='background:#111;color:#fff;font-family:sans-serif;padding:24px'><h2>ネイティブ将棋エンジンを起動できません</h2>" +
+            "<p>FireのSharedArrayBuffer制限を避けるためAndroidネイティブ版やねうら王V9.70へ切り替えましたが、この端末ではネイティブエンジンの自己診断を完了できませんでした。弱い代替動作には切り替えません。</p>" +
             "<p style='font-size:12px;white-space:pre-wrap;color:#bbb'>" + escapeHtml(details) + "</p></body></html>",
             "text/html",
             "UTF-8",
@@ -181,7 +174,7 @@ public final class MainActivity extends Activity {
         );
         new AlertDialog.Builder(this)
             .setTitle("みつき将棋")
-            .setMessage("同じ強さで動かす条件を確認できませんでした。\n\n" + details)
+            .setMessage("やねうら王V9.70ネイティブ版の起動確認に失敗しました。\n\n" + details)
             .setCancelable(false)
             .setPositiveButton("終了", (dialog, which) -> finish())
             .show();
@@ -202,19 +195,17 @@ public final class MainActivity extends Activity {
     }
 
     private final class FireInfoBridge {
-        @JavascriptInterface
-        public String getContentSha() {
+        @JavascriptInterface public String getContentSha() {
             return contentStore == null ? BASELINE_MAIN : contentStore.activeSha();
         }
-
-        @JavascriptInterface
-        public String getUpdateState() {
+        @JavascriptInterface public String getUpdateState() {
             return contentStore == null ? "端末内版" : contentStore.updateState();
         }
-
-        @JavascriptInterface
-        public String getLocalOrigin() {
+        @JavascriptInterface public String getLocalOrigin() {
             return localOrigin == null ? "" : localOrigin;
+        }
+        @JavascriptInterface public String getEngineRuntime() {
+            return loopbackServer == null ? "" : loopbackServer.nativeRuntimeInfo();
         }
     }
 
@@ -224,25 +215,13 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(outState);
     }
 
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        enterImmersiveMode();
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) enterImmersiveMode();
-    }
+    @Override public void onConfigurationChanged(Configuration newConfig) { super.onConfigurationChanged(newConfig); enterImmersiveMode(); }
+    @Override public void onWindowFocusChanged(boolean hasFocus) { super.onWindowFocusChanged(hasFocus); if (hasFocus) enterImmersiveMode(); }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        if (webView != null && webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
     }
 
     @Override
