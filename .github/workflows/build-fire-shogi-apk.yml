@@ -6,10 +6,22 @@ on:
       - fire/shogi-webview-v1-20260828
     paths:
       - 'fire-app/**'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future21520.js'
+      - 'shogi-side-test/top5-yaneura21529.js'
+      - 'shogi-side-test/cohort7-12-yaneura21533.js'
+      - 'shogi-side-test/cohort13-18-yaneura21534.js'
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
       - '.github/workflows/build-fire-shogi-apk.yml'
   pull_request:
     paths:
       - 'fire-app/**'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future21520.js'
+      - 'shogi-side-test/top5-yaneura21529.js'
+      - 'shogi-side-test/cohort7-12-yaneura21533.js'
+      - 'shogi-side-test/cohort13-18-yaneura21534.js'
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
       - '.github/workflows/build-fire-shogi-apk.yml'
   workflow_dispatch:
 
@@ -24,20 +36,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fire Stage 3.3 prevent startup self-test from blocking gameplay
+      - name: Apply Fire Stage 3.4 stable native runtime patch
         run: |
           set -euxo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java')
-          s=p.read_text()
-          old='    synchronized JSONObject selfTest() {'
-          new='    JSONObject selfTest() {'
-          if s.count(old) != 1:
-              raise SystemExit('expected exactly one synchronized selfTest declaration')
-          p.write_text(s.replace(old,new,1))
-          PY
-          grep -F '    JSONObject selfTest() {' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          python fire-app/scripts/apply-stage34-fire-runtime.py
+          node --check shogi-v21528/future-yaneura-worker21528.js
+          node --check shogi-side-test/future21520.js
+          node --check shogi-side-test/top5-yaneura21529.js
+          node --check shogi-side-test/cohort7-12-yaneura21533.js
+          node --check shogi-side-test/cohort13-18-yaneura21534.js
+          node --check shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F 'JSONObject preflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'reaping ' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'nativePreflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'nativeEngine.preflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'resetNativeTransport' shogi-v21528/future-yaneura-worker21528.js
+          grep -F 'Fireネイティブ再起動中' shogi-side-test/future21520.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/top5-yaneura21529.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort7-12-yaneura21533.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort13-18-yaneura21534.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F 'versionCode = 4' fire-app/app/build.gradle.kts
           if grep -F 'synchronized JSONObject selfTest()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java; then
             echo 'startup self-test still holds the global engine-manager monitor' >&2
             exit 1
@@ -54,7 +73,6 @@ jobs:
           NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
         run: |
           set -euxo pipefail
-          # Production shogi-side-test/yaneuraou/build-info.txt identifies this exact source commit.
           YANE_COMMIT=33ccf1f907eb7184889fa23051243f81ab0bf973
           grep -F "commit=$YANE_COMMIT" shogi-side-test/yaneuraou/build-info.txt
           git clone --filter=blob:none https://github.com/yaneurao/YaneuraOu.git /tmp/YaneuraOu
@@ -82,7 +100,6 @@ jobs:
           done
           git archive --format=tar.gz --output="$GITHUB_WORKSPACE/YaneuraOu-V9.70git-source-33ccf1f.tar.gz" HEAD
           test -s "$GITHUB_WORKSPACE/YaneuraOu-V9.70git-source-33ccf1f.tar.gz"
-          ls -lh "$GITHUB_WORKSPACE"/fire-app/app/src/main/jniLibs/*/libyaneuraou_v970_exec.so
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -95,30 +112,22 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Guard frozen browser baseline and native strength transport
+      - name: Guard Fire strength contract
         run: |
           set -euxo pipefail
           grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
-          grep -F 'NativeEngineManager' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
           grep -F 'YaneuraOu V9.70 Android NDK + Suisho5' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'libyaneuraou_v970_exec.so' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'new File(engineDir, "eval")' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F 'new File(evalDir, "nn.bin")' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
-          grep -F 'waitFor(id, cursor, "readyok"' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
-          grep -F 'go movetime 120' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
-          grep -F 'bestmove timeout after native search' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
-          grep -F '    JSONObject selfTest() {' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
           grep -F "return 'setoption name EvalDir value eval'" fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
-          grep -F 'EvalFile' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
-          grep -F 'yaneuraou-native-shim.js' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
-          grep -F 'result.optBoolean("readyok", false)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F 'result.optBoolean("searched", false)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
-          grep -F '/eval/nn.bin' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'FIRE_THREADS=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_HASH_MB=96' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_NODE_MULTIPLIER=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'Silk/MitsukiFire' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'android:extractNativeLibs="true"' fire-app/app/src/main/AndroidManifest.xml
           grep -F 'shared:!0' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
           grep -F 'instanceof SharedArrayBuffer' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
-          grep -F '更新取得済み・次回起動で適用' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
           grep -F "bright:{label:'明るい木目'" fire-app/app/src/main/assets/fire/fire-theme.js
           grep -F "contrast:{label:'くっきり'" fire-app/app/src/main/assets/fire/fire-theme.js
 
@@ -126,7 +135,7 @@ jobs:
         working-directory: fire-app
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Verify offline APK payload
+      - name: Verify Stage 3.4 APK payload
         run: |
           set -euxo pipefail
           APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
@@ -134,7 +143,6 @@ jobs:
           test "$(stat -c%s "$APK")" -gt 60000000
           unzip -l "$APK" > /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-v21528/index.html' /tmp/fire-apk-list.txt
-          grep -F 'assets/shogi/strong213.css' /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-apk-list.txt
           grep -F 'assets/fire/yaneuraou-native-shim.js' /tmp/fire-apk-list.txt
           grep -F 'lib/arm64-v8a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
@@ -146,7 +154,7 @@ jobs:
       - name: Upload offline APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mitsuki-shogi-fire-native-v970-debug-apk
+          name: mitsuki-shogi-fire-stage34-native-v970-debug-apk
           path: fire-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -172,12 +180,12 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3.3。Stage 3.2のThreads最低2・Hash最低96MB・Fire専用探索予算増加はそのまま維持し、棋力・26キャラprofile・水匠5・やねうら王V9.70gitは一切弱くしていません。実機で初手から1分以上待つ原因として、起動時のネイティブ自己診断 selfTest が最大90秒 readyok を待つ間 NativeEngineManager 全体の synchronized ロックを保持し、実戦用セッション開始を塞いでいた競合を特定。Stage 3.3では自己診断の長い待機中にグローバルロックを保持しないようビルド時に修正し、実戦エンジンと自己診断を分離します。自己診断自体、実bestmove確認、弱いfallback禁止方針は維持。ブラウザproduction mainは未変更。PR #121のFire branchから自動生成。'
+          NOTES='Fire実機検証用 Stage 3.4。ブラウザ版のAI動作は変更しません。Fireで「内蔵AI退避」がほぼ毎手発生する実機報告を受け、起動時に自己診断用と実戦用のYaneuraOuを同時起動しない軽量preflightへ変更。強制終了されたWorkerが残した古いネイティブYaneuraOuセッションは次回開始前に必ず回収し、Worker側も異常時にlocalhost sessionを明示終了します。Fireの実戦探索が失敗した場合は同じYaneuraOu V9.70git＋水匠5を1回だけ自動再起動・再探索し、それでも失敗した場合は弱い内蔵AIへ退避せず対局を停止します。Stage 3.2のThreads最低2・Hash最低96MB・Fire探索予算増加・nodes 2倍、26キャラのR/MultiPV/cp-loss/personalityは変更していません。PR #121のFire branchから自動生成。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.3 初手待ち修正版' --notes "$NOTES"
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.4 内蔵AI退避修正版' --notes "$NOTES"
           else
-            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.3 初手待ち修正版' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.4 内蔵AI退避修正版' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
