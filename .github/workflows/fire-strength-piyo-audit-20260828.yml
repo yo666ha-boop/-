@@ -14,6 +14,9 @@ jobs:
     timeout-minutes: 55
     container:
       image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Prepare Playwright
@@ -35,13 +38,21 @@ jobs:
           node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/strength-server.log 2>&1 &
           sleep 1
       - name: Measure runtime strength contract
-        run: node .github/scripts/audit-strength-runtime-contract-20260825.mjs 2>&1 | tee /tmp/runtime-strength.log
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-strength-runtime-contract-20260825.mjs 2>&1 | tee /tmp/runtime-strength.log
       - name: Measure lower 8 quality
-        run: node .github/scripts/audit-nonfuture-lower8-quality-20260825.mjs 2>&1 | tee /tmp/lower8-quality.log
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-nonfuture-lower8-quality-20260825.mjs 2>&1 | tee /tmp/lower8-quality.log
       - name: Measure all 26 hierarchy
-        run: node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/all26-strength.log
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/all26-strength.log
       - name: Probe Piyo public match UI
-        run: node .github/scripts/probe-piyo-ui-20260828.mjs 2>&1 | tee /tmp/piyo-ui.log
+        run: |
+          set -o pipefail
+          node .github/scripts/probe-piyo-ui-20260828.mjs 2>&1 | tee /tmp/piyo-ui.log
       - name: Upload measurement logs and Piyo screenshot
         if: always()
         uses: actions/upload-artifact@v4
