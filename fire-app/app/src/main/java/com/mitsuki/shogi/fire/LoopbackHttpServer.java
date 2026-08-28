@@ -1,7 +1,11 @@
 package com.mitsuki.shogi.fire;
 
+import android.content.Context;
+import android.net.Uri;
 import android.util.Log;
 import android.webkit.WebResourceResponse;
+
+import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -21,25 +25,25 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Real loopback HTTP server for the Fire WebView.
+/** Fire-local HTTP transport.
  *
- * Using an actual http://127.0.0.1 response lets Chromium/WebView process COOP/COEP as real
- * navigation response headers. Loopback origins are potentially trustworthy secure contexts,
- * so a WebView with WebAssembly threads support can expose crossOriginIsolated + SharedArrayBuffer.
- * The previous shouldInterceptRequest-only pseudo HTTPS origin did not do that on the physical Fire.
+ * Stage 2.1 proved on the physical Fire that localhost is secure but Amazon WebView still reports
+ * COI=false/SAB=false. Stage 3 therefore keeps localhost for the unchanged browser UI, but replaces
+ * only yaneuraou.halfkp.noeval.js with a worker-compatible shim that talks to native Android V9.70.
  */
 final class LoopbackHttpServer implements Closeable {
     private static final String TAG = "MitsukiLoopback";
     private final OfflineContentStore contentStore;
+    private final NativeEngineManager nativeEngine;
     private final ServerSocket serverSocket;
     private final ExecutorService workers = Executors.newCachedThreadPool();
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Thread acceptThread;
     private final String origin;
 
-    LoopbackHttpServer(OfflineContentStore contentStore) throws IOException {
+    LoopbackHttpServer(Context context, OfflineContentStore contentStore) throws IOException {
         this.contentStore = contentStore;
+        this.nativeEngine = new NativeEngineManager(context);
         this.serverSocket = new ServerSocket(0, 64, InetAddress.getByName("127.0.0.1"));
         this.origin = "http://127.0.0.1:" + serverSocket.getLocalPort();
         this.acceptThread = new Thread(this::acceptLoop, "mitsuki-fire-loopback");
@@ -47,13 +51,10 @@ final class LoopbackHttpServer implements Closeable {
         this.acceptThread.start();
     }
 
-    String origin() {
-        return origin;
-    }
-
-    String startUrl() {
-        return origin + "/shogi-v21528/index.html";
-    }
+    String origin() { return origin; }
+    String startUrl() { return origin + "/shogi-v21528/index.html"; }
+    String nativeRuntimeInfo() { return nativeEngine.runtimeInfo(); }
+    JSONObject nativeSelfTest() { return nativeEngine.selfTest(); }
 
     private void acceptLoop() {
         while (running.get()) {
@@ -83,9 +84,7 @@ final class LoopbackHttpServer implements Closeable {
             String method = parts[0].toUpperCase(Locale.US);
             String target = parts[1];
             String line;
-            while ((line = reader.readLine()) != null && !line.isEmpty()) {
-                // Drain headers. The offline app does not need request headers for asset lookup.
-            }
+            while ((line = reader.readLine()) != null && !line.isEmpty()) {}
 
             if (!"GET".equals(method) && !"HEAD".equals(method)) {
                 writeSimple(rawOut, 405, "Method Not Allowed", "method not allowed");
@@ -97,7 +96,21 @@ final class LoopbackHttpServer implements Closeable {
             }
             if (!target.startsWith("/")) target = "/" + target;
 
-            WebResourceResponse response = contentStore.intercept(OfflineContentStore.LOCAL_ORIGIN + target);
+            Uri requestUri = Uri.parse("http://127.0.0.1" + target);
+            String path = requestUri.getPath() == null ? "/" : requestUri.getPath();
+            if (path.startsWith("/__native_engine/")) {
+                handleNative(method, path, requestUri, rawOut);
+                return;
+            }
+
+            // Preserve all existing high-level Future/TOP5/cohort worker logic. Only substitute the
+            // Emscripten engine factory requested by those workers.
+            String assetTarget = target;
+            if (path.endsWith("/yaneuraou/yaneuraou.halfkp.noeval.js")) {
+                assetTarget = "/fire/yaneuraou-native-shim.js?v=3";
+            }
+
+            WebResourceResponse response = contentStore.intercept(OfflineContentStore.LOCAL_ORIGIN + assetTarget);
             if (response == null) {
                 writeSimple(rawOut, 404, "Not Found", "not found");
                 return;
@@ -125,8 +138,7 @@ final class LoopbackHttpServer implements Closeable {
                 }
             }
             writeAscii(rawOut, "Connection: close\r\n");
-            writeAscii(rawOut, "Accept-Ranges: none\r\n");
-            writeAscii(rawOut, "\r\n");
+            writeAscii(rawOut, "Accept-Ranges: none\r\n\r\n");
 
             if (!"HEAD".equals(method)) {
                 try (InputStream body = response.getData()) {
@@ -139,24 +151,79 @@ final class LoopbackHttpServer implements Closeable {
         }
     }
 
+    private void handleNative(String method, String path, Uri uri, OutputStream out) throws Exception {
+        if ("HEAD".equals(method)) {
+            writeJson(out, new JSONObject().put("ok", true), true);
+            return;
+        }
+        if ("/__native_engine/health".equals(path)) {
+            writeJson(out, nativeEngine.selfTest(), false);
+            return;
+        }
+        if ("/__native_engine/start".equals(path)) {
+            writeText(out, nativeEngine.startSession());
+            return;
+        }
+        String id = uri.getQueryParameter("id");
+        if (id == null || id.isEmpty()) {
+            writeSimple(out, 400, "Bad Request", "missing session id");
+            return;
+        }
+        if ("/__native_engine/cmd".equals(path)) {
+            String q = uri.getQueryParameter("q");
+            writeText(out, String.valueOf(nativeEngine.command(id, q == null ? "" : q)));
+            return;
+        }
+        if ("/__native_engine/poll".equals(path)) {
+            long cursor = 0;
+            try { cursor = Long.parseLong(String.valueOf(uri.getQueryParameter("cursor"))); } catch (Exception ignored) {}
+            writeJson(out, nativeEngine.poll(id, cursor), false);
+            return;
+        }
+        if ("/__native_engine/close".equals(path)) {
+            nativeEngine.closeSession(id);
+            writeText(out, "ok");
+            return;
+        }
+        writeSimple(out, 404, "Not Found", "native route not found");
+    }
+
     private static void copy(InputStream in, OutputStream out) throws IOException {
         byte[] buf = new byte[64 * 1024];
         int n;
         while ((n = in.read(buf)) >= 0) out.write(buf, 0, n);
     }
 
+    private static void writeJson(OutputStream out, JSONObject json, boolean head) throws IOException {
+        byte[] body = json.toString().getBytes(StandardCharsets.UTF_8);
+        writeHeaders(out, 200, "OK", "application/json; charset=UTF-8", body.length);
+        if (!head) out.write(body);
+        out.flush();
+    }
+
+    private static void writeText(OutputStream out, String text) throws IOException {
+        byte[] body = String.valueOf(text).getBytes(StandardCharsets.UTF_8);
+        writeHeaders(out, 200, "OK", "text/plain; charset=UTF-8", body.length);
+        out.write(body);
+        out.flush();
+    }
+
     private static void writeSimple(OutputStream out, int status, String reason, String text) throws IOException {
         byte[] body = text.getBytes(StandardCharsets.UTF_8);
+        writeHeaders(out, status, reason, "text/plain; charset=UTF-8", body.length);
+        out.write(body);
+        out.flush();
+    }
+
+    private static void writeHeaders(OutputStream out, int status, String reason, String type, int length) throws IOException {
         writeAscii(out, "HTTP/1.1 " + status + " " + reason + "\r\n");
-        writeAscii(out, "Content-Type: text/plain; charset=UTF-8\r\n");
+        writeAscii(out, "Content-Type: " + type + "\r\n");
         writeAscii(out, "Cross-Origin-Opener-Policy: same-origin\r\n");
         writeAscii(out, "Cross-Origin-Embedder-Policy: require-corp\r\n");
         writeAscii(out, "Cross-Origin-Resource-Policy: same-origin\r\n");
         writeAscii(out, "Cache-Control: no-store\r\n");
-        writeAscii(out, "Content-Length: " + body.length + "\r\n");
+        writeAscii(out, "Content-Length: " + length + "\r\n");
         writeAscii(out, "Connection: close\r\n\r\n");
-        out.write(body);
-        out.flush();
     }
 
     private static void writeAscii(OutputStream out, String text) throws IOException {
@@ -166,6 +233,7 @@ final class LoopbackHttpServer implements Closeable {
     @Override
     public void close() {
         if (!running.getAndSet(false)) return;
+        nativeEngine.close();
         try { serverSocket.close(); } catch (IOException ignored) {}
         workers.shutdownNow();
     }
