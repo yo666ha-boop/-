@@ -36,10 +36,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply Fire Stage 3.7 native transport v2 patch
+      - name: Apply Fire Stage 3.8 native worker gate patch
         run: |
           set -euxo pipefail
-          python fire-app/scripts/apply-stage37-fire-transport-v2.py
+          python fire-app/scripts/apply-stage38-fire-native-worker-gate.py
           node --check shogi-v21528/future-yaneura-worker21528.js
           node --check shogi-side-test/future21520.js
           node --check shogi-side-test/top5-yaneura21529.js
@@ -60,13 +60,19 @@ jobs:
           grep -F 'FIRE_HASH_MB=96' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'FIRE_NODE_MULTIPLIER=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
           grep -F 'resetNativeTransport' shogi-v21528/future-yaneura-worker21528.js
+          grep -F "if(!globalThis.crossOriginIsolated&&!FIRE_NATIVE_APP)throw new Error('crossOriginIsolated=false')" shogi-side-test/future21520.js
+          grep -F "AI_SHOGI_FIRE_NATIVE_WORKER_GATE='3.8-coi-bypass'" shogi-side-test/future21520.js
           grep -F 'Fireネイティブ再起動中' shogi-side-test/future21520.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/top5-yaneura21529.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort7-12-yaneura21533.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort13-18-yaneura21534.js
           grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort19-26-yaneura21536.js
-          grep -F 'versionCode = 7' fire-app/app/build.gradle.kts
-          grep -F 'versionName = "3.7-fire-native-v970-transport-v2"' fire-app/app/build.gradle.kts
+          grep -F 'versionCode = 8' fire-app/app/build.gradle.kts
+          grep -F 'versionName = "3.8-fire-native-v970-worker-gate"' fire-app/app/build.gradle.kts
+          grep -F 'MitsukiShogiFire/3.8' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'android:icon="@drawable/micchan_launcher"' fire-app/app/src/main/AndroidManifest.xml
+          grep -F 'android:roundIcon="@drawable/micchan_launcher"' fire-app/app/src/main/AndroidManifest.xml
+          test -s shogi/micchan21528.webp
           if grep -F 'synchronized JSONObject selfTest()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java; then
             echo 'startup self-test still holds the global engine-manager monitor' >&2
             exit 1
@@ -145,12 +151,13 @@ jobs:
         working-directory: fire-app
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Verify Stage 3.7 APK payload
+      - name: Verify Stage 3.8 APK payload
         run: |
           set -euxo pipefail
           APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           test "$(stat -c%s "$APK")" -gt 60000000
+          test -s fire-app/app/build/generated/launcherRes/drawable/micchan_launcher.webp
           unzip -l "$APK" > /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-v21528/index.html' /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-apk-list.txt
@@ -158,13 +165,14 @@ jobs:
           grep -F 'lib/arm64-v8a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
           grep -F 'lib/armeabi-v7a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
           grep -F 'assets/fire/fire-theme.js' /tmp/fire-apk-list.txt
+          grep -F 'micchan_launcher' /tmp/fire-apk-list.txt || true
           sha256sum "$APK"
           ls -lh "$APK"
 
       - name: Upload offline APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mitsuki-shogi-fire-stage37-native-v970-transport-v2-debug-apk
+          name: mitsuki-shogi-fire-stage38-native-worker-gate-debug-apk
           path: fire-app/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -190,12 +198,12 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3.7。ブラウザ版のAI動作は変更しません。Stage 3.6で「弱い内蔵AIに切り替えず停止しました。新規対局で再試行」がほぼ即時に出続ける実機報告を受け、ネイティブ橋渡しを根本修正。事前探索済みセッションのwarmup終了cursorをAndroidからWorkerへ引き継ぎ、古いbestmoveを現在対局の返答として再読込する欠陥を除去。さらに8msごとのlocalhost高速ポーリングを廃止し、Android側250ms long-poll＋wait/notifyへ変更してFire CPUをYaneuraOu探索へ戻します。YaneuraOu V9.70git＋水匠5、26キャラR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍、Stage 3.6 watchdog、弱い内蔵AI退避禁止は維持。'
+          NOTES='Fire実機検証用 Stage 3.8。ブラウザ版のAI動作は変更しません。Stage 3.7でも対局開始直後に「弱い内蔵AIには切り替えず停止しました。新規対局で再試行」が出る実機報告を受け、実際の即時停止原因を修正。Fire WebViewはcrossOriginIsolated=falseだが、AndroidネイティブYaneuraOu経路はSharedArrayBufferを使わないため、本来不要なブラウザWASM用COIゲートをFireネイティブ時だけ迂回します。非FireブラウザのCOI/SAB要件は変更しません。Stage 3.7のcursor handoff/long-poll、Stage 3.6 watchdog、YaneuraOu V9.70git＋水匠5、26キャラR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍、弱い内蔵AI退避禁止を維持。Androidランチャーアイコンは既存のアプリ内みっちゃん画像 shogi/micchan21528.webp をそのまま使用します。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.7 ネイティブ通信根本修正版' --notes "$NOTES" --prerelease
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃんアイコン修正版' --notes "$NOTES" --prerelease
           else
-            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.7 ネイティブ通信根本修正版' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃんアイコン修正版' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
