@@ -16,16 +16,24 @@ val prepareOfflineAssets by tasks.registering(Copy::class) {
     from(File(repoRoot, "shogi-side-test")) { into("shogi-side-test") }
 }
 
-// Stage 3.8 launcher icon: use the user-approved app-style Micchan + shogi-piece artwork.
-// The approved WebP is stored as Base64 text so the repository keeps the exact tested image bytes.
-val launcherIconBase64 = File(repoRoot, "fire-app/icon/micchan_stage38_app_icon.webp.b64")
+// Stage 3.8 launcher icon: exact user-approved app-style Micchan + Japanese shogi-piece artwork.
+// Split Base64 into small immutable text chunks so GitHub transport cannot truncate the image source.
+val launcherIconBase64Parts = (1..6).map { index ->
+    File(repoRoot, "fire-app/icon/micchan_stage38_app_icon.webp.b64.part$index")
+}
 val launcherIconOutput = generatedLauncherRes.map { it.file("drawable/micchan_launcher.webp") }
 val launcherIconSha256 = "21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db"
 val prepareLauncherIcon by tasks.registering {
-    inputs.file(launcherIconBase64)
+    inputs.files(launcherIconBase64Parts)
     outputs.file(launcherIconOutput)
     doLast {
-        val encoded = launcherIconBase64.readText(Charsets.UTF_8).filterNot { it.isWhitespace() }
+        launcherIconBase64Parts.forEach { part -> check(part.isFile) { "Missing Stage 3.8 launcher icon part: $part" } }
+        val encoded = launcherIconBase64Parts.joinToString("") { part ->
+            part.readText(Charsets.UTF_8).filterNot { it.isWhitespace() }
+        }
+        check(encoded.length == 21176) {
+            "Stage 3.8 launcher icon Base64 length mismatch: ${encoded.length}"
+        }
         val bytes = Base64.getDecoder().decode(encoded)
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(bytes)
