@@ -72,7 +72,8 @@ jobs:
           grep -F 'MitsukiShogiFire/3.8' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
           grep -F 'android:icon="@drawable/micchan_launcher"' fire-app/app/src/main/AndroidManifest.xml
           grep -F 'android:roundIcon="@drawable/micchan_launcher"' fire-app/app/src/main/AndroidManifest.xml
-          test -s shogi/micchan21528.webp
+          test -s fire-app/icon/micchan_stage38_app_icon.webp.b64
+          grep -F 'launcherIconSha256 = "21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db"' fire-app/app/build.gradle.kts
           if grep -F 'synchronized JSONObject selfTest()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java; then
             echo 'startup self-test still holds the global engine-manager monitor' >&2
             exit 1
@@ -158,6 +159,7 @@ jobs:
           test -s "$APK"
           test "$(stat -c%s "$APK")" -gt 60000000
           test -s fire-app/app/build/generated/launcherRes/drawable/micchan_launcher.webp
+          echo '21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db  fire-app/app/build/generated/launcherRes/drawable/micchan_launcher.webp' | sha256sum -c -
           unzip -l "$APK" > /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-v21528/index.html' /tmp/fire-apk-list.txt
           grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-apk-list.txt
@@ -198,12 +200,12 @@ jobs:
           cp "$APK" "$ASSET"
           git tag -f "$TAG" "$GITHUB_SHA"
           git push --force origin "refs/tags/$TAG"
-          NOTES='Fire実機検証用 Stage 3.8。ブラウザ版のAI動作は変更しません。Stage 3.7でも対局開始直後に「弱い内蔵AIには切り替えず停止しました。新規対局で再試行」が出る実機報告を受け、実際の即時停止原因を修正。Fire WebViewはcrossOriginIsolated=falseだが、AndroidネイティブYaneuraOu経路はSharedArrayBufferを使わないため、本来不要なブラウザWASM用COIゲートをFireネイティブ時だけ迂回します。非FireブラウザのCOI/SAB要件は変更しません。Stage 3.7のcursor handoff/long-poll、Stage 3.6 watchdog、YaneuraOu V9.70git＋水匠5、26キャラR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍、弱い内蔵AI退避禁止を維持。Androidランチャーアイコンは既存のアプリ内みっちゃん画像 shogi/micchan21528.webp をそのまま使用します。'
+          NOTES='Fire実機検証用 Stage 3.8。ブラウザ版のAI動作は変更しません。Stage 3.7でも対局開始直後に「弱い内蔵AIには切り替えず停止しました。新規対局で再試行」が出る実機報告を受け、実際の即時停止原因を修正。Fire WebViewはcrossOriginIsolated=falseだが、AndroidネイティブYaneuraOu経路はSharedArrayBufferを使わないため、本来不要なブラウザWASM用COIゲートをFireネイティブ時だけ迂回します。さらに同期XHRを廃止してasync fetch＋直列コマンドキューへ変更し、通信エラー時は具体的な原因を画面へ出します。非FireブラウザのCOI/SAB要件は変更しません。Stage 3.7のcursor handoff/long-poll、Stage 3.6 watchdog、YaneuraOu V9.70git＋水匠5、26キャラR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍、弱い内蔵AI退避禁止を維持。Androidランチャーアイコンはユーザー確認済みの「みっちゃん＋日本の将棋駒」のアプリ風デザインを採用し、ビルド時にSHA256を照合します。'
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
-            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃんアイコン修正版' --notes "$NOTES" --prerelease
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃん将棋アイコン修正版' --notes "$NOTES" --prerelease
           else
-            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃんアイコン修正版' --notes "$NOTES" --prerelease
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃん将棋アイコン修正版' --notes "$NOTES" --prerelease
           fi
           echo 'Stable sideload URL:'
           echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
