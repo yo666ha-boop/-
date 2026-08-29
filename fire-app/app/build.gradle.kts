@@ -13,12 +13,19 @@ val prepareOfflineAssets by tasks.registering(Copy::class) {
     from(File(repoRoot, "shogi-side-test")) { into("shogi-side-test") }
 }
 
-// Use the exact existing in-app Micchan character art for the Android launcher icon.
-// No regenerated/look-alike artwork is introduced here.
-val prepareLauncherIcon by tasks.registering(Copy::class) {
-    into(generatedLauncherRes.map { it.dir("drawable") })
-    from(File(repoRoot, "shogi/micchan21528.webp")) {
-        rename { "micchan_launcher.webp" }
+// Stage 3.8 launcher icon: use the user-approved app-style Micchan + shogi-piece artwork.
+// The approved WebP is stored as Base64 text so the repository keeps the exact tested image bytes.
+val launcherIconBase64 = File(repoRoot, "fire-app/icon/micchan_stage38_app_icon.webp.b64")
+val launcherIconOutput = generatedLauncherRes.map { it.file("drawable/micchan_launcher.webp") }
+val prepareLauncherIcon by tasks.registering {
+    inputs.file(launcherIconBase64)
+    outputs.file(launcherIconOutput)
+    doLast {
+        val encoded = launcherIconBase64.readText(Charsets.UTF_8).filterNot { it.isWhitespace() }
+        val bytes = java.util.Base64.getDecoder().decode(encoded)
+        val target = launcherIconOutput.get().asFile
+        target.parentFile.mkdirs()
+        target.writeBytes(bytes)
     }
 }
 
