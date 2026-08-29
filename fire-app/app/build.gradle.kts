@@ -1,3 +1,6 @@
+import java.security.MessageDigest
+import java.util.Base64
+
 plugins {
     id("com.android.application")
 }
@@ -23,10 +26,10 @@ val prepareLauncherIcon by tasks.registering {
     outputs.file(launcherIconOutput)
     doLast {
         val encoded = launcherIconBase64.readText(Charsets.UTF_8).filterNot { it.isWhitespace() }
-        val bytes = java.util.Base64.getDecoder().decode(encoded)
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val bytes = Base64.getDecoder().decode(encoded)
+        val digest = MessageDigest.getInstance("SHA-256")
             .digest(bytes)
-            .joinToString("") { "%02x".format(it) }
+            .joinToString("") { byte -> "%02x".format(byte) }
         check(digest == launcherIconSha256) {
             "Stage 3.8 launcher icon digest mismatch: $digest"
         }
