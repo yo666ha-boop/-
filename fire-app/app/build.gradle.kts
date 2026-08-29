@@ -17,12 +17,19 @@ val prepareOfflineAssets by tasks.registering(Copy::class) {
 // The approved WebP is stored as Base64 text so the repository keeps the exact tested image bytes.
 val launcherIconBase64 = File(repoRoot, "fire-app/icon/micchan_stage38_app_icon.webp.b64")
 val launcherIconOutput = generatedLauncherRes.map { it.file("drawable/micchan_launcher.webp") }
+val launcherIconSha256 = "21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db"
 val prepareLauncherIcon by tasks.registering {
     inputs.file(launcherIconBase64)
     outputs.file(launcherIconOutput)
     doLast {
         val encoded = launcherIconBase64.readText(Charsets.UTF_8).filterNot { it.isWhitespace() }
         val bytes = java.util.Base64.getDecoder().decode(encoded)
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        check(digest == launcherIconSha256) {
+            "Stage 3.8 launcher icon digest mismatch: $digest"
+        }
         val target = launcherIconOutput.get().asFile
         target.parentFile.mkdirs()
         target.writeBytes(bytes)
