@@ -5,10 +5,13 @@ Required fixes in this build:
 - Stage 3.7 warmup cursor handoff + Android long-poll retained
 - synchronous XMLHttpRequest removed from Fire native worker bridge
 - async fetch + serialized native command queue
+- concrete native bridge error is surfaced instead of only the generic new-game retry loop
 - Stage 3.6 native search watchdog retained
 - YaneuraOu V9.70git + Suisho5 retained
 - Threads >= 2, Hash >= 96 MB, nodes multiplier x2 retained
 - no weak built-in AI fallback on Fire
-- launcher icon uses existing in-app Micchan asset shogi/micchan21528.webp
+- launcher icon uses the user-approved app-style Micchan + Japanese shogi-piece artwork
+- approved icon source: fire-app/icon/micchan_stage38_app_icon.webp.b64
+- decoded launcher WebP SHA256: 21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db
 
-This file exists to force the stable Fire APK to be rebuilt from the exact combined Stage 3.8 branch state rather than leaving the stable release on an earlier Stage 3.8 commit.
+This file forces the stable Fire APK to be rebuilt from the exact combined Stage 3.8 branch state. Do not treat an earlier Stage 3.7/3.8 APK or the plain in-app portrait icon as canonical.
