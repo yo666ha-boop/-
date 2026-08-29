@@ -16,6 +16,22 @@ def replace_one(path, old, new, label):
     p.write_text(s.replace(old, new, 1), encoding='utf-8')
 
 
+# Product name is "みつき将棋" in both the Fire app and browser. For the Fire APK, rewrite the
+# bundled HTML itself so no old "AI将棋先生" product title flashes before JavaScript starts.
+index_html = 'shogi-v21528/index.html'
+replace_one(
+    index_html,
+    '<title>AI将棋先生 v2.15.28</title>',
+    '<title>みつき将棋</title>',
+    'Fire document title rename',
+)
+replace_one(
+    index_html,
+    '<div class="top"><div class="title">☗ AI将棋先生</div>',
+    '<div class="top"><div class="title">☗ みつき将棋</div>',
+    'Fire visible product title rename',
+)
+
 future = 'shogi-side-test/future21520.js'
 
 # Fire native Worker does not use the SharedArrayBuffer WASM path. This was the direct reason
