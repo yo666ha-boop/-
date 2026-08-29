@@ -28,6 +28,16 @@ if(typeof window==='undefined'){
   });
 }else{
   (()=>{
+    const applyTitle=()=>{
+      document.title='みつき将棋';
+      const title=document.querySelector('.top .title');
+      if(title)title.textContent='☗ みつき将棋';
+    };
+    applyTitle();
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyTitle,{once:true});
+    else applyTitle();
+  })();
+  (()=>{
     if(window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B)return;
     window.__AI_SHOGI_SAVE_FETCH_PATCH_21536B=true;
     const nativeFetch=window.fetch.bind(window),scriptURL=document.currentScript?.src||location.href;
