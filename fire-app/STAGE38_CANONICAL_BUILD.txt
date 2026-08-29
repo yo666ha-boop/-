@@ -13,6 +13,7 @@ Required fixes in this build:
 - launcher icon uses the user-approved app-style Micchan + Japanese shogi-piece artwork
 - approved icon source: fire-app/icon/micchan_stage38_app_icon.webp.b64
 - decoded launcher WebP SHA256: 21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db
+- visible app/browser product title is unified to 「みつき将棋」; the old top-level 「AI将棋先生」 title is no longer used
 
 Validated combined implementation snapshot before stable-release checkpoint:
 - implementation head: 9bd2c2e7735c460fe5e76e9f1684869a46cc1246
@@ -23,6 +24,6 @@ Validated combined implementation snapshot before stable-release checkpoint:
 - real engine source: YaneuraOu 9.70git commit 33ccf1f907eb7184889fa23051243f81ab0bf973
 - physical validation still required before merge
 
-This checkpoint intentionally touches fire-app/** so the branch push produces a fresh canonical Stage 3.8 APK and updates the stable fire-offline-test release. The checkpoint does not alter gameplay, search strength, character profiles, engine options, or browser behavior.
+This checkpoint intentionally touches fire-app/** so the branch push produces a fresh canonical Stage 3.8 APK and updates the stable fire-offline-test release. The checkpoint does not alter gameplay, search strength, character profiles, engine options, or browser behavior apart from the visible product-title rename.
 
 Do not treat an earlier Stage 3.7/3.8 APK or the plain in-app portrait icon as canonical.
