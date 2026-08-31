@@ -1,0 +1,33 @@
+name: Verify Fire OTA save persistence 20260831
+
+on:
+  push:
+    branches: [fix/fire-ota-autosave-20260831]
+  pull_request:
+    paths:
+      - 'shogi-v21528/player-name21534b.js'
+      - '.github/scripts/verify-fire-ota-save-persist-20260831.mjs'
+      - '.github/workflows/verify-fire-ota-save-persist-20260831.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire-ota-save:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install matching Playwright package
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check OTA Web layer
+        run: |
+          node --check shogi-v21528/player-name21534b.js
+          node --check .github/scripts/verify-fire-ota-save-persist-20260831.mjs
+      - name: Verify random-port Fire save restore and live cloud CORS
+        run: node .github/scripts/verify-fire-ota-save-persist-20260831.mjs
