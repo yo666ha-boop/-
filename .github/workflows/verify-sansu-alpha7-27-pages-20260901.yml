@@ -1,0 +1,38 @@
+name: verify-sansu-alpha7-27-pages-20260901
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-sansu-alpha7-27-pages-20260901.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify GitHub Pages alpha7.27
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://yo666ha-boop.github.io/-/sansu-app-alpha7-27-20260901-final/'
+          PAYLOAD='https://yo666ha-boop.github.io/-/sansu-app-alpha7-27-20260901-v2/'
+          ok=0
+          for i in $(seq 1 18); do
+            echo "attempt=$i url=$BASE"
+            code=$(curl -L -sS -o /tmp/index.html -w '%{http_code}' "${BASE}?verify=${GITHUB_SHA}" || true)
+            if [ "$code" = '200' ] && grep -q 'alpha7.27' /tmp/index.html; then ok=1; break; fi
+            sleep 10
+          done
+          test "$ok" = '1'
+          curl -L -fsS "${BASE}manifest.json?verify=${GITHUB_SHA}" -o /tmp/manifest.json
+          grep -q '90560c323b910d91e2ef8e15b01ac87972b550cca5a8c14fd2da8e9d4d2df80c' /tmp/manifest.json
+          for n in $(seq -w 1 18); do
+            curl -L -fsS "${PAYLOAD}p${n}.txt?verify=${GITHUB_SHA}" -o "/tmp/p${n}.txt"
+          done
+          test "$(wc -c </tmp/p01.txt)" = '9000'
+          test "$(wc -c </tmp/p16.txt)" = '9000'
+          test "$(wc -c </tmp/p17.txt)" = '9000'
+          test "$(wc -c </tmp/p18.txt)" = '2652'
+          echo 'PUBLIC_URL_OK'
+          echo "URL=${BASE}"
+          echo 'VERSION=alpha7.27'
+          echo 'SHA256=90560c323b910d91e2ef8e15b01ac87972b550cca5a8c14fd2da8e9d4d2df80c'
