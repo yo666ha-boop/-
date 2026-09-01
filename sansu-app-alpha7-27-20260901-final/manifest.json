@@ -1,0 +1,11 @@
+{
+  "app": "算数アプリ_v2_F9強化_alpha7_27_20260901.html",
+  "version": "alpha7.27",
+  "sha256": "90560c323b910d91e2ef8e15b01ac87972b550cca5a8c14fd2da8e9d4d2df80c",
+  "bytes": 546921,
+  "payload_parts": 18,
+  "part_sizes": [9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,9000,2652],
+  "verified_local_reassembly": true,
+  "github_payload_dir": "sansu-app-alpha7-27-20260901-v2",
+  "created": "2026-09-01"
+}
