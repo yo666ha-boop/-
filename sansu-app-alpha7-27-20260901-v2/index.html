@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="sansu-app-version" content="alpha7.27">
+<meta name="sansu-app-sha256" content="90560c323b910d91e2ef8e15b01ac87972b550cca5a8c14fd2da8e9d4d2df80c">
+<title>算数プリントメーカー alpha7.27</title>
+<div id="boot" data-version="alpha7.27" style="font-family:sans-serif;padding:24px">読み込み中… alpha7.27</div>
+<script>
+(async()=>{
+ const files=["../sansu-app-alpha7-27-20260901/p01.txt","../sansu-app-alpha7-27-20260901/p02.txt","../sansu-app-alpha7-27-20260901/p03.txt","../sansu-app-alpha7-27-20260901/p04.txt","../sansu-app-alpha7-27-20260901/p05.txt","p06.txt","p07.txt","p08.txt","p09.txt","p10.txt","p11.txt","p12.txt","p13.txt","p14.txt","p15.txt","p16.txt","p17.txt","p18.txt"];
+ const parts=await Promise.all(files.map(x=>fetch(x,{cache:"no-store"}).then(r=>{if(!r.ok)throw Error(x+":"+r.status);return r.text()})));
+ const raw=Uint8Array.from(atob(parts.join("")),c=>c.charCodeAt(0));
+ const ds=new DecompressionStream("gzip");
+ const html=await new Response(new Blob([raw]).stream().pipeThrough(ds)).text();
+ document.open(); document.write(html); document.close();
+})().catch(e=>{document.getElementById("boot").innerHTML="<h2>読み込みエラー</h2><p>"+String(e)+"</p>"})
+</script>
