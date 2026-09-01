@@ -211,3 +211,49 @@
     audit:()=>({ok:true,fire:true,cookiePersisted:KEY_RE.test(cookieRead(COOKIE_KEY)),deviceKeyPresent:KEY_RE.test(deviceKey),slotId:SLOT_ID,online:!!navigator.onLine,syncing,dirty,lastError,lastRemoteRevision,lastSyncedSavedAt,localSavedAt:Number(readJson(SAVE_KEY,null)?.savedAt)||0,localPly:Number(readJson(SAVE_KEY,null)?.st?.log?.length)||0})
   };
 })();
+
+/* Fire-only startup auto-resume v1.
+ * Fire tablets are treated as a personal appliance: if an unfinished saved game exists, reopen it
+ * automatically after the OTA persistence layer has restored the latest device backup. The manual
+ * resume button remains available as a fallback. Finished games and empty saves are never auto-opened.
+ */
+(function installFireAutoResume21539B(){
+  if(window.__AI_SHOGI_FIRE_AUTO_RESUME_21539B)return;
+  const isFire=!!window.MitsukiFireNative||/MitsukiShogiFire\//i.test(navigator.userAgent||'');
+  if(!isFire)return;
+  window.__AI_SHOGI_FIRE_AUTO_RESUME_21539B=true;
+  let state='waiting',lastError='',attempts=0,resumedPly=0;
+  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+  async function run(){
+    state='waiting-persistence';
+    try{await window.AI_SHOGI_FIRE_PERSIST?.ready}catch(e){}
+    state='waiting-save-api';
+    for(attempts=1;attempts<=120;attempts++){
+      const api=window.AI_SHOGI_SAVE;
+      if(api&&typeof api.data==='function'&&typeof api.restore==='function'){
+        try{
+          const saved=api.data();
+          const savedPly=Number(saved?.st?.log?.length)||0;
+          if(!saved){state='no-save';return{ok:true,resumed:false,reason:state}}
+          if(saved.gameCounted){state='finished-save';return{ok:true,resumed:false,reason:state,savedPly}}
+          if(savedPly<1){state='empty-save';return{ok:true,resumed:false,reason:state,savedPly}}
+          const currentPly=Number(api.audit?.()?.currentPly)||0;
+          if(currentPly>0){state='already-active';return{ok:true,resumed:false,reason:state,currentPly,savedPly}}
+          const ok=api.restore({force:true});
+          if(ok){state='resumed';resumedPly=savedPly;return{ok:true,resumed:true,savedPly}}
+          state='restore-failed';return{ok:false,resumed:false,reason:state,savedPly}
+        }catch(e){lastError=String(e?.message||e);state='error';return{ok:false,resumed:false,reason:state,error:lastError}}
+      }
+      await sleep(50);
+    }
+    state='save-api-timeout';
+    return{ok:false,resumed:false,reason:state};
+  }
+
+  const ready=run();
+  window.AI_SHOGI_FIRE_AUTO_RESUME={
+    version:'21539b',ready,run,
+    audit:()=>({ok:true,fire:true,state,lastError,attempts,resumedPly})
+  };
+})();

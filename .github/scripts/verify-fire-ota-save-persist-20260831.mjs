@@ -13,13 +13,16 @@ const HIDDEN_SLOT='fire_device_autosave_v1';
 const source=await fs.readFile(SOURCE_PATH,'utf8');
 for(const marker of [
   'AI_SHOGI_FIRE_PERSIST',
+  'AI_SHOGI_FIRE_AUTO_RESUME',
   'mitsukiFireAutoSaveKeyV1',
   'fire_device_autosave_v1',
   'fireLocalStorageV1',
   'MitsukiShogiFire\\//',
   "out.r.status===409",
   "out.r.status===413",
-]) assert.ok(source.includes(marker),'missing Fire persistence marker: '+marker);
+  "saved.gameCounted",
+  "api.restore({force:true})",
+]) assert.ok(source.includes(marker),'missing Fire persistence/auto-resume marker: '+marker);
 
 const seededSave={
   version:1,
@@ -33,7 +36,15 @@ const seededStats={rating:1666,w:12,l:4,d:1,chars:Array.from({length:26},()=>({w
 
 function html(seed){
   const pre=seed?`<script>window.MitsukiFireNative={};localStorage.setItem('aiShogiGameSaveV1',${JSON.stringify(JSON.stringify(seededSave))});localStorage.setItem('aiShogiSenseiStatsV27',${JSON.stringify(JSON.stringify(seededStats))});</script>`:`<script>window.MitsukiFireNative={};</script>`;
-  return `<!doctype html><meta charset="utf-8"><div id="statsMain">あなた R1500</div><div id="statsSub"></div><div id="status"></div><div id="fstatus"></div><div id="sHand"><b>あなた</b></div><div id="fsHand"><b>あなた</b></div>${pre}<script src="/player.js"></script>`;
+  const saveApi=`<script>
+  window.__fireTestCurrentPly=0;window.__fireTestRestoreCalls=0;
+  window.AI_SHOGI_SAVE={
+    data:()=>{try{return JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null')}catch(e){return null}},
+    restore:()=>{const x=window.AI_SHOGI_SAVE.data();if(!x)return false;window.__fireTestRestoreCalls++;window.__fireTestCurrentPly=Number(x?.st?.log?.length)||0;document.getElementById('status').textContent='AUTO_RESUMED_'+window.__fireTestCurrentPly;return true},
+    audit:()=>({currentPly:window.__fireTestCurrentPly})
+  };
+  </script>`;
+  return `<!doctype html><meta charset="utf-8"><div id="statsMain">あなた R1500</div><div id="statsSub"></div><div id="status"></div><div id="fstatus"></div><div id="sHand"><b>あなた</b></div><div id="fsHand"><b>あなた</b></div>${pre}${saveApi}<script src="/player.js"></script>`;
 }
 function server(port){
   const s=http.createServer((req,res)=>{
@@ -77,25 +88,47 @@ await context.route(EDGE+'**',async route=>{
 try{
   const page=await context.newPage();
   await page.goto(`http://127.0.0.1:${PORT_A}/?seed=1`,{waitUntil:'load'});
-  await page.waitForFunction(()=>!!window.AI_SHOGI_FIRE_PERSIST,{timeout:10000});
-  const first=await page.evaluate(async()=>({ready:await window.AI_SHOGI_FIRE_PERSIST.ready,push:await window.AI_SHOGI_FIRE_PERSIST.push(),audit:window.AI_SHOGI_FIRE_PERSIST.audit(),cookie:document.cookie}));
+  await page.waitForFunction(()=>!!window.AI_SHOGI_FIRE_PERSIST&&!!window.AI_SHOGI_FIRE_AUTO_RESUME,{timeout:10000});
+  const first=await page.evaluate(async()=>({
+    persistReady:await window.AI_SHOGI_FIRE_PERSIST.ready,
+    autoReady:await window.AI_SHOGI_FIRE_AUTO_RESUME.ready,
+    push:await window.AI_SHOGI_FIRE_PERSIST.push(),
+    audit:window.AI_SHOGI_FIRE_PERSIST.audit(),
+    autoAudit:window.AI_SHOGI_FIRE_AUTO_RESUME.audit(),
+    currentPly:window.__fireTestCurrentPly,
+    restoreCalls:window.__fireTestRestoreCalls,
+    cookie:document.cookie
+  }));
   assert.equal(first.push.ok,true,'port A push failed: '+JSON.stringify(first));
+  assert.equal(first.autoReady.resumed,true,'port A did not auto-resume seeded unfinished game');
+  assert.equal(first.currentPly,1);
+  assert.equal(first.restoreCalls,1);
   assert.ok(first.cookie.includes(COOKIE+'='),'device cookie was not created');
   assert.equal(remoteRecord?.payload?.savedAt,seededSave.savedAt);
   assert.equal(remoteRecord?.payload?.playerStats?.rating,1666);
   assert.equal(remoteRecord?.payload?.fireLocalStorageV1?.aiShogiSenseiStatsV27,JSON.stringify(seededStats));
 
   await page.goto(`http://127.0.0.1:${PORT_B}/`,{waitUntil:'load'});
-  await page.waitForFunction(()=>!!window.AI_SHOGI_FIRE_PERSIST,{timeout:10000});
-  const second=await page.evaluate(async()=>{const ready=await window.AI_SHOGI_FIRE_PERSIST.ready;await new Promise(r=>setTimeout(r,100));return{ready,audit:window.AI_SHOGI_FIRE_PERSIST.audit(),cookie:document.cookie,save:JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null'),stats:JSON.parse(localStorage.getItem('aiShogiSenseiStatsV27')||'null')}});
-  assert.equal(second.ready.ok,true,'port B hydrate failed: '+JSON.stringify(second));
-  assert.equal(second.ready.restored,true,'port B did not restore remote save');
+  await page.waitForFunction(()=>!!window.AI_SHOGI_FIRE_PERSIST&&!!window.AI_SHOGI_FIRE_AUTO_RESUME,{timeout:10000});
+  const second=await page.evaluate(async()=>{
+    const persistReady=await window.AI_SHOGI_FIRE_PERSIST.ready;
+    const autoReady=await window.AI_SHOGI_FIRE_AUTO_RESUME.ready;
+    await new Promise(r=>setTimeout(r,100));
+    return{persistReady,autoReady,audit:window.AI_SHOGI_FIRE_PERSIST.audit(),autoAudit:window.AI_SHOGI_FIRE_AUTO_RESUME.audit(),cookie:document.cookie,save:JSON.parse(localStorage.getItem('aiShogiGameSaveV1')||'null'),stats:JSON.parse(localStorage.getItem('aiShogiSenseiStatsV27')||'null'),currentPly:window.__fireTestCurrentPly,restoreCalls:window.__fireTestRestoreCalls,status:document.getElementById('status').textContent};
+  });
+  assert.equal(second.persistReady.ok,true,'port B hydrate failed: '+JSON.stringify(second));
+  assert.equal(second.persistReady.restored,true,'port B did not restore remote save');
+  assert.equal(second.autoReady.resumed,true,'port B did not auto-resume restored unfinished game');
+  assert.equal(second.autoAudit.state,'resumed');
+  assert.equal(second.currentPly,1,'auto-resume did not put board back at saved ply');
+  assert.equal(second.restoreCalls,1,'auto-resume should restore exactly once');
+  assert.equal(second.status,'AUTO_RESUMED_1');
   assert.ok(second.cookie.includes(COOKIE+'='),'device cookie did not cross ports');
   assert.equal(second.save?.savedAt,seededSave.savedAt);
   assert.equal(second.save?.st?.log?.length,1);
   assert.equal(second.stats?.rating,1666);
   assert.equal(second.audit.localPly,1);
-  console.log('PASS_FIRE_OTA_BROWSER_PORT_CHANGE '+JSON.stringify({portA:PORT_A,portB:PORT_B,cookieAcrossPorts:true,restoredSavedAt:second.save.savedAt,restoredRating:second.stats.rating}));
+  console.log('PASS_FIRE_OTA_BROWSER_PORT_CHANGE_AUTO_RESUME '+JSON.stringify({portA:PORT_A,portB:PORT_B,cookieAcrossPorts:true,restoredSavedAt:second.save.savedAt,restoredRating:second.stats.rating,currentPly:second.currentPly,autoResume:second.autoAudit.state}));
 } finally {
   await browser.close();
   for(const s of servers)await new Promise(resolve=>s.close(resolve));
