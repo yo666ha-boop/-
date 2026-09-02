@@ -89,3 +89,16 @@
     clearMessage:()=>{const p=profile(),store=read(),key=p.key||'__local__';if(store.profiles?.[key]){store.profiles[key].last=null;write(store)}persistLast(key,null);render(null);try{window.AI_SHOGI_PROFILE_STATS?.saveNow?.()}catch(e){}}
   };
 })();
+
+/* v2.15.40: tournament mode loader. This support layer is already injected in browser and Fire. */
+(function loadTournament21540(){
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21540A)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21540A=true;
+  try{
+    const scriptURL=document.currentScript?.src||location.href;
+    const s=document.createElement('script');
+    s.src=new URL('./tournament21540.js?v=21540a',scriptURL).href;
+    s.async=false;
+    document.head.appendChild(s);
+  }catch(e){console.error('tournament21540 loader failed',e)}
+})();
