@@ -34,7 +34,7 @@ const browser=await chromium.launch({headless:true});
 try{
   const page=await browser.newPage();
   await page.goto('http://127.0.0.1:43140/',{waitUntil:'load'});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.audit?.().charactersReady===true);
+  await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT?.audit?.();return a?.charactersReady===true&&a?.button===true&&a?.panel===true});
   let audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.audit());
   assert.equal(audit.cups,8);
   assert.equal(audit.recommended,'shinji');
