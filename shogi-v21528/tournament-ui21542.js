@@ -135,3 +135,16 @@
     }
   };
 })();
+
+/* v2.15.43a: bracket result labels + connector lines. */
+(function loadTournamentBracketUI21543(){
+  if(window.__AI_SHOGI_TOURNAMENT_BRACKET_LOADER_21543A)return;
+  window.__AI_SHOGI_TOURNAMENT_BRACKET_LOADER_21543A=true;
+  try{
+    const scriptURL=document.currentScript?.src||location.href;
+    const s=document.createElement('script');
+    s.src=new URL('./tournament-ui21543.js?v=21543a',scriptURL).href;
+    s.async=false;
+    document.head.appendChild(s);
+  }catch(e){console.error('tournament21543 bracket loader failed',e)}
+})();
