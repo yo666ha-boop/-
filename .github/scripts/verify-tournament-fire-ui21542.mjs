@@ -5,7 +5,10 @@ import { chromium } from 'playwright';
 
 const core=await fs.readFile('shogi-v21528/tournament21541.js','utf8');
 const ui=await fs.readFile('shogi-v21528/tournament-ui21542.js','utf8');
+const bracketUI=await fs.readFile('shogi-v21528/tournament-ui21543.js','utf8');
+const skin=await fs.readFile('shogi-v21528/tournament-skin21544.js','utf8');
 for(const marker of ['sourceFor(name)','tourFireFit','rosterPortraits','Silk'])assert.ok(ui.includes(marker),'missing UI marker '+marker);
+for(const marker of ['tourSkin21544','tourFireFit.tourSkin21544',"version:'21544c'"])assert.ok(skin.includes(marker),'missing skin marker '+marker);
 
 const names=['みつき','みっちゃん','あき王','おにまま','まま','ケンシロウ','ジャギ','しんじ','直江兼続','あやなみ','バット','伊達政宗','あすか','ユリア','玉ちゃん','まり','ぺんぺん','げんどー','前田慶次','シン','みさとさん','サウザー','リン','ラオウ','カヲル','未来からやってきたみつき'];
 const ratings=[3000,2850,2700,2600,2500,2100,1450,1550,1700,1800,1600,1750,1900,1680,1380,1950,1250,2050,1820,2000,1880,2180,1500,2250,2400,3400];
@@ -16,19 +19,20 @@ const cards=names.map((n,i)=>`<button class="ch"><img src="${svg(i)}" alt="${leg
 const html=`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0}.side{width:360px}.btn{padding:6px}</style><body>
 <div class="side"><div class="controls"><button class="btn">new</button></div></div><div id="status"></div><div id="resultBanner"></div><div id="chars">${cards}</div><div id="board"></div>
 <script>window.__mock={rating:1500,state:{log:[]},selected:[],characters:${JSON.stringify(characters)}};window.AIShogiIOS={characters:()=>window.__mock.characters,stats:()=>({rating:window.__mock.rating,w:0,l:0,d:0}),state:()=>window.__mock.state,select:i=>{window.__mock.selected.push(i);return window.__mock.characters[i]}};</script>
-<script src="/core.js"></script><script src="/ui.js"></script></body>`;
-const server=http.createServer((req,res)=>{if(req.url==='/core.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(core);return}if(req.url==='/ui.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(ui);return}res.writeHead(200,{'content-type':'text/html'});res.end(html)});
+<script src="/core.js"></script><script src="/ui.js"></script><script src="/skin.js"></script></body>`;
+const server=http.createServer((req,res)=>{if(req.url==='/core.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(core);return}if(req.url==='/ui.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(ui);return}if(req.url==='/skin.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(skin);return}if(req.url?.startsWith('/tournament-ui21543.js')){res.writeHead(200,{'content-type':'application/javascript'});res.end(bracketUI);return}res.writeHead(200,{'content-type':'text/html'});res.end(html)});
 await new Promise(r=>server.listen(43142,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true});
 try{
   const context=await browser.newContext({viewport:{width:1280,height:800},userAgent:'Mozilla/5.0 (Linux; U; en-US) AppleWebKit/537.36 Silk/126.5 like Chrome Safari/537.36'});
   const page=await context.newPage();
   await page.goto('http://127.0.0.1:43142/',{waitUntil:'load'});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI);
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI&&window.AI_SHOGI_TOURNAMENT_SKIN);
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.start('mitsuki'));
-  await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_UI.repair()});
-  await page.waitForTimeout(150);
+  await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_UI.repair();window.AI_SHOGI_TOURNAMENT_SKIN.refresh()});
+  await page.waitForTimeout(180);
   const audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_UI.audit());
+  const skinAudit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_SKIN.audit());
   assert.equal(audit.fire,true);
   assert.equal(audit.fit,true);
   assert.equal(audit.activeFit,true);
@@ -37,10 +41,18 @@ try{
   assert.deepEqual(audit.missingRoster,[]);
   assert.equal(audit.fallback,0,'no visible tournament entrant may fall back to a text avatar');
   assert.ok(audit.scrollWidth<=audit.clientWidth+3,`Fire bracket overflows horizontally: ${audit.scrollWidth}/${audit.clientWidth}`);
+  assert.equal(skinAudit.ok,true,'integrated skin must be active on Fire');
+  assert.equal(skinAudit.version,'21544c');
+  assert.equal(skinAudit.fire,true);
+  assert.equal(skinAudit.fireOverflow,0,'skin must preserve zero horizontal Fire overflow');
+  assert.equal(skinAudit.cups,8);
+  assert.equal(skinAudit.recommended,1);
+  assert.equal(skinAudit.connectors,30);
+  assert.ok(skinAudit.alignmentError<=1.25,`skin must preserve aligned bracket: ${skinAudit.alignmentError}`);
   const visibleRounds=await page.evaluate(()=>[...document.querySelectorAll('.tourBracketRound')].filter(x=>{const r=x.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1}).length);
   assert.equal(visibleRounds,5);
   const firstRoundPortraits=await page.locator('.tourBracketRound[data-round="0"] .tourAvatar img').count();
   assert.equal(firstRoundPortraits,15,'all 15 AI entrants in the first round must show a portrait');
-  console.log('PASS_TOURNAMENT21542_FIRE_UI '+JSON.stringify({rosterPortraits:audit.rosterPortraits,firstRoundPortraits,fallback:audit.fallback,fit:audit.fit,scroll:[audit.scrollWidth,audit.clientWidth],visibleRounds}));
+  console.log('PASS_TOURNAMENT21544C_FIRE_SKIN '+JSON.stringify({rosterPortraits:audit.rosterPortraits,firstRoundPortraits,fallback:audit.fallback,fit:audit.fit,scroll:[audit.scrollWidth,audit.clientWidth],visibleRounds,skin:skinAudit.version,connectors:skinAudit.connectors,alignmentError:skinAudit.alignmentError}));
   await context.close();
 } finally {await browser.close();await new Promise(r=>server.close(r))}
