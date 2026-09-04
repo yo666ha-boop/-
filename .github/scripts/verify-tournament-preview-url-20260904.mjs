@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 
 const sha=String(process.env.PREVIEW_SHA||'').trim();
 assert.match(sha,/^[0-9a-f]{40}$/,'PREVIEW_SHA must be a full commit SHA');
-const path='preview/tournament-16/index21542b.html';
+const path='preview/tournament-16/index21542c.html';
 const raw=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/${path}`;
 const blob=`https://github.com/yo666ha-boop/-/blob/${sha}/${path}`;
 const candidates=[`https://htmlpreview.github.io/?${raw}`,`https://htmlpreview.github.io/?${blob}`];
@@ -29,5 +29,5 @@ try{
   const fire=await browser.newPage({viewport:{width:1280,height:800}});
   await fire.goto(url,{waitUntil:'domcontentloaded',timeout:30000});await fire.waitForFunction(()=>window.TOURNAMENT_PREVIEW_AUDIT?.().portraitCatalog===26,{timeout:15000});await fire.locator('[data-cup="shinji"] button').click();await fire.waitForSelector('#stage.on .bracket',{state:'visible'});const fireAudit=await fire.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());assert.ok(fireAudit.bracketOverflow<=3,`Fire-fit preview overflow ${fireAudit.bracketOverflow}px`);assert.equal(await fire.locator('.round').count(),5);assert.equal(await fire.locator('.round:first-child .slot img').count(),15);await fire.close();
 
-  console.log('PASS_TOURNAMENT_STANDALONE_PREVIEW_21542B '+JSON.stringify({url,status,cups:8,portraitCatalog:26,firstRoundPortraits:15,initialRunning:7,initialResolved:0,fireOverflow:fireAudit.bracketOverflow,champion:'player'}));
+  console.log('PASS_TOURNAMENT_STANDALONE_PREVIEW_21542C '+JSON.stringify({url,status,cups:8,portraitCatalog:26,firstRoundPortraits:15,initialRunning:7,initialResolved:0,fireOverflow:fireAudit.bracketOverflow,champion:'player'}));
 } finally {await browser.close()}
