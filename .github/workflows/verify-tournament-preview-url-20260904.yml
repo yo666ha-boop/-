@@ -12,6 +12,7 @@ on:
       - 'preview/tournament-16/index21542b.html'
       - 'preview/tournament-16/index21542c.html'
       - 'preview/tournament-16/index21543.html'
+      - 'preview/tournament-16/bracket-preview21543.js'
       - '.github/scripts/verify-tournament-preview-url-20260904.mjs'
       - '.github/workflows/verify-tournament-preview-url-20260904.yml'
   workflow_dispatch:
@@ -29,6 +30,7 @@ jobs:
       - name: Syntax check
         run: |
           node --check shogi-v21528/tournament-ui21543.js
+          node --check preview/tournament-16/bracket-preview21543.js
           node --check .github/scripts/verify-tournament-preview-url-20260904.mjs
       - name: Verify immutable preview URL
         env:
