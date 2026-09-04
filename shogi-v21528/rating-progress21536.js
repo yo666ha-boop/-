@@ -90,10 +90,10 @@
   };
 })();
 
-/* v2.15.42a: live 16-player tournament + portrait repair + Fire fit loader. */
-(function loadTournament21542(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21542A)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21542A=true;
+/* v2.15.44c: live 16-player tournament + portrait repair + Fire fit + integrated skin loader. */
+(function loadTournament21544(){
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21544C)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21544C=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
@@ -103,8 +103,14 @@
       const ui=document.createElement('script');
       ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
       ui.async=false;
+      ui.addEventListener('load',()=>{
+        const skin=document.createElement('script');
+        skin.src=new URL('./tournament-skin21544.js?v=21544c',scriptURL).href;
+        skin.async=false;
+        document.head.appendChild(skin);
+      },{once:true});
       document.head.appendChild(ui);
     },{once:true});
     document.head.appendChild(core);
-  }catch(e){console.error('tournament21542 loader failed',e)}
+  }catch(e){console.error('tournament21544 loader failed',e)}
 })();
