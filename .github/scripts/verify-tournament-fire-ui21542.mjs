@@ -30,7 +30,7 @@ try{
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI&&window.AI_SHOGI_TOURNAMENT_SKIN);
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.start('mitsuki'));
   await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_UI.repair();window.AI_SHOGI_TOURNAMENT_SKIN.refresh()});
-  await page.waitForTimeout(180);
+  await page.waitForFunction(()=>{window.AI_SHOGI_TOURNAMENT_UI?.repair?.();return document.querySelectorAll('.tourBracketRound[data-round="0"] .tourAvatar img').length===15},{timeout:3000});
   const audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_UI.audit());
   const skinAudit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_SKIN.audit());
   assert.equal(audit.fire,true);
