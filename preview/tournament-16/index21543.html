@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8"><title>みつき将棋｜大会モード16人・参加者ルール修正版</title><body style="margin:0;background:#06100e;color:#f2e3ad;font-family:sans-serif"><div id="boot" style="padding:16px">大会モードを準備中…</div><script>
+<!doctype html><meta charset="utf-8"><title>みつき将棋｜大会モード16人・進行修正版・参加者ルール</title><body style="margin:0;background:#06100e;color:#f2e3ad;font-family:sans-serif"><div id="boot" style="padding:16px">大会モードを準備中…</div><script>
 (async()=>{
   const decoded=decodeURIComponent(location.search.slice(1));
   const m=decoded.match(/\/([0-9a-f]{40})\/preview\/tournament-16\/index21543\.html(?:$|[?#])/i);
@@ -20,7 +20,7 @@
     if(!html.includes(bootMarker))throw Error('21542b boot signature mismatch');
     html=html.replace(oldHydrate,newHydrate)
       .replace('</head>','<style id="visualPolish21544Style">'+skin+'</style></head>')
-      .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・参加者ルール修正版')
+      .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・進行修正版・参加者ルール')
       .replace('16人・画像完全＋Fireフィット確認版','16人・本番デザイン＋適正参加者ルール')
       .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。AI同士の勝敗は表示Rを使った仮シミュレーションです。参加者は各杯のボスRを基本上限とし、16人を成立させるため足りない低位杯だけ必要最小限まで上限を広げます。');
     field=field.replace(new RegExp('<\\/script','gi'),'<\\/script');
