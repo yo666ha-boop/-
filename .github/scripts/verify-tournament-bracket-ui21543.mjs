@@ -8,6 +8,8 @@ const ui=await fs.readFile('shogi-v21528/tournament-ui21542.js','utf8');
 const bracketUI=await fs.readFile('shogi-v21528/tournament-ui21543.js','utf8');
 assert.ok(bracketUI.includes('pairingErrors'));
 assert.ok(bracketUI.includes('tourBracketLines'));
+assert.ok(bracketUI.includes('alignmentErrors'));
+assert.ok(bracketUI.includes("version:'21543b'"));
 
 const names=['みつき','みっちゃん','あき王','おにまま','まま','ケンシロウ','ジャギ','しんじ','直江兼続','あやなみ','バット','伊達政宗','あすか','ユリア','玉ちゃん','まり','ぺんぺん','げんどー','前田慶次','シン','みさとさん','サウザー','リン','ラオウ','カヲル','未来からやってきたみつき'];
 const ratings=[3000,2850,2700,2600,2500,2100,1450,1550,1700,1800,1600,1750,1900,1680,1380,1950,1250,2050,1820,2000,1880,2180,1500,2250,2400,3400];
@@ -26,20 +28,43 @@ try{
   await page.goto('http://127.0.0.1:43143/',{waitUntil:'load'});
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI);
   await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('mitsuki');document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render()});
-  await page.waitForTimeout(300); // allow the resultBanner observer to install before the first simulated result
+  await page.waitForTimeout(300); // allow observers/layout patch to install before the first simulated result
 
   async function resultWin(){
     await page.evaluate(()=>{const b=document.getElementById('resultBanner');b.className='';void b.offsetWidth;b.className='on result-win'});
     await page.waitForTimeout(120);
+  }
+  async function verifyGeometry(label='geometry'){
+    const measured=await page.evaluate(()=>{
+      const rs=[...document.querySelectorAll('.tourBracketRound')];let checks=0,max=0,errors=0;
+      for(let r=0;r<Math.min(4,rs.length-1);r++){
+        const src=[...rs[r].querySelectorAll('.tourBracketSlot')],dst=[...rs[r+1].querySelectorAll('.tourBracketSlot')];
+        for(let i=0;i<dst.length;i++){
+          const a=src[i*2],b=src[i*2+1],d=dst[i];if(!a||!b||!d)continue;
+          const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect(),dr=d.getBoundingClientRect();
+          const expected=((ar.top+ar.bottom)/2+(br.top+br.bottom)/2)/2,actual=(dr.top+dr.bottom)/2,err=Math.abs(expected-actual);
+          checks++;max=Math.max(max,err);if(err>1.25)errors++;
+        }
+      }
+      return{checks,errors,max:Number(max.toFixed(3))};
+    });
+    assert.equal(measured.checks,15,`${label}: all 15 parent pair centers checked`);
+    assert.equal(measured.errors,0,`${label}: no winner slot may drift from source-pair center`);
+    assert.ok(measured.max<=1.25,`${label}: maximum center drift ${measured.max}px`);
+    return measured;
   }
   async function assertRound(round,wins,losses){
     const q=`.tourBracketRound[data-round="${round}"]`;
     const got=await page.evaluate(q=>{const root=document.querySelector(q);return{win:[...root.querySelectorAll('.tourMatchState')].filter(x=>x.textContent==='勝利').length,loss:[...root.querySelectorAll('.tourMatchState')].filter(x=>x.textContent==='敗退').length}},q);
     assert.deepEqual(got,{win:wins,loss:losses},`round ${round} states`);
     const audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_BRACKET_UI.audit());
+    assert.equal(audit.version,'21543b');
     assert.equal(audit.pairingErrors,0,'every advanced name must come from its source pair');
     assert.equal(audit.invalidWins,0,'no stale blanket win labels');
+    assert.equal(audit.alignmentErrors,0,'winner slots stay centered on their source pairs');
+    assert.ok(audit.maxAlignmentError<=1.25,`audit center drift ${audit.maxAlignmentError}px`);
     assert.ok(audit.connectors>=30,'all bracket source-to-next paths are drawn');
+    await verifyGeometry(`round ${round}`);
   }
   async function verifyMapping(round){
     const ok=await page.evaluate(round=>{
@@ -50,6 +75,7 @@ try{
     assert.equal(ok,true,`round ${round} pairwise mapping`);
   }
 
+  const initialGeometry=await verifyGeometry('opening bracket');
   await resultWin();await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT.state().active?.pending==='next');await assertRound(0,8,8);await verifyMapping(0);
   for(let r=1;r<=3;r++){
     await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.next());await page.waitForTimeout(220);await resultWin();
@@ -59,6 +85,7 @@ try{
   const state=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.state().active);
   assert.equal(state.status,'champion');assert.equal(state.bracket.rounds[4][0],'__PLAYER__');
   const audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_BRACKET_UI.audit());
-  console.log('PASS_TOURNAMENT21543_BRACKET_UI '+JSON.stringify({connectors:audit.connectors,pairingErrors:audit.pairingErrors,invalidWins:audit.invalidWins,champion:state.bracket.rounds[4][0]}));
+  assert.equal(audit.alignmentErrors,0);assert.ok(audit.maxAlignmentError<=1.25);
+  console.log('PASS_TOURNAMENT21543B_BRACKET_ALIGNMENT '+JSON.stringify({connectors:audit.connectors,pairingErrors:audit.pairingErrors,invalidWins:audit.invalidWins,alignmentChecks:audit.alignmentChecks,maxAlignmentError:audit.maxAlignmentError,openingMaxAlignmentError:initialGeometry.max,champion:state.bracket.rounds[4][0]}));
   await page.close();
 } finally {await browser.close();await new Promise(r=>server.close(r))}
