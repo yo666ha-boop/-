@@ -6,6 +6,7 @@ on:
       - 'shogi-v21528/tournament21541.js'
       - 'shogi-v21528/rating-progress21536.js'
       - 'preview/tournament-16/index.html'
+      - 'preview/tournament-16/index21542.html'
       - '.github/scripts/verify-tournament-preview-url-20260904.mjs'
       - '.github/workflows/verify-tournament-preview-url-20260904.yml'
   workflow_dispatch:
