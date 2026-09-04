@@ -1,0 +1,29 @@
+name: Verify tournament field rules 21545
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/rating-progress21536.js'
+      - 'preview/tournament-16/field-preview21545.js'
+      - 'preview/tournament-16/index21543.html'
+      - '.github/scripts/verify-tournament-field21545.mjs'
+      - '.github/workflows/verify-tournament-field21545.yml'
+  workflow_dispatch:
+
+jobs:
+  field-rules:
+    runs-on: ubuntu-22.04
+    container: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install matching Playwright package
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check
+        run: |
+          node --check shogi-v21528/tournament-field21545.js
+          node --check .github/scripts/verify-tournament-field21545.mjs
+      - name: Verify cup field ceilings
+        run: node .github/scripts/verify-tournament-field21545.mjs
