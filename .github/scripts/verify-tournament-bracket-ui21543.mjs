@@ -26,6 +26,7 @@ try{
   await page.goto('http://127.0.0.1:43143/',{waitUntil:'load'});
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI);
   await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('mitsuki');document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render()});
+  await page.waitForTimeout(300); // allow the resultBanner observer to install before the first simulated result
 
   async function resultWin(){
     await page.evaluate(()=>{const b=document.getElementById('resultBanner');b.className='';void b.offsetWidth;b.className='on result-win'});
@@ -51,7 +52,7 @@ try{
 
   await resultWin();await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT.state().active?.pending==='next');await assertRound(0,8,8);await verifyMapping(0);
   for(let r=1;r<=3;r++){
-    await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.next());await page.waitForTimeout(60);await resultWin();
+    await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.next());await page.waitForTimeout(220);await resultWin();
     if(r<3)await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT.state().active?.pending==='next');
     await assertRound(r,2**(3-r),2**(3-r));await verifyMapping(r);
   }
