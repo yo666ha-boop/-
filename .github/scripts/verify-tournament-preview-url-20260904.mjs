@@ -6,62 +6,21 @@ assert.match(sha,/^[0-9a-f]{40}$/,'PREVIEW_SHA must be a full commit SHA');
 const path='preview/tournament-16/index.html';
 const raw=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/${path}`;
 const blob=`https://github.com/yo666ha-boop/-/blob/${sha}/${path}`;
-const candidates=[
-  `https://htmlpreview.github.io/?${raw}`,
-  `https://htmlpreview.github.io/?${blob}`,
-  `https://raw.githack.com/yo666ha-boop/-/${sha}/${path}`,
-  `https://rawcdn.githack.com/yo666ha-boop/-/${sha}/${path}`,
-  `https://cdn.jsdelivr.net/gh/yo666ha-boop/-@${sha}/${path}`
-];
+const candidates=[`https://htmlpreview.github.io/?${raw}`,`https://htmlpreview.github.io/?${blob}`];
 
 const browser=await chromium.launch({headless:true});
 try{
-  let winner=null;
-  const attempts=[];
+  let winner=null;const attempts=[];
   for(const url of candidates){
-    const page=await browser.newPage({viewport:{width:390,height:844}});
-    const pageErrors=[];
-    page.on('pageerror',e=>pageErrors.push(String(e)));
-    try{
-      const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
-      const status=response?.status()??0;
-      await page.waitForTimeout(1500);
-      const snapshot=await page.evaluate(()=>({title:document.title,hasAudit:typeof window.TOURNAMENT_PREVIEW_AUDIT==='function',body:(document.body?.innerText||'').slice(0,180)}));
-      attempts.push({url,status,...snapshot,pageErrors});
-      if(status===200&&snapshot.hasAudit){winner={url,page,status};break}
-    }catch(e){attempts.push({url,error:String(e),pageErrors})}
-    await page.close();
+    const page=await browser.newPage({viewport:{width:390,height:844}});const pageErrors=[];page.on('pageerror',e=>pageErrors.push(String(e)));
+    try{const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});const status=response?.status()??0;await page.waitForTimeout(1200);const snapshot=await page.evaluate(()=>({title:document.title,hasAudit:typeof window.TOURNAMENT_PREVIEW_AUDIT==='function',body:(document.body?.innerText||'').slice(0,180)}));attempts.push({url,status,...snapshot,pageErrors});if(status===200&&snapshot.hasAudit){winner={url,page,status};break}}catch(e){attempts.push({url,error:String(e),pageErrors})}if(!winner)await page.close();
   }
-  console.log('PREVIEW_HOST_ATTEMPTS '+JSON.stringify(attempts));
-  assert.ok(winner,'no standalone preview host executed the page JavaScript');
-
-  const {url,page,status}=winner;
-  let audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());
-  assert.equal(audit.standalone,true);
-  assert.equal(audit.cups,8);
-  assert.equal(audit.recommended,'shinji');
-  assert.equal(await page.locator('[data-cup]').count(),8);
-  assert.match(await page.title(),/大会モード16人確認版/);
-  assert.match(await page.locator('.notice').innerText(),/本体とは完全に別/);
-
-  await page.locator('[data-cup="shinji"]').click();
-  await page.waitForSelector('#stage.on .bracket',{state:'visible',timeout:10000});
-  audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());
-  assert.equal(audit.active.cup,'shinji');
-  assert.equal(audit.active.slots,16);
-  assert.equal(audit.active.columns,5);
-  assert.equal(audit.columns,5);
-  assert.equal(audit.firstRound,16);
-  assert.equal(await page.locator('.slot.player').count(),1);
-  assert.ok(await page.locator('.slot.boss').count()>=1);
-
-  for(let i=0;i<4;i++)await page.locator('#winBtn').click();
-  audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());
-  assert.equal(audit.active.status,'champion');
-  assert.match(await page.locator('#status').innerText(),/優勝/);
-  assert.equal(await page.locator('.slot.champion.player').count(),1);
-  console.log('PASS_TOURNAMENT_STANDALONE_PREVIEW_URL_16 '+JSON.stringify({url,status,cups:audit.cups,recommended:'shinji',slots:16,columns:5,champion:'player'}));
-  await page.close();
-} finally {
-  await browser.close();
-}
+  console.log('PREVIEW_HOST_ATTEMPTS '+JSON.stringify(attempts));assert.ok(winner,'no standalone preview host executed the page JavaScript');
+  const {url,page,status}=winner;let audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());
+  assert.equal(audit.standalone,true);assert.equal(audit.cups,8);assert.equal(audit.recommended,'shinji');assert.equal(await page.locator('[data-cup]').count(),8);assert.match(await page.title(),/同時進行確認版/);assert.match(await page.locator('.notice').innerText(),/開始時にはAI勝者を決めていません/);
+  await page.locator('[data-cup="shinji"]').click();await page.waitForSelector('#stage.on .bracket',{state:'visible',timeout:10000});audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());
+  assert.equal(audit.active.cup,'shinji');assert.equal(audit.active.slots,16);assert.equal(audit.active.columns,5);assert.equal(audit.columns,5);assert.equal(audit.firstRound,16);assert.equal(audit.active.resolved,0,'no AI winner at opening');assert.equal(audit.active.running,7,'seven parallel AI matches at opening');assert.ok(audit.portraitImgs>=4,'visible character portrait images');assert.ok(audit.news>=1,'tournament news visible');assert.equal(await page.locator('.slot.player').count(),1);assert.ok(await page.locator('.slot.boss').count()>=1);assert.ok(await page.locator('.state.running').count()>=16,'all eight first-round matches visibly running');
+  for(let i=0;i<4;i++){await page.locator('#winBtn').click();if(i<3){await page.waitForSelector('#nextBtn:not([hidden])');await page.locator('#nextBtn').click();}}
+  audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());assert.equal(audit.active.status,'champion');assert.match(await page.locator('#status').innerText(),/優勝/);assert.equal(await page.locator('.slot.champion.player').count(),1);
+  console.log('PASS_TOURNAMENT_STANDALONE_PREVIEW_LIVE_16 '+JSON.stringify({url,status,cups:audit.cups,slots:16,columns:5,initialRunning:7,initialResolved:0,portraitImgs:audit.portraitImgs,champion:'player'}));await page.close();
+} finally {await browser.close()}
