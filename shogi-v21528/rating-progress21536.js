@@ -90,15 +90,21 @@
   };
 })();
 
-/* v2.15.41a: portraits + live-progress 16-player tournament loader. */
-(function loadTournament21541(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21541A)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21541A=true;
+/* v2.15.42a: live 16-player tournament + portrait repair + Fire fit loader. */
+(function loadTournament21542(){
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21542A)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21542A=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
-    const s=document.createElement('script');
-    s.src=new URL('./tournament21541.js?v=21541a',scriptURL).href;
-    s.async=false;
-    document.head.appendChild(s);
-  }catch(e){console.error('tournament21541 loader failed',e)}
+    const core=document.createElement('script');
+    core.src=new URL('./tournament21541.js?v=21541a',scriptURL).href;
+    core.async=false;
+    core.addEventListener('load',()=>{
+      const ui=document.createElement('script');
+      ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
+      ui.async=false;
+      document.head.appendChild(ui);
+    },{once:true});
+    document.head.appendChild(core);
+  }catch(e){console.error('tournament21542 loader failed',e)}
 })();
