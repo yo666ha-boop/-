@@ -90,27 +90,33 @@
   };
 })();
 
-/* v2.15.44c: live 16-player tournament + portrait repair + Fire fit + integrated skin loader. */
-(function loadTournament21544(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21544C)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21544C=true;
+/* v2.15.45a: live 16-player tournament + field ceiling + portrait repair + Fire fit + integrated skin loader. */
+(function loadTournament21545(){
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21545A)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21545A=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
     core.src=new URL('./tournament21541.js?v=21541a',scriptURL).href;
     core.async=false;
     core.addEventListener('load',()=>{
-      const ui=document.createElement('script');
-      ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
-      ui.async=false;
-      ui.addEventListener('load',()=>{
-        const skin=document.createElement('script');
-        skin.src=new URL('./tournament-skin21544.js?v=21544c',scriptURL).href;
-        skin.async=false;
-        document.head.appendChild(skin);
+      const field=document.createElement('script');
+      field.src=new URL('./tournament-field21545.js?v=21545a',scriptURL).href;
+      field.async=false;
+      field.addEventListener('load',()=>{
+        const ui=document.createElement('script');
+        ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
+        ui.async=false;
+        ui.addEventListener('load',()=>{
+          const skin=document.createElement('script');
+          skin.src=new URL('./tournament-skin21544.js?v=21544c',scriptURL).href;
+          skin.async=false;
+          document.head.appendChild(skin);
+        },{once:true});
+        document.head.appendChild(ui);
       },{once:true});
-      document.head.appendChild(ui);
+      document.head.appendChild(field);
     },{once:true});
     document.head.appendChild(core);
-  }catch(e){console.error('tournament21544 loader failed',e)}
+  }catch(e){console.error('tournament21545 loader failed',e)}
 })();
