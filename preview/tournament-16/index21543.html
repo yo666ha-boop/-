@@ -5,7 +5,7 @@
   const sha=m?.[1]||'feature/tournament-cups-20260902';
   const root=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/`;
   const baseURL=root+'preview/tournament-16/index21542b.html';
-  const patchURL=root+'shogi-v21528/tournament-ui21543.js';
+  const patchURL=root+'preview/tournament-16/bracket-preview21543.js';
   const oldHydrate=`rawText('shogi/strong213_01.part').then(s=>{const a=fixedImages(s);IMG['みつき']=a[0];IMG['おにまま']=a[3];IMG['まま']=a[4]})`;
   const newHydrate=`Promise.all(['01','02','02b','03','04','05','06'].map(id=>rawText('shogi/strong213_'+id+'.part'))).then(parts=>{const s=parts.join(''),p=s.indexOf('const FIXED_IMG='),all=(p>=0?s.slice(p):s).match(/data:image\\\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)||[];if(all.length<5)throw Error('FIXED_IMG concat incomplete '+all.length);IMG['みつき']=all[0];IMG['おにまま']=all[3];IMG['まま']=all[4]})`;
   try{
