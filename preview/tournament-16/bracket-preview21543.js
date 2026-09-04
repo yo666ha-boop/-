@@ -1,10 +1,11 @@
-/* みつき将棋 16人大会・外部確認ページ専用ブラケット補正 21543a */
+/* みつき将棋 16人大会・外部確認ページ専用ブラケット補正 21543b */
 (function installStandaloneBracket21543(){
-  if(window.__TOURNAMENT_PREVIEW_BRACKET_21543A)return;
-  window.__TOURNAMENT_PREVIEW_BRACKET_21543A=true;
+  if(window.__TOURNAMENT_PREVIEW_BRACKET_21543B)return;
+  window.__TOURNAMENT_PREVIEW_BRACKET_21543B=true;
 
   const oldRenderBracket=renderBracket;
   const oldSlotHtml=slotHtml;
+  let raf=0;
 
   function cleanName(node){return String(node?.querySelector?.('.name')?.textContent||'').replace(/[👑🏆]/gu,'').trim()}
   function unitHash(text){let h=2166136261>>>0;for(const ch of String(text)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)>>>0}return (h%1000000)/1000000}
@@ -39,7 +40,7 @@
   };
 
   slotHtml=function(name,col,i){
-    if(!name)return`<div class="slot empty"><div class="main"><span class="name">—</span><div class="meta"><span class="state">未定</span></div></div></div>`;
+    if(!name)return`<div class="slot empty" data-round="${col}" data-slot="${i}"><div class="main"><span class="name">—</span><div class="meta"><span class="state">未定</span></div></div></div>`;
     const player=name===PLAYER,boss=name===active.cup.boss,state=stateFor(col,i,name),src=player?'':IMG[name];
     const stateCls=state==='対局中'?'running':state==='勝利'||state==='優勝'?'win':state==='敗退'?'loss':'';
     return`<div class="slot ${player?'player':''} ${boss?'boss':''} ${state==='敗退'?'eliminated':''} ${active.status==='champion'&&col===4&&player?'champion':''}" data-round="${col}" data-slot="${i}">${player?'':`<div class="avatar">${src?`<img src="${src}" alt="">`:''}</div>`}<div class="main"><span class="name">${player?'あなた':name}</span><div class="meta"><span>R${ratingOf(name)}</span><span class="state ${stateCls}">${state}</span></div></div></div>`;
@@ -48,9 +49,31 @@
   function ensureStyle(){
     if(document.getElementById('previewBracket21543Style'))return;
     const s=document.createElement('style');s.id='previewBracket21543Style';s.textContent=`
-.bracket{position:relative}.state.loss{opacity:.58}.slot.eliminated{opacity:.58}.previewBracketLines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:3}.previewBracketLines path{fill:none;stroke:#665f47;stroke-width:1;opacity:.38;vector-effect:non-scaling-stroke}.previewBracketLines path.advanced{stroke:#d7bd72;stroke-width:1.7;opacity:.9}.previewBracketLines path.playerAdvanced{stroke:#65a8ff;stroke-width:2.2;opacity:1}.round,.slot{position:relative;z-index:4}
+.bracket{position:relative}.roundBody{position:relative!important}.state.loss{opacity:.58}.slot.eliminated{opacity:.58}.previewBracketLines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:3}.previewBracketLines path{fill:none;stroke:#665f47;stroke-width:1;opacity:.38;vector-effect:non-scaling-stroke}.previewBracketLines path.advanced{stroke:#d7bd72;stroke-width:1.7;opacity:.9}.previewBracketLines path.playerAdvanced{stroke:#65a8ff;stroke-width:2.2;opacity:1}.round,.slot{position:relative;z-index:4}
 `;
     document.head.appendChild(s);
+  }
+
+  function rounds(){return[...document.querySelectorAll('#bracket .round')].map(r=>[...r.querySelectorAll('.slot')])}
+  function clearGeometry(rs){
+    for(const row of rs){
+      const body=row[0]?.closest('.roundBody');body?.style.removeProperty('height');body?.style.removeProperty('display');
+      for(const slot of row){slot.style.removeProperty('position');slot.style.removeProperty('left');slot.style.removeProperty('right');slot.style.removeProperty('top');slot.style.removeProperty('transform');slot.style.removeProperty('width')}
+    }
+  }
+  function alignSlots(){
+    ensureStyle();const rs=rounds();if(!rs.length)return 0;clearGeometry(rs);
+    const bodies=rs.map(r=>r[0]?.closest('.roundBody')).filter(Boolean);if(!bodies.length)return 0;
+    let h=Math.max(...bodies.map(b=>b.getBoundingClientRect().height||0),0);
+    for(const row of rs){if(!row.length)continue;const sh=Math.max(...row.map(s=>s.getBoundingClientRect().height||0),0);h=Math.max(h,sh*row.length+8)}
+    h=Math.max(1,Math.ceil(h));
+    for(const row of rs){const body=row[0]?.closest('.roundBody');if(!body||!row.length)continue;body.style.setProperty('height',h+'px','important');body.style.setProperty('display','block','important');body.style.setProperty('position','relative','important');const n=row.length;row.forEach((slot,i)=>{slot.style.setProperty('position','absolute','important');slot.style.setProperty('left','0','important');slot.style.setProperty('right','0','important');slot.style.setProperty('width','auto','important');slot.style.setProperty('top',(((i+.5)/n)*100).toFixed(6)+'%','important');slot.style.setProperty('transform','translateY(-50%)','important')})}
+    bodies[0]?.getBoundingClientRect();return h;
+  }
+  function alignmentAudit(){
+    const rs=rounds();let checks=0,alignmentErrors=0,maxAlignmentError=0;
+    for(let r=0;r<Math.min(4,rs.length-1);r++){const src=rs[r],dst=rs[r+1];for(let i=0;i<dst.length;i++){const a=src[i*2],b=src[i*2+1],d=dst[i];if(!a||!b||!d)continue;const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect(),dr=d.getBoundingClientRect();const expected=((ar.top+ar.bottom)/2+(br.top+br.bottom)/2)/2,actual=(dr.top+dr.bottom)/2,err=Math.abs(expected-actual);checks++;maxAlignmentError=Math.max(maxAlignmentError,err);if(err>1.25)alignmentErrors++}}
+    return{alignmentChecks:checks,alignmentErrors,maxAlignmentError:Number(maxAlignmentError.toFixed(3))};
   }
 
   function drawLines(){
@@ -59,9 +82,9 @@
     root.querySelector('.previewBracketLines')?.remove();
     const box=root.getBoundingClientRect();if(!box.width||!box.height)return 0;
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','previewBracketLines');svg.setAttribute('viewBox',`0 0 ${box.width} ${box.height}`);svg.setAttribute('preserveAspectRatio','none');
-    const rounds=[...root.querySelectorAll('.round')];let count=0;
-    for(let r=0;r<Math.min(4,rounds.length-1);r++){
-      const src=[...rounds[r].querySelectorAll('.slot')],dst=[...rounds[r+1].querySelectorAll('.slot')];
+    const rs=[...root.querySelectorAll('.round')];let count=0;
+    for(let r=0;r<Math.min(4,rs.length-1);r++){
+      const src=[...rs[r].querySelectorAll('.slot')],dst=[...rs[r+1].querySelectorAll('.slot')];
       for(let i=0;i<src.length;i++){
         const target=dst[Math.floor(i/2)];if(!target)continue;
         const a=src[i].getBoundingClientRect(),b=target.getBoundingClientRect();
@@ -74,8 +97,10 @@
     }
     root.appendChild(svg);return count;
   }
+  function refreshGeometry(){alignSlots();const connectors=drawLines();return{connectors,...alignmentAudit()}}
+  function requestRefresh(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;refreshGeometry()})}
 
-  renderBracket=function(){oldRenderBracket();requestAnimationFrame(drawLines)};
+  renderBracket=function(){oldRenderBracket();requestRefresh()};
 
   advanceRound=function(){
     if(!active||active.status!=='won')return;
@@ -102,9 +127,9 @@
   resetBtn.onclick=()=>{active=null;stage.classList.remove('on')};
 
   function audit(){
-    const rounds=[...document.querySelectorAll('#bracket .round')];let pairingErrors=0,invalidWins=0;
-    for(let r=0;r<Math.min(4,rounds.length-1);r++){
-      const src=[...rounds[r].querySelectorAll('.slot')],dst=[...rounds[r+1].querySelectorAll('.slot')];
+    const rs=[...document.querySelectorAll('#bracket .round')];let pairingErrors=0,invalidWins=0;
+    for(let r=0;r<Math.min(4,rs.length-1);r++){
+      const src=[...rs[r].querySelectorAll('.slot')],dst=[...rs[r+1].querySelectorAll('.slot')];
       for(let i=0;i<dst.length;i++){
         const dn=cleanName(dst[i]);if(!dn||dn==='—')continue;
         const a=src[i*2],b=src[i*2+1],an=cleanName(a),bn=cleanName(b);
@@ -115,10 +140,11 @@
         }
       }
     }
-    return{ok:true,version:'preview21543a',pairingErrors,invalidWins,connectors:document.querySelectorAll('#bracket .previewBracketLines path').length};
+    const geometry=refreshGeometry();
+    return{ok:true,version:'preview21543b',pairingErrors,invalidWins,...geometry};
   }
 
-  window.AI_SHOGI_TOURNAMENT_BRACKET_UI={version:'preview21543a',audit,draw:drawLines};
-  window.addEventListener('resize',()=>requestAnimationFrame(drawLines),{passive:true});
-  ensureStyle();
+  window.AI_SHOGI_TOURNAMENT_BRACKET_UI={version:'preview21543b',audit,draw:drawLines,align:alignSlots};
+  window.addEventListener('resize',requestRefresh,{passive:true});
+  ensureStyle();requestRefresh();
 })();
