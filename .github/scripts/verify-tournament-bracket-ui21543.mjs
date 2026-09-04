@@ -6,10 +6,12 @@ import { chromium } from 'playwright';
 const core=await fs.readFile('shogi-v21528/tournament21541.js','utf8');
 const ui=await fs.readFile('shogi-v21528/tournament-ui21542.js','utf8');
 const bracketUI=await fs.readFile('shogi-v21528/tournament-ui21543.js','utf8');
+const skin=await fs.readFile('shogi-v21528/tournament-skin21544.js','utf8');
 assert.ok(bracketUI.includes('pairingErrors'));
 assert.ok(bracketUI.includes('tourBracketLines'));
 assert.ok(bracketUI.includes('alignmentErrors'));
 assert.ok(bracketUI.includes("version:'21543b'"));
+for(const marker of ['tourSkin21544','tourTier0','tourRoundLive',"version:'21544c'"])assert.ok(skin.includes(marker),'missing skin marker '+marker);
 
 const names=['みつき','みっちゃん','あき王','おにまま','まま','ケンシロウ','ジャギ','しんじ','直江兼続','あやなみ','バット','伊達政宗','あすか','ユリア','玉ちゃん','まり','ぺんぺん','げんどー','前田慶次','シン','みさとさん','サウザー','リン','ラオウ','カヲル','未来からやってきたみつき'];
 const ratings=[3000,2850,2700,2600,2500,2100,1450,1550,1700,1800,1600,1750,1900,1680,1380,1950,1250,2050,1820,2000,1880,2180,1500,2250,2400,3400];
@@ -19,16 +21,23 @@ const cards=names.map((n,i)=>`<button class="ch"><img src="${svg(i)}" alt="${n}"
 const html=`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0}.side{width:380px}.btn{padding:6px}</style><body>
 <div class="side"><div class="controls"><button class="btn">new</button></div></div><div id="status"></div><div id="resultBanner"></div><div id="chars">${cards}</div>
 <script>window.__mock={rating:1500,state:{log:[]},selected:[],characters:${JSON.stringify(characters)}};window.AIShogiIOS={characters:()=>window.__mock.characters,stats:()=>({rating:window.__mock.rating,w:0,l:0,d:0}),state:()=>window.__mock.state,select:i=>{window.__mock.selected.push(i);return window.__mock.characters[i]}};</script>
-<script src="/core.js"></script><script src="/ui.js"></script></body>`;
-const server=http.createServer((req,res)=>{if(req.url==='/core.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(core);return}if(req.url==='/ui.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(ui);return}if(req.url?.startsWith('/tournament-ui21543.js')){res.writeHead(200,{'content-type':'application/javascript'});res.end(bracketUI);return}res.writeHead(200,{'content-type':'text/html'});res.end(html)});
+<script src="/core.js"></script><script src="/ui.js"></script><script src="/skin.js"></script></body>`;
+const server=http.createServer((req,res)=>{if(req.url==='/core.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(core);return}if(req.url==='/ui.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(ui);return}if(req.url==='/skin.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(skin);return}if(req.url?.startsWith('/tournament-ui21543.js')){res.writeHead(200,{'content-type':'application/javascript'});res.end(bracketUI);return}res.writeHead(200,{'content-type':'text/html'});res.end(html)});
 await new Promise(r=>server.listen(43143,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true});
 try{
   const page=await browser.newPage({viewport:{width:1280,height:800}});
   await page.goto('http://127.0.0.1:43143/',{waitUntil:'load'});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI);
-  await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('mitsuki');document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render()});
-  await page.waitForTimeout(300); // allow observers/layout patch to install before the first simulated result
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT&&window.AI_SHOGI_TOURNAMENT_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI&&window.AI_SHOGI_TOURNAMENT_SKIN);
+  await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('mitsuki');document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_SKIN.refresh()});
+  await page.waitForTimeout(300);
+  const openingSkin=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_SKIN.audit());
+  assert.equal(openingSkin.ok,true,'integrated skin must attach to actual tournament panel');
+  assert.equal(openingSkin.version,'21544c');
+  assert.equal(openingSkin.cups,8);
+  assert.equal(openingSkin.recommended,1);
+  assert.equal(openingSkin.connectors,30);
+  assert.ok(openingSkin.alignmentError<=1.25,`skin must not disturb bracket geometry: ${openingSkin.alignmentError}`);
 
   async function resultWin(){
     await page.evaluate(()=>{const b=document.getElementById('resultBanner');b.className='';void b.offsetWidth;b.className='on result-win'});
@@ -64,6 +73,8 @@ try{
     assert.equal(audit.alignmentErrors,0,'winner slots stay centered on their source pairs');
     assert.ok(audit.maxAlignmentError<=1.25,`audit center drift ${audit.maxAlignmentError}px`);
     assert.ok(audit.connectors>=30,'all bracket source-to-next paths are drawn');
+    const skinAudit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_SKIN.audit());
+    assert.equal(skinAudit.ok,true);assert.equal(skinAudit.connectors,30);assert.ok(skinAudit.alignmentError<=1.25);
     await verifyGeometry(`round ${round}`);
   }
   async function verifyMapping(round){
@@ -85,7 +96,8 @@ try{
   const state=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.state().active);
   assert.equal(state.status,'champion');assert.equal(state.bracket.rounds[4][0],'__PLAYER__');
   const audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_BRACKET_UI.audit());
-  assert.equal(audit.alignmentErrors,0);assert.ok(audit.maxAlignmentError<=1.25);
-  console.log('PASS_TOURNAMENT21543B_BRACKET_ALIGNMENT '+JSON.stringify({connectors:audit.connectors,pairingErrors:audit.pairingErrors,invalidWins:audit.invalidWins,alignmentChecks:audit.alignmentChecks,maxAlignmentError:audit.maxAlignmentError,openingMaxAlignmentError:initialGeometry.max,champion:state.bracket.rounds[4][0]}));
+  const finalSkin=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_SKIN.audit());
+  assert.equal(audit.alignmentErrors,0);assert.ok(audit.maxAlignmentError<=1.25);assert.equal(finalSkin.ok,true);assert.equal(finalSkin.connectors,30);
+  console.log('PASS_TOURNAMENT21544C_INTEGRATED_SKIN '+JSON.stringify({connectors:audit.connectors,pairingErrors:audit.pairingErrors,invalidWins:audit.invalidWins,alignmentChecks:audit.alignmentChecks,maxAlignmentError:audit.maxAlignmentError,openingMaxAlignmentError:initialGeometry.max,cups:openingSkin.cups,recommended:openingSkin.recommended,champion:state.bracket.rounds[4][0]}));
   await page.close();
 } finally {await browser.close();await new Promise(r=>server.close(r))}
