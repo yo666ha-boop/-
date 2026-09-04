@@ -1,13 +1,14 @@
-/* みつき将棋 大会ブラケット進行補正 v2.15.43a
+/* みつき将棋 大会ブラケット進行補正 v2.15.43b
  * - 過去ラウンドを一律「勝利」にする表示バグを補正
  * - 進出先の実データから勝利/敗退を判定
  * - 各対戦から次ラウンド枠へのブラケット線を描画
+ * - 各ラウンドの勝者枠を元の2人のちょうど中間へ固定して配置ずれを防止
  * - 独立確認ページではAI戦を実際のペア単位で勝敗決定して進行
  */
 (function installTournamentBracketUI21543(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_BRACKET_UI_21543A)return;
-  window.__AI_SHOGI_TOURNAMENT_BRACKET_UI_21543A=true;
+  if(window.__AI_SHOGI_TOURNAMENT_BRACKET_UI_21543B)return;
+  window.__AI_SHOGI_TOURNAMENT_BRACKET_UI_21543B=true;
 
   const NS='http://www.w3.org/2000/svg';
   const clean=s=>String(s||'').replace(/[👑🏆]/gu,'').trim();
@@ -21,6 +22,7 @@
     s.textContent=`
 .tourBracket,.bracket{position:relative!important}
 .tourBracketRound,.round{position:relative;z-index:2}
+.tourBracketRoundBody,.roundBody{position:relative!important}
 .tourBracketLines{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:hidden}
 .tourBracketLines path{fill:none;stroke:#706648;stroke-width:1.15;opacity:.38;vector-effect:non-scaling-stroke}
 .tourBracketLines path.pending{stroke:#706648;opacity:.32;stroke-dasharray:2.5 2.5}
@@ -72,6 +74,59 @@
     return{winnerStates,loserStates,invalidWins,pairingErrors};
   }
 
+  function bodyForRound(round,preview=false){return round?.[0]?.closest?.(preview?'.roundBody':'.tourBracketRoundBody')||null}
+  function clearGeometry(rounds,preview=false){
+    for(const round of rounds){
+      const body=bodyForRound(round,preview);
+      body?.style.removeProperty('height');body?.style.removeProperty('display');
+      for(const slot of round){
+        slot.style.removeProperty('position');slot.style.removeProperty('left');slot.style.removeProperty('right');slot.style.removeProperty('top');slot.style.removeProperty('transform');slot.style.removeProperty('width');
+      }
+    }
+  }
+  function alignSlots(rounds,preview=false){
+    if(!rounds.length)return 0;
+    clearGeometry(rounds,preview);
+    const bodies=rounds.map(r=>bodyForRound(r,preview)).filter(Boolean);
+    if(!bodies.length)return 0;
+    let commonHeight=Math.max(...bodies.map(b=>b.getBoundingClientRect().height||0),0);
+    for(const round of rounds){
+      if(!round.length)continue;
+      const maxSlot=Math.max(...round.map(s=>s.getBoundingClientRect().height||0),0);
+      commonHeight=Math.max(commonHeight,maxSlot*round.length+8);
+    }
+    commonHeight=Math.max(1,Math.ceil(commonHeight));
+    for(let r=0;r<rounds.length;r++){
+      const round=rounds[r],body=bodyForRound(round,preview);if(!body||!round.length)continue;
+      body.style.setProperty('height',commonHeight+'px','important');
+      body.style.setProperty('display','block','important');
+      body.style.setProperty('position','relative','important');
+      const n=round.length;
+      for(let i=0;i<n;i++){
+        const slot=round[i];
+        slot.style.setProperty('position','absolute','important');
+        slot.style.setProperty('left','0','important');slot.style.setProperty('right','0','important');slot.style.setProperty('width','auto','important');
+        slot.style.setProperty('top',(((i+.5)/n)*100).toFixed(6)+'%','important');
+        slot.style.setProperty('transform','translateY(-50%)','important');
+      }
+    }
+    bodies[0]?.getBoundingClientRect();
+    return commonHeight;
+  }
+  function alignmentAudit(rounds){
+    let checks=0,alignmentErrors=0,maxAlignmentError=0;
+    for(let r=0;r<Math.min(4,rounds.length-1);r++){
+      const src=rounds[r],dst=rounds[r+1];
+      for(let i=0;i<dst.length;i++){
+        const a=src[i*2],b=src[i*2+1],d=dst[i];if(!a||!b||!d)continue;
+        const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect(),dr=d.getBoundingClientRect();
+        const expected=((ar.top+ar.bottom)/2+(br.top+br.bottom)/2)/2,actual=(dr.top+dr.bottom)/2,err=Math.abs(expected-actual);
+        checks++;maxAlignmentError=Math.max(maxAlignmentError,err);if(err>1.25)alignmentErrors++;
+      }
+    }
+    return{alignmentChecks:checks,alignmentErrors,maxAlignmentError:Number(maxAlignmentError.toFixed(3))};
+  }
+
   function drawLines(root,rounds,preview=false){
     root.querySelector(':scope > .tourBracketLines')?.remove();
     if(rounds.length<2)return 0;
@@ -101,9 +156,9 @@
     ensureStyle();
     let rounds=actualRounds(),preview=false,root=document.querySelector('.tourBracket');
     if(!root){rounds=previewRounds();preview=true;root=document.querySelector('.bracket')}
-    if(!root||rounds.length<2)return{connectors:0,winnerStates:0,loserStates:0,invalidWins:0,pairingErrors:0,preview};
-    const state=markProgress(rounds,preview),connectors=drawLines(root,rounds,preview);
-    return{connectors,...state,preview};
+    if(!root||rounds.length<2)return{connectors:0,winnerStates:0,loserStates:0,invalidWins:0,pairingErrors:0,alignmentChecks:0,alignmentErrors:0,maxAlignmentError:0,bodyHeight:0,preview};
+    const state=markProgress(rounds,preview),bodyHeight=alignSlots(rounds,preview),alignment=alignmentAudit(rounds),connectors=drawLines(root,rounds,preview);
+    return{connectors,...state,...alignment,bodyHeight,preview};
   }
 
   function installPreviewLogic(){
@@ -185,10 +240,10 @@
   observe();scheduleRefresh();
 
   window.AI_SHOGI_TOURNAMENT_BRACKET_UI={
-    version:'21543a',refresh,
+    version:'21543b',refresh,
     audit:()=>{
       const x=genericRefresh();
-      return{ok:true,version:'21543a',...x};
+      return{ok:true,version:'21543b',...x};
     }
   };
 })();
