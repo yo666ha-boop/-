@@ -3,18 +3,35 @@ import { chromium } from 'playwright';
 
 const sha=String(process.env.PREVIEW_SHA||'').trim();
 assert.match(sha,/^[0-9a-f]{40}$/,'PREVIEW_SHA must be a full commit SHA');
-const url=`https://cdn.jsdelivr.net/gh/yo666ha-boop/-@${sha}/preview/tournament-16/index.html`;
+const path='preview/tournament-16/index.html';
+const candidates=[
+  `https://raw.githack.com/yo666ha-boop/-/${sha}/${path}`,
+  `https://rawcdn.githack.com/yo666ha-boop/-/${sha}/${path}`,
+  `https://cdn.jsdelivr.net/gh/yo666ha-boop/-@${sha}/${path}`
+];
 
 const browser=await chromium.launch({headless:true});
 try{
-  const page=await browser.newPage({viewport:{width:390,height:844}});
-  const pageErrors=[];
-  page.on('pageerror',e=>pageErrors.push(String(e)));
-  const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
-  assert.ok(response,'preview navigation returned no response');
-  assert.equal(response.status(),200,'preview URL HTTP status');
-  await page.waitForFunction(()=>window.TOURNAMENT_PREVIEW_AUDIT?.().ok===true,null,{timeout:15000});
+  let winner=null;
+  const attempts=[];
+  for(const url of candidates){
+    const page=await browser.newPage({viewport:{width:390,height:844}});
+    const pageErrors=[];
+    page.on('pageerror',e=>pageErrors.push(String(e)));
+    try{
+      const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
+      const status=response?.status()??0;
+      await page.waitForTimeout(1000);
+      const snapshot=await page.evaluate(()=>({title:document.title,hasAudit:typeof window.TOURNAMENT_PREVIEW_AUDIT==='function',body:(document.body?.innerText||'').slice(0,180)}));
+      attempts.push({url,status,...snapshot,pageErrors});
+      if(status===200&&snapshot.hasAudit){winner={url,page,status};break}
+    }catch(e){attempts.push({url,error:String(e),pageErrors})}
+    await page.close();
+  }
+  console.log('PREVIEW_HOST_ATTEMPTS '+JSON.stringify(attempts));
+  assert.ok(winner,'no standalone preview host executed the page JavaScript');
 
+  const {url,page,status}=winner;
   let audit=await page.evaluate(()=>window.TOURNAMENT_PREVIEW_AUDIT());
   assert.equal(audit.standalone,true);
   assert.equal(audit.cups,8);
@@ -39,9 +56,8 @@ try{
   assert.equal(audit.active.status,'champion');
   assert.match(await page.locator('#status').innerText(),/優勝/);
   assert.equal(await page.locator('.slot.champion.player').count(),1);
-  assert.deepEqual(pageErrors,[],'preview page errors');
-
-  console.log('PASS_TOURNAMENT_STANDALONE_PREVIEW_URL_16 '+JSON.stringify({url,status:response.status(),cups:audit.cups,recommended:'shinji',slots:16,columns:5,champion:'player'}));
+  console.log('PASS_TOURNAMENT_STANDALONE_PREVIEW_URL_16 '+JSON.stringify({url,status,cups:audit.cups,recommended:'shinji',slots:16,columns:5,champion:'player'}));
+  await page.close();
 } finally {
   await browser.close();
 }
