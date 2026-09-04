@@ -1,10 +1,11 @@
-<!doctype html><meta charset="utf-8"><title>みつき将棋｜大会モード16人・進行修正版・見た目調整</title><body style="margin:0;background:#06100e;color:#f2e3ad;font-family:sans-serif"><div id="boot" style="padding:16px">大会モードを準備中…</div><script>
+<!doctype html><meta charset="utf-8"><title>みつき将棋｜大会モード16人・参加者ルール修正版</title><body style="margin:0;background:#06100e;color:#f2e3ad;font-family:sans-serif"><div id="boot" style="padding:16px">大会モードを準備中…</div><script>
 (async()=>{
   const decoded=decodeURIComponent(location.search.slice(1));
   const m=decoded.match(/\/([0-9a-f]{40})\/preview\/tournament-16\/index21543\.html(?:$|[?#])/i);
   const sha=m?.[1]||'feature/tournament-cups-20260902';
   const root=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/`;
   const baseURL=root+'preview/tournament-16/index21542b.html';
+  const fieldURL=root+'preview/tournament-16/field-preview21545.js';
   const patchURL=root+'preview/tournament-16/bracket-preview21543.js';
   const skinURL=root+'preview/tournament-16/visual-polish21544.css';
   const oldHydrate=`rawText('shogi/strong213_01.part').then(s=>{const a=fixedImages(s);IMG['みつき']=a[0];IMG['おにまま']=a[3];IMG['まま']=a[4]})`;
@@ -12,18 +13,19 @@
   const closeScript='</scr'+'ipt>';
   const bootMarker='renderCups();hydrate();\n'+closeScript+'</body></html>';
   try{
-    const [baseRes,patchRes,skinRes]=await Promise.all([fetch(baseURL,{cache:'no-store'}),fetch(patchURL,{cache:'no-store'}),fetch(skinURL,{cache:'no-store'})]);
-    if(!baseRes.ok)throw Error('preview source '+baseRes.status);if(!patchRes.ok)throw Error('bracket patch '+patchRes.status);if(!skinRes.ok)throw Error('visual skin '+skinRes.status);
-    let html=await baseRes.text(),patch=await patchRes.text(),skin=await skinRes.text();
+    const [baseRes,fieldRes,patchRes,skinRes]=await Promise.all([fetch(baseURL,{cache:'no-store'}),fetch(fieldURL,{cache:'no-store'}),fetch(patchURL,{cache:'no-store'}),fetch(skinURL,{cache:'no-store'})]);
+    if(!baseRes.ok)throw Error('preview source '+baseRes.status);if(!fieldRes.ok)throw Error('field rule '+fieldRes.status);if(!patchRes.ok)throw Error('bracket patch '+patchRes.status);if(!skinRes.ok)throw Error('visual skin '+skinRes.status);
+    let html=await baseRes.text(),field=await fieldRes.text(),patch=await patchRes.text(),skin=await skinRes.text();
     if(!html.includes(oldHydrate))throw Error('21542b hydrate signature mismatch');
     if(!html.includes(bootMarker))throw Error('21542b boot signature mismatch');
     html=html.replace(oldHydrate,newHydrate)
       .replace('</head>','<style id="visualPolish21544Style">'+skin+'</style></head>')
-      .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・進行修正版・見た目調整')
-      .replace('16人・画像完全＋Fireフィット確認版','16人・本番デザイン試作＋正しい勝ち上がり')
-      .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。AI同士の勝敗は現在、表示Rを使った仮シミュレーションです。参加キャラの最終ルールは見た目確定後に調整します。');
+      .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・参加者ルール修正版')
+      .replace('16人・画像完全＋Fireフィット確認版','16人・本番デザイン＋適正参加者ルール')
+      .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。AI同士の勝敗は表示Rを使った仮シミュレーションです。参加者は各杯のボスRを基本上限とし、16人を成立させるため足りない低位杯だけ必要最小限まで上限を広げます。');
+    field=field.replace(new RegExp('<\\/script','gi'),'<\\/script');
     patch=patch.replace(new RegExp('<\\/script','gi'),'<\\/script');
-    html=html.replace(bootMarker,patch+'\nrenderCups();hydrate();\n'+closeScript+'</body></html>');
+    html=html.replace(bootMarker,field+'\n'+patch+'\nrenderCups();hydrate();\n'+closeScript+'</body></html>');
     document.open();document.write(html);document.close();
   }catch(e){document.getElementById('boot').textContent='確認ページの準備に失敗しました: '+String(e);throw e}
 })();
