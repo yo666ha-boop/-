@@ -4,11 +4,14 @@ on:
     paths:
       - 'shogi-v21528/tournament21540.js'
       - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-ui21542.js'
+      - 'shogi-v21528/tournament-ui21543.js'
       - 'shogi-v21528/rating-progress21536.js'
       - 'preview/tournament-16/index.html'
       - 'preview/tournament-16/index21542.html'
       - 'preview/tournament-16/index21542b.html'
       - 'preview/tournament-16/index21542c.html'
+      - 'preview/tournament-16/index21543.html'
       - '.github/scripts/verify-tournament-preview-url-20260904.mjs'
       - '.github/workflows/verify-tournament-preview-url-20260904.yml'
   workflow_dispatch:
@@ -24,7 +27,9 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
       - name: Syntax check
-        run: node --check .github/scripts/verify-tournament-preview-url-20260904.mjs
+        run: |
+          node --check shogi-v21528/tournament-ui21543.js
+          node --check .github/scripts/verify-tournament-preview-url-20260904.mjs
       - name: Verify immutable preview URL
         env:
           PREVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
