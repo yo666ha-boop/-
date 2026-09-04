@@ -4,7 +4,11 @@ import { chromium } from 'playwright';
 const sha=String(process.env.PREVIEW_SHA||'').trim();
 assert.match(sha,/^[0-9a-f]{40}$/,'PREVIEW_SHA must be a full commit SHA');
 const path='preview/tournament-16/index.html';
+const raw=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/${path}`;
+const blob=`https://github.com/yo666ha-boop/-/blob/${sha}/${path}`;
 const candidates=[
+  `https://htmlpreview.github.io/?${raw}`,
+  `https://htmlpreview.github.io/?${blob}`,
   `https://raw.githack.com/yo666ha-boop/-/${sha}/${path}`,
   `https://rawcdn.githack.com/yo666ha-boop/-/${sha}/${path}`,
   `https://cdn.jsdelivr.net/gh/yo666ha-boop/-@${sha}/${path}`
@@ -21,7 +25,7 @@ try{
     try{
       const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
       const status=response?.status()??0;
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1500);
       const snapshot=await page.evaluate(()=>({title:document.title,hasAudit:typeof window.TOURNAMENT_PREVIEW_AUDIT==='function',body:(document.body?.innerText||'').slice(0,180)}));
       attempts.push({url,status,...snapshot,pageErrors});
       if(status===200&&snapshot.hasAudit){winner={url,page,status};break}
