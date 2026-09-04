@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>みつき将棋｜大会進行修正版</title><body style="margin:0;background:#06100e;color:#f2e3ad;font-family:sans-serif"><div id="boot" style="padding:16px">大会進行修正版を準備中…</div><script>
+(async()=>{
+  const decoded=decodeURIComponent(location.search.slice(1));
+  const m=decoded.match(/\/([0-9a-f]{40})\/preview\/tournament-16\/index21543\.html(?:$|[?#])/i);
+  const sha=m?.[1]||'feature/tournament-cups-20260902';
+  const root=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/`;
+  const baseURL=root+'preview/tournament-16/index21542b.html';
+  const patchURL=root+'shogi-v21528/tournament-ui21543.js';
+  const oldHydrate=`rawText('shogi/strong213_01.part').then(s=>{const a=fixedImages(s);IMG['みつき']=a[0];IMG['おにまま']=a[3];IMG['まま']=a[4]})`;
+  const newHydrate=`Promise.all(['01','02','02b','03','04','05','06'].map(id=>rawText('shogi/strong213_'+id+'.part'))).then(parts=>{const s=parts.join(''),p=s.indexOf('const FIXED_IMG='),all=(p>=0?s.slice(p):s).match(/data:image\\\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)||[];if(all.length<5)throw Error('FIXED_IMG concat incomplete '+all.length);IMG['みつき']=all[0];IMG['おにまま']=all[3];IMG['まま']=all[4]})`;
+  try{
+    const [baseRes,patchRes]=await Promise.all([fetch(baseURL,{cache:'no-store'}),fetch(patchURL,{cache:'no-store'})]);
+    if(!baseRes.ok)throw Error('preview source '+baseRes.status);if(!patchRes.ok)throw Error('bracket patch '+patchRes.status);
+    let html=await baseRes.text(),patch=await patchRes.text();
+    if(!html.includes(oldHydrate))throw Error('21542b hydrate signature mismatch');
+    html=html.replace(oldHydrate,newHydrate)
+      .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・進行修正版')
+      .replace('16人・画像完全＋Fireフィット確認版','16人・正しい勝ち上がり＋トーナメント線')
+      .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。');
+    patch=patch.replace(/<\/script/gi,'<\\/script');
+    html=html.replace('</body>',`<script>${patch}<\/script></body>`);
+    document.open();document.write(html);document.close();
+  }catch(e){document.getElementById('boot').textContent='確認ページの準備に失敗しました: '+String(e);throw e}
+})();
+</script></body>
