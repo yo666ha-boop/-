@@ -4,6 +4,8 @@ on:
     paths:
       - 'shogi-v21528/tournament21541.js'
       - 'shogi-v21528/tournament-ui21542.js'
+      - 'shogi-v21528/tournament-ui21543.js'
+      - 'shogi-v21528/tournament-skin21544.js'
       - 'shogi-v21528/rating-progress21536.js'
       - '.github/scripts/verify-tournament-fire-ui21542.mjs'
       - '.github/workflows/verify-tournament-fire-ui21542.yml'
@@ -22,7 +24,9 @@ jobs:
       - name: Syntax check
         run: |
           node --check shogi-v21528/tournament-ui21542.js
+          node --check shogi-v21528/tournament-ui21543.js
+          node --check shogi-v21528/tournament-skin21544.js
           node --check shogi-v21528/rating-progress21536.js
           node --check .github/scripts/verify-tournament-fire-ui21542.mjs
-      - name: Verify all portraits and Fire fit
+      - name: Verify all portraits, Fire fit, and integrated skin
         run: node .github/scripts/verify-tournament-fire-ui21542.mjs
