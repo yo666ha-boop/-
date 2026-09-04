@@ -13,7 +13,7 @@ const legacy={8:'本多 忠勝',10:'島津 義久',11:'伊達 政宗',13:'服部
 const characters=names.map((name,i)=>({name,rating:ratings[i],fixed:true,style:'test',feature:'test'}));
 const svg=i=>`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="hsl(${i*13},60%,50%)"/><text x="20" y="25" text-anchor="middle" font-size="12">${i}</text></svg>`)}`;
 const cards=names.map((n,i)=>`<button class="ch"><img src="${svg(i)}" alt="${legacy[i]||n}"><span class="chName">${legacy[i]||n}</span></button>`).join('');
-const html=`<!doctype html><meta charset="utf-8"><style>body{margin:0}.side{width:360px}.btn{padding:6px}</style><body>
+const html=`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0}.side{width:360px}.btn{padding:6px}</style><body>
 <div class="side"><div class="controls"><button class="btn">new</button></div></div><div id="status"></div><div id="resultBanner"></div><div id="chars">${cards}</div><div id="board"></div>
 <script>window.__mock={rating:1500,state:{log:[]},selected:[],characters:${JSON.stringify(characters)}};window.AIShogiIOS={characters:()=>window.__mock.characters,stats:()=>({rating:window.__mock.rating,w:0,l:0,d:0}),state:()=>window.__mock.state,select:i=>{window.__mock.selected.push(i);return window.__mock.characters[i]}};</script>
 <script src="/core.js"></script><script src="/ui.js"></script></body>`;
@@ -33,17 +33,14 @@ try{
   assert.equal(audit.fit,true);
   assert.equal(audit.activeFit,true);
   assert.equal(audit.roster,26);
-  assert.equal(audit.rosterPortraits,26);
+  assert.equal(audit.rosterPortraits,26,'all 26 character image sources must resolve even when visible card names are legacy names');
   assert.deepEqual(audit.missingRoster,[]);
-  assert.equal(audit.fallback,0);
+  assert.equal(audit.fallback,0,'no visible tournament entrant may fall back to a text avatar');
   assert.ok(audit.scrollWidth<=audit.clientWidth+3,`Fire bracket overflows horizontally: ${audit.scrollWidth}/${audit.clientWidth}`);
   const visibleRounds=await page.evaluate(()=>[...document.querySelectorAll('.tourBracketRound')].filter(x=>{const r=x.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1}).length);
   assert.equal(visibleRounds,5);
-  const repairedNames=['直江兼続','バット','ユリア','玉ちゃん','前田慶次','リン'];
-  for(const n of repairedNames){
-    const ok=await page.evaluate(name=>[...document.querySelectorAll('.tourBracketSlot')].some(slot=>slot.querySelector('.tourSlotName')?.textContent?.includes(name)&&!!slot.querySelector('.tourAvatar img')),n);
-    assert.equal(ok,true,'missing repaired portrait '+n);
-  }
-  console.log('PASS_TOURNAMENT21542_FIRE_UI '+JSON.stringify({rosterPortraits:audit.rosterPortraits,fallback:audit.fallback,fit:audit.fit,scroll:[audit.scrollWidth,audit.clientWidth],visibleRounds}));
+  const firstRoundPortraits=await page.locator('.tourBracketRound[data-round="0"] .tourAvatar img').count();
+  assert.equal(firstRoundPortraits,15,'all 15 AI entrants in the first round must show a portrait');
+  console.log('PASS_TOURNAMENT21542_FIRE_UI '+JSON.stringify({rosterPortraits:audit.rosterPortraits,firstRoundPortraits,fallback:audit.fallback,fit:audit.fit,scroll:[audit.scrollWidth,audit.clientWidth],visibleRounds}));
   await context.close();
 } finally {await browser.close();await new Promise(r=>server.close(r))}
