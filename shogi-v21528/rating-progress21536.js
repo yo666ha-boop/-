@@ -90,14 +90,14 @@
   };
 })();
 
-/* v2.15.40: tournament mode loader. This support layer is already injected in browser and Fire. */
+/* v2.15.40b: 16-player tournament mode loader. This support layer is already injected in browser and Fire. */
 (function loadTournament21540(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21540A)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21540A=true;
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21540B)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21540B=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const s=document.createElement('script');
-    s.src=new URL('./tournament21540.js?v=21540a',scriptURL).href;
+    s.src=new URL('./tournament21540.js?v=21540b',scriptURL).href;
     s.async=false;
     document.head.appendChild(s);
   }catch(e){console.error('tournament21540 loader failed',e)}
