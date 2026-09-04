@@ -78,9 +78,9 @@
 #tournament21540Panel.tourFireFit .tourNewsItem{font-size:8px;line-height:1.25}
 #tournament21540Panel.tourFireFit .tourBracketWrap{margin:3px 0}
 #tournament21540Panel.tourFireFit .tourBracketCaption{font-size:9px;margin-bottom:2px}
-#tournament21540Panel.tourFireFit .tourBracketScroll{overflow-x:hidden!important;padding-bottom:0}
-#tournament21540Panel.tourFireFit .tourBracket{min-width:0!important;width:100%!important;gap:3px;padding:4px}
-#tournament21540Panel.tourFireFit .tourBracketRound{width:auto!important;flex:1 1 0!important;min-width:0!important}
+#tournament21540Panel.tourFireFit .tourBracketScroll{overflow-x:hidden!important;padding-bottom:0;box-sizing:border-box!important}
+#tournament21540Panel.tourFireFit .tourBracket{min-width:0!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;gap:3px;padding:4px}
+#tournament21540Panel.tourFireFit .tourBracketRound{width:auto!important;flex:1 1 0!important;min-width:0!important;box-sizing:border-box!important}
 #tournament21540Panel.tourFireFit .tourBracketRoundTitle{font-size:9px;margin-bottom:2px}
 #tournament21540Panel.tourFireFit .tourBracketRoundBody{height:clamp(430px,calc(100vh - 205px),650px)!important;gap:1px}
 #tournament21540Panel.tourFireFit .tourBracketSlot{min-height:0!important;padding:2px 3px!important;font-size:clamp(7px,.85vw,10px)!important;gap:3px!important;border-radius:6px}
