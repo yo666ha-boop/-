@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 
 const sha=String(process.env.PREVIEW_SHA||'').trim();
 assert.match(sha,/^[0-9a-f]{40}$/,'PREVIEW_SHA must be a full commit SHA');
-const path='preview/tournament-16/index.html';
+const path='preview/tournament-16/index21542.html';
 const raw=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/${path}`;
 const blob=`https://github.com/yo666ha-boop/-/blob/${sha}/${path}`;
 const candidates=[`https://htmlpreview.github.io/?${raw}`,`https://htmlpreview.github.io/?${blob}`];
