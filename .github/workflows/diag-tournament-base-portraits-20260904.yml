@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Extract exact FIXED_IMG entries
+      - name: Inspect exact FIXED_IMG source shape
         shell: bash
         run: |
           node <<'NODE'
@@ -19,30 +19,19 @@ jobs:
           const a=s.indexOf(mark);
           console.log('MARK_INDEX',a,'SIZE',s.length);
           if(a<0) throw new Error('FIXED_IMG marker missing');
-          const start=s.indexOf('[',a+mark.length);
-          let depth=0,end=-1,quote='',esc=false;
-          for(let i=start;i<s.length;i++){
-            const ch=s[i];
-            if(quote){
-              if(esc){esc=false;continue;}
-              if(ch==='\\'){esc=true;continue;}
-              if(ch===quote)quote='';
-              continue;
-            }
-            if(ch==='"'||ch==="'"||ch==='`'){quote=ch;continue;}
-            if(ch==='['){depth++;continue;}
-            if(ch===']'){depth--;if(depth===0){end=i;break;}}
-          }
-          console.log('ARRAY_RANGE',start,end,'NEXT',JSON.stringify(s.slice(end+1,end+12)));
-          if(end<0) throw new Error('FIXED_IMG end missing');
-          const literal=s.slice(start,end+1);
-          const arr=Function('"use strict";return ('+literal+')')();
-          console.log('ARRAY_LENGTH',arr.length);
-          console.log('ENTRY_LENGTHS',arr.map(x=>String(x||'').length).join(','));
-          for(const [label,idx] of [['MITSUKI',0],['ONIMAMA',3],['MAMA',4]]){
-            const v=String(arr[idx]||'');
-            console.log(`PORTRAIT_${label}_BEGIN`);
+          console.log('AROUND_MARK_BEGIN');
+          console.log(s.slice(a,a+900));
+          console.log('AROUND_MARK_END');
+          console.log('TAIL_BEGIN');
+          console.log(s.slice(-1800));
+          console.log('TAIL_END');
+          const tail=s.slice(a);
+          const all=tail.match(/data:image\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)||[];
+          console.log('DATA_URI_COUNT',all.length);
+          console.log('DATA_URI_LENGTHS',all.map(x=>x.length).join(','));
+          all.slice(0,8).forEach((v,i)=>{
+            console.log(`DATA_URI_${i}_BEGIN`);
             console.log(v);
-            console.log(`PORTRAIT_${label}_END`);
-          }
+            console.log(`DATA_URI_${i}_END`);
+          });
           NODE
