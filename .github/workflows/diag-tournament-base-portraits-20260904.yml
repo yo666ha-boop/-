@@ -9,29 +9,25 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect exact FIXED_IMG source shape
+      - name: Verify concatenated FIXED_IMG data
         shell: bash
         run: |
           node <<'NODE'
           const fs=require('fs');
-          const s=fs.readFileSync('shogi/strong213_01.part','utf8');
-          const mark='const FIXED_IMG=';
-          const a=s.indexOf(mark);
-          console.log('MARK_INDEX',a,'SIZE',s.length);
-          if(a<0) throw new Error('FIXED_IMG marker missing');
-          console.log('AROUND_MARK_BEGIN');
-          console.log(s.slice(a,a+900));
-          console.log('AROUND_MARK_END');
-          console.log('TAIL_BEGIN');
-          console.log(s.slice(-1800));
-          console.log('TAIL_END');
+          const ids=['01','02','02b','03','04','05','06'];
+          const parts=ids.map(id=>fs.readFileSync(`shogi/strong213_${id}.part`,'utf8'));
+          console.log('PART_LENGTHS',ids.map((id,i)=>id+':'+parts[i].length).join(','));
+          const s=parts.join('');
+          const a=s.indexOf('const FIXED_IMG=');
+          if(a<0)throw new Error('FIXED_IMG missing after concat');
           const tail=s.slice(a);
           const all=tail.match(/data:image\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)||[];
-          console.log('DATA_URI_COUNT',all.length);
-          console.log('DATA_URI_LENGTHS',all.map(x=>x.length).join(','));
-          all.slice(0,8).forEach((v,i)=>{
-            console.log(`DATA_URI_${i}_BEGIN`);
-            console.log(v);
-            console.log(`DATA_URI_${i}_END`);
-          });
+          console.log('CONCAT_SIZE',s.length,'MARK',a,'DATA_URI_COUNT',all.length);
+          console.log('FIRST_LENGTHS',all.slice(0,10).map(x=>x.length).join(','));
+          if(all.length<5)throw new Error('need at least 5 complete FIXED_IMG data URIs');
+          for(const [label,idx] of [['MITSUKI',0],['ONIMAMA',3],['MAMA',4]]){
+            const v=all[idx];
+            console.log(label,'LEN',v.length,'PREFIX',v.slice(0,48),'SUFFIX',v.slice(-32));
+          }
+          console.log('PASS_CONCAT_FIXED_IMG_5PLUS');
           NODE
