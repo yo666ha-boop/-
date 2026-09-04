@@ -3,7 +3,9 @@ on:
   pull_request:
     paths:
       - 'shogi-v21528/tournament21540.js'
+      - 'shogi-v21528/tournament21541.js'
       - 'shogi-v21528/rating-progress21536.js'
+      - 'preview/tournament-16/index.html'
       - '.github/scripts/verify-tournament-preview-url-20260904.mjs'
       - '.github/workflows/verify-tournament-preview-url-20260904.yml'
   workflow_dispatch:
