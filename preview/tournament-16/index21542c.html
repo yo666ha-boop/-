@@ -6,10 +6,12 @@
   const src=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/preview/tournament-16/index21542b.html`;
   const old=`function fixedImages(s){const mark='const FIXED_IMG=',a=s.indexOf(mark);if(a<0)throw Error('FIXED_IMG not found');const from=a+mark.length,end=s.indexOf('],',from);if(end<0)throw Error('FIXED_IMG end not found');const literal=s.slice(from,end+1);const arr=Function('"use strict";return ('+literal+')')();if(!Array.isArray(arr)||arr.length<5)throw Error('FIXED_IMG incomplete '+(arr?.length||0));return arr}`;
   const newer=`function fixedImages(s){const mark='const FIXED_IMG=',a=s.indexOf(mark);if(a<0)throw Error('FIXED_IMG not found');const start=s.indexOf('[',a+mark.length);if(start<0)throw Error('FIXED_IMG start not found');let depth=0,end=-1,quote='',esc=false;for(let i=start;i<s.length;i++){const ch=s[i];if(quote){if(esc){esc=false;continue}if(ch==='\\\\'){esc=true;continue}if(ch===quote)quote='';continue}if(ch==='"'||ch==="'"||ch==='\x60'){quote=ch;continue}if(ch==='['){depth++;continue}if(ch===']'){depth--;if(depth===0){end=i;break}}}if(end<0)throw Error('FIXED_IMG end not found');const literal=s.slice(start,end+1);const arr=Function('"use strict";return ('+literal+')')();if(!Array.isArray(arr)||arr.length<5)throw Error('FIXED_IMG incomplete '+(arr?.length||0));return arr}`;
+  const oldHydrate=`rawText('shogi/strong213_01.part').then(s=>{const a=fixedImages(s);IMG['みつき']=a[0];IMG['おにまま']=a[3];IMG['まま']=a[4]})`;
+  const newHydrate=`Promise.all(['01','02','02b','03','04','05','06'].map(id=>rawText('shogi/strong213_'+id+'.part'))).then(parts=>{const s=parts.join(''),p=s.indexOf('const FIXED_IMG='),all=(p>=0?s.slice(p):s).match(/data:image\\\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)||[];if(all.length<5)throw Error('FIXED_IMG concat incomplete '+all.length);IMG['みつき']=all[0];IMG['おにまま']=all[3];IMG['まま']=all[4]})`;
   try{
     const r=await fetch(src,{cache:'no-store'});if(!r.ok)throw Error('preview source '+r.status);
-    const html=await r.text();if(!html.includes(old))throw Error('21542b parser signature mismatch');
-    const fixed=html.replace(old,newer);
+    const html=await r.text();if(!html.includes(old))throw Error('21542b parser signature mismatch');if(!html.includes(oldHydrate))throw Error('21542b hydrate signature mismatch');
+    const fixed=html.replace(old,newer).replace(oldHydrate,newHydrate);
     document.open();document.write(fixed);document.close();
   }catch(e){document.getElementById('boot').textContent='確認ページの準備に失敗しました: '+String(e);throw e}
 })();
