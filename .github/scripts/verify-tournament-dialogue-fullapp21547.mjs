@@ -151,7 +151,7 @@ try{
     const evalNode=document.getElementById('evalNumber');
     if(evalNode){evalNode.textContent='+900';await delay(700);seen.push(snap('bossAdvantage'));evalNode.textContent='-900';await delay(700);seen.push(snap('bossDisadvantage'));evalNode.textContent='—'}
     await result('draw');await waitBoss('draw');seen.push(snap('bossDraw'));
-    t.challengeBoss();await waitBoss('active');await result('lose');await waitBoss('lost');seen.push(snap('bossLoss'));
+    t.challengeBoss();await waitBoss('active');await result('loss');await waitBoss('lost');seen.push(snap('bossLoss'));
     localStorage.setItem('aiShogiTournament21540',pendingSnapshot);t.render();await delay(120);seen.push(snap('restoredPending'));
     t.challengeBoss();await waitBoss('active');await result('win');await waitBoss('won');seen.push(snap('bossWin'));
     const final=t.state();
