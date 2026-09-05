@@ -32,67 +32,62 @@ try{
       if(t.state()?.active)t.exit();
       if(!t.start(cup.id))throw new Error(cup.id+': start failed');
       await delay(80);
-      for(let round=0;round<4;round++){
-        await result('win');
-        if(round<3){t.next();await delay(60)}
-      }
+      for(let round=0;round<4;round++){await result('win');if(round<3){t.next();await delay(60)}}
       if(!await waitBoss('pending'))throw new Error(cup.id+': boss pending timeout');
       if(!t.challengeBoss())throw new Error(cup.id+': boss challenge failed');
       if(!await waitBoss('active'))throw new Error(cup.id+': boss active timeout');
       await delay(320);
     };
 
+    const initialRestoreAudit=window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.audit?.()||null;
     const rows=[];
     for(const cup of t.cups()){
-      await reachBoss(cup);
-      rows.push(snap(cup,'start'));
-      await result('draw');
-      if(!await waitBoss('draw'))throw new Error(cup.id+': boss draw timeout');
-      await delay(320);rows.push(snap(cup,'draw'));
-      if(!t.challengeBoss())throw new Error(cup.id+': boss draw retry failed');
-      if(!await waitBoss('active'))throw new Error(cup.id+': boss draw retry active timeout');
-      await delay(320);rows.push(snap(cup,'retry'));
-      await result('loss');
-      if(!await waitBoss('lost'))throw new Error(cup.id+': boss lost timeout');
-      await delay(320);rows.push(snap(cup,'lost'));
-      t.exit();await delay(80);
-
-      await reachBoss(cup);
-      await result('win');
-      if(!await waitBoss('won'))throw new Error(cup.id+': boss won timeout');
-      await delay(320);rows.push(snap(cup,'won'));
-      t.exit();await delay(80);
+      await reachBoss(cup);rows.push(snap(cup,'start'));
+      await result('draw');if(!await waitBoss('draw'))throw new Error(cup.id+': boss draw timeout');await delay(320);rows.push(snap(cup,'draw'));
+      if(!t.challengeBoss())throw new Error(cup.id+': boss draw retry failed');if(!await waitBoss('active'))throw new Error(cup.id+': boss draw retry active timeout');await delay(320);rows.push(snap(cup,'retry'));
+      await result('loss');if(!await waitBoss('lost'))throw new Error(cup.id+': boss lost timeout');await delay(320);rows.push(snap(cup,'lost'));t.exit();await delay(80);
+      await reachBoss(cup);await result('win');if(!await waitBoss('won'))throw new Error(cup.id+': boss won timeout');await delay(320);rows.push(snap(cup,'won'));t.exit();await delay(80);
     }
-    return{rows,activeAfter:!!t.state()?.active};
+    return{rows,activeAfter:!!t.state()?.active,initialRestoreAudit};
   });
 
-  const snapReload=async label=>await page.evaluate(label=>{
+  const snapReload=async(label,force=false)=>await page.evaluate(({label,force})=>{
     const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,dock=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK;
-    d.render();
+    if(force)d.render();
     const cup=t.cups().find(c=>c.id==='shinji'),box=document.getElementById('tourDialogue21547'),da=d.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img');
     const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===cup.boss),ri=card?.querySelector('img');
     const actual=img?.currentSrc||img?.src||'',expected=ri?.currentSrc||ri?.src||'',rect=box?.getBoundingClientRect?.()||{width:0,height:0};
     let history={};try{history=JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')}catch(e){}
     const ids=Array.isArray(history?.byKey?.[cup.id+':'+da.context])?history.byKey[cup.id+':'+da.context].slice():[];
-    return{label,context:da.context||null,lineId:box?.dataset.lineId||null,speaker:da.speaker||null,role:box?.dataset.role||null,boss:cup.boss,bossStatus:t.state()?.active?.bossChallenge?.status||null,portraitMatch:!!expected&&actual===expected,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,dock:dock?.audit?.()||null,oppName:(document.getElementById('oppName')?.textContent||'').trim(),historyIds:ids};
-  },label);
+    const sentinel=Array.isArray(history?.byKey?.__reload21547f__)&&history.byKey.__reload21547f__.includes('sentinel-21547f');
+    return{label,context:da.context||null,lineId:box?.dataset.lineId||null,speaker:da.speaker||null,role:box?.dataset.role||null,boss:cup.boss,bossStatus:t.state()?.active?.bossChallenge?.status||null,portraitMatch:!!expected&&actual===expected,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,dock:dock?.audit?.()||null,oppName:(document.getElementById('oppName')?.textContent||'').trim(),historyIds:ids,historySentinel:sentinel,restoreAudit:window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.audit?.()||null};
+  },{label,force});
   const reloadSnap=async label=>{
     await page.reload({waitUntil:'domcontentloaded',timeout:60000});
     await waitRuntime();
-    await page.waitForTimeout(700);
-    return await snapReload(label);
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.version==='21548a',{timeout:10000});
+    await page.waitForFunction(()=>document.documentElement.dataset.tournamentRestore21548==='1',{timeout:10000});
+    await page.waitForTimeout(850);
+    return await snapReload(label,false);
   };
+  const forceAdvance=async label=>await page.evaluate(label=>{
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
+    const beforeBox=document.getElementById('tourDialogue21547'),before=beforeBox?.dataset.lineId||null,context=d.audit?.()?.context||null,cup=t.cups().find(c=>c.id==='shinji');
+    d.render();
+    const after=document.getElementById('tourDialogue21547')?.dataset.lineId||null;
+    let history={};try{history=JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')}catch(e){}
+    const ids=Array.isArray(history?.byKey?.[cup.id+':'+context])?history.byKey[cup.id+':'+context].slice():[];
+    const sentinel=Array.isArray(history?.byKey?.__reload21547f__)&&history.byKey.__reload21547f__.includes('sentinel-21547f');
+    return{label,context,before,after,historyIds:ids,historySentinel:sentinel};
+  },label);
   const waitBossPage=async status=>await page.waitForFunction(s=>window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.bossChallenge?.status===s,status,{timeout:5000});
 
-  const restore={};
+  const restore={},anti={};
   await page.evaluate(()=>{
-    localStorage.removeItem('aiShogiTournamentDialogue21547');
-    const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();
-    if(!t.start('shinji'))throw new Error('reload restore start failed');
+    localStorage.setItem('aiShogiTournamentDialogue21547',JSON.stringify({byKey:{__reload21547f__:['sentinel-21547f']}}));
+    const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('reload restore start failed');
   });
-  await page.waitForTimeout(600);
-  restore.introBefore=await snapReload('introBefore');
-  restore.introAfter=await reloadSnap('introAfter');
+  await page.waitForTimeout(650);restore.introBefore=await snapReload('introBefore',true);restore.introAfter=await reloadSnap('introAfter');anti.intro=await forceAdvance('intro');
 
   await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -102,28 +97,21 @@ try{
     if(t.state()?.active?.bossChallenge?.status!=='pending')throw new Error('reload restore pending timeout');
     const key='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(key));s.active.bossChallenge.tournamentWonAt=Date.now()-5000;localStorage.setItem(key,JSON.stringify(s));
   });
-  await page.waitForTimeout(650);
-  restore.pendingBefore=await snapReload('pendingBefore');
-  restore.pendingAfter=await reloadSnap('pendingAfter');
+  await page.waitForTimeout(650);restore.pendingBefore=await snapReload('pendingBefore',true);restore.pendingAfter=await reloadSnap('pendingAfter');anti.pending=await forceAdvance('pending');
 
   if(!(await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss())))throw new Error('reload restore boss challenge failed');
-  await waitBossPage('active');await page.waitForTimeout(700);
-  restore.activeBefore=await snapReload('activeBefore');
-  restore.activeAfter=await reloadSnap('activeAfter');
+  await waitBossPage('active');await page.waitForTimeout(700);restore.activeBefore=await snapReload('activeBefore',true);restore.activeAfter=await reloadSnap('activeAfter');anti.active=await forceAdvance('active');
 
   await page.evaluate(async()=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-draw';r.textContent='draw';await new Promise(x=>setTimeout(x,120))});
-  await waitBossPage('draw');await page.waitForTimeout(650);
-  restore.drawBefore=await snapReload('drawBefore');
-  restore.drawAfter=await reloadSnap('drawAfter');
+  await waitBossPage('draw');await page.waitForTimeout(650);restore.drawBefore=await snapReload('drawBefore',true);restore.drawAfter=await reloadSnap('drawAfter');anti.draw=await forceAdvance('draw');
 
   if(!(await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss())))throw new Error('reload restore retry failed');
-  await waitBossPage('active');await page.waitForTimeout(700);
-  restore.retryBefore=await snapReload('retryBefore');
-  restore.retryAfter=await reloadSnap('retryAfter');
+  await waitBossPage('active');await page.waitForTimeout(700);restore.retryBefore=await snapReload('retryBefore',true);restore.retryAfter=await reloadSnap('retryAfter');anti.retry=await forceAdvance('retry');
 
   const failures=[];
   const expectedContext={start:'boss_start',draw:'boss_draw',retry:'boss_start',lost:'boss_lost',won:'boss_won'};
   if(report.rows.length!==40)failures.push('rows '+report.rows.length);
+  if(report.initialRestoreAudit?.hadInitialActive!==false||report.initialRestoreAudit?.done!==true)failures.push('fresh page restore guard did not stay idle '+JSON.stringify(report.initialRestoreAudit));
   for(const x of report.rows){
     if(x.context!==expectedContext[x.label])failures.push(`${x.cupId}/${x.label}: context ${x.context}`);
     if(x.speaker!==x.boss)failures.push(`${x.cupId}/${x.label}: speaker ${x.speaker}`);
@@ -142,10 +130,15 @@ try{
     if(before.context!==context||after.context!==context)failures.push(`${beforeKey}/${afterKey}: context ${before.context}/${after.context}`);
     if(before.speaker!==before.boss||after.speaker!==after.boss)failures.push(`${afterKey}: speaker restore mismatch`);
     if(!before.portraitMatch||!after.portraitMatch||!before.visible||!after.visible)failures.push(`${afterKey}: portrait/visibility restore mismatch`);
-    if(!before.lineId||!after.lineId||before.lineId===after.lineId)failures.push(`${afterKey}: anti-repeat did not advance across reload ${before.lineId}/${after.lineId}`);
-    if(!after.historyIds.includes(before.lineId)||!after.historyIds.includes(after.lineId))failures.push(`${afterKey}: persisted dialogue history missing ids`);
+    if(!after.historySentinel)failures.push(`${afterKey}: persisted history sentinel missing`);
+    if(after.restoreAudit?.hadInitialActive!==true||after.restoreAudit?.done!==true)failures.push(`${afterKey}: restore audit not completed ${JSON.stringify(after.restoreAudit)}`);
   }
-  for(const key of ['pendingAfter','drawAfter'])if(restore[key].dock?.docked)failures.push(`${key}: dock should be restored to tournament panel`);
+  for(const [key,x] of Object.entries(anti)){
+    if(!x.before||!x.after||x.before===x.after)failures.push(`${key}: immediate anti-repeat failed ${x.before}/${x.after}`);
+    if(!x.historyIds.includes(x.before)||!x.historyIds.includes(x.after))failures.push(`${key}: current anti-repeat ids not retained in history`);
+    if(!x.historySentinel)failures.push(`${key}: history sentinel lost after new speech`);
+  }
+  for(const key of ['introAfter','pendingAfter','drawAfter'])if(restore[key].dock?.docked)failures.push(`${key}: dock should be in tournament panel`);
   for(const key of ['activeBefore','activeAfter','retryBefore','retryAfter']){
     const x=restore[key];if(!x.dock?.bossActive||!x.dock?.docked||!x.dock?.connected)failures.push(`${key}: active battle dock not restored ${JSON.stringify(x.dock)}`);
     if(!x.oppName.startsWith(x.boss))failures.push(`${key}: boss opponent not restored, oppName=${x.oppName}`);
@@ -155,33 +148,8 @@ try{
   if(failures.length)throw new Error(failures.join(' | '));
 
   const bosses=[...new Set(report.rows.map(x=>x.boss))];
-  console.log('PASS_TOURNAMENT21547E_ALL_BOSS_TERMINALS '+JSON.stringify({
-    bosses:bosses.length,
-    bossNames:bosses,
-    starts:report.rows.filter(x=>x.label==='start'&&x.context==='boss_start').length,
-    draws:report.rows.filter(x=>x.label==='draw'&&x.context==='boss_draw').length,
-    retries:report.rows.filter(x=>x.label==='retry'&&x.context==='boss_start').length,
-    losses:report.rows.filter(x=>x.label==='lost'&&x.context==='boss_lost').length,
-    wins:report.rows.filter(x=>x.label==='won'&&x.context==='boss_won').length,
-    portraitMatches:report.rows.filter(x=>x.portraitMatch).length,
-    bossRoles:report.rows.filter(x=>x.role==='杯ボス').length,
-    visible:report.rows.filter(x=>x.visible).length,
-    battleDockActive:report.rows.filter(x=>['start','retry'].includes(x.label)&&x.dock?.docked).length,
-    restoredAfterTerminal:report.rows.filter(x=>['draw','lost','won'].includes(x.label)&&!x.dock?.docked).length,
-    activeAfter:report.activeAfter,
-    pageErrors
-  }));
-  console.log('PASS_TOURNAMENT21547F_RELOAD_RESTORE '+JSON.stringify({
-    contexts:reloadPairs.map(([,afterKey])=>restore[afterKey].context),
-    antiRepeatAcrossReload:reloadPairs.filter(([beforeKey,afterKey])=>restore[beforeKey].lineId!==restore[afterKey].lineId).length,
-    historyPersisted:reloadPairs.filter(([beforeKey,afterKey])=>restore[afterKey].historyIds.includes(restore[beforeKey].lineId)&&restore[afterKey].historyIds.includes(restore[afterKey].lineId)).length,
-    pendingRestored:restore.pendingAfter.bossStatus==='pending'&&!restore.pendingAfter.dock?.docked,
-    activeRestored:restore.activeAfter.bossStatus==='active'&&restore.activeAfter.dock?.docked,
-    drawRestored:restore.drawAfter.bossStatus==='draw'&&!restore.drawAfter.dock?.docked,
-    retryRestored:restore.retryAfter.bossStatus==='active'&&restore.retryAfter.dock?.docked,
-    bossOpponentRestored:[restore.activeAfter,restore.retryAfter].every(x=>x.oppName.startsWith(x.boss)),
-    pageErrors
-  }));
+  console.log('PASS_TOURNAMENT21547E_ALL_BOSS_TERMINALS '+JSON.stringify({bosses:bosses.length,bossNames:bosses,starts:report.rows.filter(x=>x.label==='start'&&x.context==='boss_start').length,draws:report.rows.filter(x=>x.label==='draw'&&x.context==='boss_draw').length,retries:report.rows.filter(x=>x.label==='retry'&&x.context==='boss_start').length,losses:report.rows.filter(x=>x.label==='lost'&&x.context==='boss_lost').length,wins:report.rows.filter(x=>x.label==='won'&&x.context==='boss_won').length,portraitMatches:report.rows.filter(x=>x.portraitMatch).length,bossRoles:report.rows.filter(x=>x.role==='杯ボス').length,visible:report.rows.filter(x=>x.visible).length,battleDockActive:report.rows.filter(x=>['start','retry'].includes(x.label)&&x.dock?.docked).length,restoredAfterTerminal:report.rows.filter(x=>['draw','lost','won'].includes(x.label)&&!x.dock?.docked).length,activeAfter:report.activeAfter,pageErrors}));
+  console.log('PASS_TOURNAMENT21547F_RELOAD_RESTORE '+JSON.stringify({contexts:reloadPairs.map(([,afterKey])=>restore[afterKey].context),freshStartGuard:report.initialRestoreAudit?.hadInitialActive===false&&report.initialRestoreAudit?.done===true,historySentinelPersisted:reloadPairs.filter(([,afterKey])=>restore[afterKey].historySentinel).length,antiRepeatAfterRestore:Object.values(anti).filter(x=>x.before&&x.after&&x.before!==x.after).length,pendingRestored:restore.pendingAfter.bossStatus==='pending'&&!restore.pendingAfter.dock?.docked,activeRestored:restore.activeAfter.bossStatus==='active'&&restore.activeAfter.dock?.docked,drawRestored:restore.drawAfter.bossStatus==='draw'&&!restore.drawAfter.dock?.docked,retryRestored:restore.retryAfter.bossStatus==='active'&&restore.retryAfter.dock?.docked,bossOpponentRestored:[restore.activeAfter,restore.retryAfter].every(x=>x.oppName.startsWith(x.boss)),pageErrors}));
 } finally {
   await browser.close();
 }
