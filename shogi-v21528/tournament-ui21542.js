@@ -108,7 +108,11 @@
 
   function refresh(){repairPortraits();syncFit()}
   let raf=0;
-  function requestRefresh(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;refresh()})}
+  function requestRefresh(){
+    refresh();
+    if(raf)return;
+    raf=requestAnimationFrame(()=>{raf=0;refresh()});
+  }
 
   const observer=new MutationObserver(requestRefresh);
   function startObserver(){
