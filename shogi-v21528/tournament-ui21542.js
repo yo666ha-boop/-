@@ -155,27 +155,36 @@
 })();
 
 /* v2.15.48a: page reload restore compatibility.
- * Stored tournament state is authoritative. On a fresh page only, reopen the
- * tournament panel for bracket/pending/draw states. For boss_active, restore
- * the actual AI opponent to the saved cup boss before the dialogue battle dock
- * takes over. Never poll-select an already-correct opponent because select()
- * starts a new board.
+ * Only the tournament state that already existed when this script loaded is
+ * eligible for restoration. A tournament started later by the user is never
+ * mistaken for a reload. boss_active restores the saved cup boss as the real
+ * AI opponent once; other saved states reopen the tournament panel stably.
  */
 (function installTournamentReloadRestore21548(){
   'use strict';
   if(window.__AI_SHOGI_TOURNAMENT_RELOAD_RESTORE_21548A)return;
   window.__AI_SHOGI_TOURNAMENT_RELOAD_RESTORE_21548A=true;
   const KEY='aiShogiTournament21540';
-  let done=false,tries=0;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
+  const initialStore=read();
+  const initialActive=initialStore?.active?JSON.parse(JSON.stringify(initialStore.active)):null;
+  const initialBossStatus=initialActive?.bossChallenge?.status||null;
+  const initialBoss=initialActive?.bossChallenge?.boss||null;
+  let done=!initialActive,tries=0;
   const currentOpponent=()=>String(document.getElementById('oppName')?.textContent||'').trim();
+  const panelOpen=()=>!!document.getElementById('tournament21540Panel')?.classList.contains('on');
+  function publish(){
+    window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE={version:'21548a',audit:()=>({done,hadInitialActive:!!initialActive,initialBossStatus,active:!!read()?.active,bossStatus:read()?.active?.bossChallenge?.status||null,opponent:currentOpponent(),panelOpen:panelOpen()})};
+  }
+  publish();
+  if(!initialActive){document.documentElement.dataset.tournamentRestore21548='idle';return}
+
   function restoreOnce(){
     if(done)return true;
-    const panel=document.getElementById('tournament21540Panel'),api=window.AIShogiIOS,store=read(),a=store?.active,b=a?.bossChallenge;
-    if(!panel||!api?.characters||!api?.select)return false;
-    if(!a)return false;
-    if(b?.status==='active'){
-      const boss=String(b.boss||'');
+    const panel=document.getElementById('tournament21540Panel'),api=window.AIShogiIOS,current=read()?.active;
+    if(!panel||!api?.characters||!api?.select||!current)return false;
+    if(initialBossStatus==='active'){
+      const boss=String(initialBoss||current?.bossChallenge?.boss||'');
       if(!boss)return false;
       if(!currentOpponent().startsWith(boss)){
         const idx=api.characters().findIndex(c=>c?.name===boss);
@@ -183,19 +192,18 @@
         try{api.select(idx)}catch(e){console.error('tournament reload boss opponent restore failed',e);return false}
       }
       panel.classList.remove('on');
-      const st=document.getElementById('status');
-      if(st)st.textContent='復元した杯ボス戦：'+boss+' に挑戦中';
+      const st=document.getElementById('status');if(st)st.textContent='復元した杯ボス戦：'+boss+' に挑戦中';
     }else{
-      panel.classList.add('on');
-      try{window.AI_SHOGI_TOURNAMENT?.render?.()}catch(e){}
+      const reopen=()=>{
+        const p=document.getElementById('tournament21540Panel');if(!p)return;
+        p.classList.add('on');
+        try{window.AI_SHOGI_TOURNAMENT?.render?.()}catch(e){}
+        p.classList.add('on');
+      };
+      reopen();setTimeout(reopen,120);setTimeout(reopen,350);setTimeout(reopen,700);
     }
-    done=true;
-    document.documentElement.dataset.tournamentRestore21548='1';
-    return true;
+    done=true;document.documentElement.dataset.tournamentRestore21548='1';publish();return true;
   }
-  const timer=setInterval(()=>{
-    if(restoreOnce()||++tries>120)clearInterval(timer);
-  },100);
+  const timer=setInterval(()=>{if(restoreOnce()||++tries>120)clearInterval(timer)},100);
   setTimeout(restoreOnce,0);
-  window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE={version:'21548a',audit:()=>({done,active:!!read()?.active,bossStatus:read()?.active?.bossChallenge?.status||null,opponent:currentOpponent(),panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on')})};
 })();
