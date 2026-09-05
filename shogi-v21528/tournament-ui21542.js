@@ -118,7 +118,7 @@
   function startObserver(){
     const panel=document.getElementById('tournament21540Panel');
     if(!panel)return false;
-    observer.disconnect();observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+    observer.disconnect();observer.observe(panel,{childList:true,subtree:true});
     refresh();return true;
   }
   let tries=0;
