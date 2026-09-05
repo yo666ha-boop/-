@@ -152,12 +152,19 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
 
   function patchAPI(){
     const t=window.AI_SHOGI_TOURNAMENT;if(!t||patched||typeof t.start!=='function')return false;
-    const originalStart=t.start.bind(t),originalNext=t.next?.bind(t),originalAudit=t.audit?.bind(t);
+    const originalStart=t.start.bind(t),originalNext=t.next?.bind(t),originalExit=t.exit?.bind(t),originalAudit=t.audit?.bind(t);
     t.start=function(id,...args){
       const before=read(),baseline=Number(before?.trophies?.[id])||0,result=originalStart(id,...args);
       if(!rewriteTournament(id,baseline))return result;
       try{originalNext?.()}catch(e){}
       renderAndDecorate();return true;
+    };
+    t.exit=function(...args){
+      const a=read()?.active;
+      if(a&&['boss_pending','boss_active','boss_draw'].includes(a.status)){
+        if(!confirm('優勝後のボス挑戦を終了して通常対局に戻りますか？'))return false;
+      }
+      return originalExit?originalExit(...args):false;
     };
     t.challengeBoss=()=>startBoss(false);
     t.bossState=()=>JSON.parse(JSON.stringify(read()?.active?.bossChallenge||null));
