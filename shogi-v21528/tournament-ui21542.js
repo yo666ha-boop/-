@@ -130,7 +130,7 @@
       const roster=chars().map(c=>c.name),missingRoster=roster.filter(n=>!sourceFor(n));
       const panel=document.getElementById('tournament21540Panel');
       const scroll=panel?.querySelector('.tourBracketScroll'),bracket=panel?.querySelector('.tourBracket');
-      const fallback=[...document.querySelectorAll('.tourBracketSlot .tourAvatarFallback')].filter(x=>x.closest('.tourBracketSlot')?.querySelector('.tourSlotName')?.textContent!=='—').length;
+      const fallback=[...document.querySelectorAll('.tourBracketSlot .tourAvatarFallback')].filter(x=>{const name=slotName(x.closest('.tourBracketSlot'));return name&&name!=='—'&&name!==PLAYER_LABEL}).length;
       return{ok:true,fire:IS_FIRE,roster:roster.length,rosterPortraits:roster.length-missingRoster.length,missingRoster,fallback,fit:!!panel?.classList.contains('tourFireFit'),activeFit:!!panel?.classList.contains('tourHasActive'),scrollWidth:scroll?.scrollWidth||0,clientWidth:scroll?.clientWidth||0,bracketWidth:bracket?.getBoundingClientRect?.().width||0,viewportWidth:innerWidth};
     }
   };
