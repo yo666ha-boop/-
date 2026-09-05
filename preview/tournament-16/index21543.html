@@ -15,10 +15,11 @@
   const newHydrate=`Promise.all(['01','02','02b','03','04','05','06'].map(id=>rawText('shogi/strong213_'+id+'.part'))).then(parts=>{const s=parts.join(''),p=s.indexOf('const FIXED_IMG='),all=(p>=0?s.slice(p):s).match(/data:image\\\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g)||[];if(all.length<5)throw Error('FIXED_IMG concat incomplete '+all.length);IMG['みつき']=all[0];IMG['おにまま']=all[3];IMG['まま']=all[4]})`;
   const closeScript='</scr'+'ipt>';
   const bootMarker='renderCups();hydrate();\n'+closeScript+'</body></html>';
+  const safeScript=s=>s.replace(new RegExp('<\\/script','gi'),'<\\/script');
   try{
     const [baseRes,fieldRes,patchRes,bossRes,skinRes,bankRes,dialogueRes]=await Promise.all([fetch(baseURL,{cache:'no-store'}),fetch(fieldURL,{cache:'no-store'}),fetch(patchURL,{cache:'no-store'}),fetch(bossURL,{cache:'no-store'}),fetch(skinURL,{cache:'no-store'}),fetch(bankURL,{cache:'no-store'}),fetch(dialogueURL,{cache:'no-store'})]);
     if(!baseRes.ok)throw Error('preview source '+baseRes.status);if(!fieldRes.ok)throw Error('field rule '+fieldRes.status);if(!patchRes.ok)throw Error('bracket patch '+patchRes.status);if(!bossRes.ok)throw Error('boss patch '+bossRes.status);if(!skinRes.ok)throw Error('visual skin '+skinRes.status);if(!bankRes.ok)throw Error('dialogue bank '+bankRes.status);if(!dialogueRes.ok)throw Error('dialogue preview '+dialogueRes.status);
-    let html=await baseRes.text(),field=await fieldRes.text(),patch=await patchRes.text(),boss=await bossRes.text(),skin=await skinRes.text(),bank=await bankRes.text(),dialogue=await dialogueRes.text();
+    let html=await baseRes.text(),field=safeScript(await fieldRes.text()),patch=safeScript(await patchRes.text()),boss=safeScript(await bossRes.text()),skin=await skinRes.text(),bank=safeScript(await bankRes.text()),dialogue=safeScript(await dialogueRes.text());
     if(!html.includes(oldHydrate))throw Error('21542b hydrate signature mismatch');
     if(!html.includes(bootMarker))throw Error('21542b boot signature mismatch');
     html=html.replace(oldHydrate,newHydrate)
@@ -26,7 +27,6 @@
       .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・優勝後ボス戦＋状況セリフ')
       .replace('16人・画像完全＋Fireフィット確認版','16人トーナメント → 優勝後ボス戦＋状況セリフ')
       .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。杯ボスは16人トーナメントには参加せず、大会主として画像付きの状況セリフを話します。まず4勝してトーナメント優勝、そのあとに杯ボスへ挑戦します。AI同士の勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。');
-    for(const name of ['field','patch','boss','bank','dialogue'])eval(name+'='+name+`.replace(new RegExp('<\\\\/script','gi'),'<\\\\/script')`);
     html=html.replace(bootMarker,bank+'\n'+field+'\n'+patch+'\n'+boss+'\n'+dialogue+'\nrenderCups();hydrate();\n'+closeScript+'</body></html>');
     document.open();document.write(html);document.close();
   }catch(e){document.getElementById('boot').textContent='確認ページの準備に失敗しました: '+String(e);throw e}
