@@ -4,6 +4,8 @@ on:
     paths:
       - 'shogi-v21528/tournament21540.js'
       - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
       - 'shogi-v21528/rating-progress21536.js'
       - '.github/scripts/verify-tournament21540.mjs'
       - '.github/workflows/verify-tournament21540.yml'
@@ -21,7 +23,9 @@ jobs:
       - name: Syntax check
         run: |
           node --check shogi-v21528/tournament21541.js
+          node --check shogi-v21528/tournament-field21545.js
+          node --check shogi-v21528/tournament-boss21546.js
           node --check shogi-v21528/rating-progress21536.js
           node --check .github/scripts/verify-tournament21540.mjs
-      - name: Verify tournament flow
+      - name: Verify tournament then boss flow
         run: node .github/scripts/verify-tournament21540.mjs
