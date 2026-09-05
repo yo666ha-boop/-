@@ -1,11 +1,11 @@
-/* みつき将棋 大会画像付き状況セリフ v2.15.47a
+/* みつき将棋 大会画像付き状況セリフ v2.15.47b
  * 杯ボスはトーナメント参加者ではなく「大会主」として実況し、優勝後だけ対局相手になる。
  * 既存26キャラ画像を再利用。状況変化時だけ台詞を選び、直近5件の同一台詞を避ける。
  */
 (function installTournamentDialogue21547(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547A)return;
-  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547A=true;
+  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547B)return;
+  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547B=true;
 
   const KEY='aiShogiTournament21540';
   const HISTORY_KEY='aiShogiTournamentDialogue21547';
@@ -33,6 +33,7 @@
   function display(name){return name===PLAYER?'あなた':String(name||'未定')}
   function currentOpponent(a){const row=a?.bracket?.rounds?.[a?.round];if(!Array.isArray(row))return null;return row[(Number(a.playerSlot)||0)^1]||null}
   function moveCount(){const s=gameState();return Array.isArray(s?.log)?s.log.length:0}
+  function visibleEvalScore(){const t=(document.getElementById('evalNumber')?.textContent||'').trim();if(!t||t==='—')return null;const n=Number(t.replace(/[^+\-\d.]/g,''));return Number.isFinite(n)?n:null}
 
   function latestUpset(a){
     const entries=Object.entries(a?.bracket?.results||{}).map(([key,r])=>({key,...r})).filter(r=>r?.kind==='ai'&&r?.winner&&r?.resolvedAt).sort((x,y)=>Number(y.resolvedAt)-Number(x.resolvedAt));
@@ -49,7 +50,10 @@
     const b=a.bossChallenge||{};let context='r1',label='',extra='';
     if(b.status==='pending')context='boss_pending';
     else if(b.status==='active'){
-      const moves=moveCount();context=moves<18?'boss_start':moves<54?'boss_mid':'boss_end';extra='moves'+(moves<18?'0':moves<54?'1':'2');
+      const moves=moveCount(),score=visibleEvalScore();
+      if(score!=null&&score>=350){context='boss_advantage';extra='score+'+Math.floor(score/100)}
+      else if(score!=null&&score<=-350){context='boss_disadvantage';extra='score'+Math.ceil(score/100)}
+      else{context=moves<18?'boss_start':moves<54?'boss_mid':'boss_end';extra='moves'+(moves<18?'0':moves<54?'1':'2')}
     }else if(b.status==='won')context='boss_won';
     else if(b.status==='lost')context='boss_lost';
     else if(b.status==='draw')context='boss_draw';
@@ -109,10 +113,10 @@ body.tournamentFire21542 #tournament21540Panel .tourDialogue21547{grid-template-
   }
   function audit(){
     const d=derive(),b=bank()?.audit?.()||{},box=document.getElementById('tourDialogue21547'),img=box?.querySelector('img'),panel=document.getElementById('tournament21540Panel');
-    return{ok:!!b.ok&&(!d||!!box),version:'21547a',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
+    return{ok:!!b.ok&&(!d||!!box),version:'21547b',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
   }
 
-  window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547a',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
+  window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547b',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
   observer=new MutationObserver(()=>setTimeout(()=>render(false),0));observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
   let tries=0;const boot=setInterval(()=>{render(false);if(++tries>120)clearInterval(boot)},120);setInterval(()=>render(false),600);
   window.addEventListener('resize',()=>render(false));window.addEventListener('orientationchange',()=>setTimeout(()=>render(false),100));window.addEventListener('ai-shogi-local-save',()=>setTimeout(()=>render(false),0));
