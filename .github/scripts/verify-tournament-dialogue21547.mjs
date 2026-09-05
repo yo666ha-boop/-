@@ -17,7 +17,7 @@ try{
   const page=await browser.newPage({viewport:{width:1280,height:800}});await page.goto('http://127.0.0.1:43147/',{waitUntil:'load'});
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK?.audit?.().ok&&window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit);
   const bankAudit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK.audit());
-  assert.equal(bankAudit.bosses,8);assert.equal(bankAudit.contexts,18);assert.ok(bankAudit.minVariants>=25);assert.ok(bankAudit.totalContextVariants>=3600);
+  assert.equal(bankAudit.bosses,8);assert.equal(bankAudit.contexts,19);assert.ok(bankAudit.minVariants>=25);assert.ok(bankAudit.totalContextVariants>=3800);
   const anti=await page.evaluate(()=>{const b=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK,h=[];const ids=[];for(let i=0;i<6;i++){const p=b.pick('akiou','qf',{cup:'あき王杯',boss:'あき王'},h,0);ids.push(p.id);h.push(p.id)}return ids});
   assert.equal(new Set(anti).size,6,'anti-repeat must avoid the previous five exact lines');
   await page.waitForTimeout(3500);
