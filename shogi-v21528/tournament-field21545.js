@@ -1,15 +1,16 @@
-/* みつき将棋 大会参加者ルール v2.15.45a
+/* みつき将棋 大会参加者ルール v2.15.45b
  * 安定済み tournament21541 本体を直接書き換えず、参加者候補だけを開始時に制限する互換レイヤー。
- * - 16人制に必要な14人を確保できる最小R上限を求める
+ * - 杯ボスはトーナメントに出さない。優勝後に別ボス戦へ進む
+ * - 16人制に必要な非ボス15人を確保できる最小R上限を求める
  * - その上限と杯ボスRの大きい方を参加上限にする
  * - R2100以上の杯では、現在の26キャラ構成上、ボスより高Rのキャラを出さない
  * - 低位杯は16人を成立させるために必要な分だけ上限を広げる
- * - キャラR・AI思考・AI同士のElo風勝敗・決勝ボス固定は変更しない
+ * - キャラR・AI思考・AI同士のElo風勝敗は変更しない
  */
 (function installTournamentField21545(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_FIELD_21545A)return;
-  window.__AI_SHOGI_TOURNAMENT_FIELD_21545A=true;
+  if(window.__AI_SHOGI_TOURNAMENT_FIELD_21545B)return;
+  window.__AI_SHOGI_TOURNAMENT_FIELD_21545B=true;
 
   const CUPS={
     shinji:{id:'shinji',boss:'しんじ',bossRating:1550},
@@ -30,11 +31,11 @@
   function ruleFor(cup,all){
     const nonBoss=(Array.isArray(all)?all:[]).filter(ch=>ch?.name!==cup.boss).slice();
     const asc=nonBoss.slice().sort((a,b)=>rating(a)-rating(b)||String(a.name).localeCompare(String(b.name),'ja'));
-    const minimumNeeded=rating(asc[Math.min(13,Math.max(0,asc.length-1))]);
+    const minimumNeeded=rating(asc[Math.min(14,Math.max(0,asc.length-1))]);
     const ceiling=Math.max(Number(cup.bossRating)||1500,minimumNeeded||0);
     const eligible=nonBoss.filter(ch=>rating(ch)<=ceiling);
     const score=ch=>{const d=rating(ch)-cup.bossRating;return d<=0?Math.abs(d):(Math.abs(d)*4+120)};
-    const selected=eligible.slice().sort((a,b)=>score(a)-score(b)||rating(a)-rating(b)||String(a.name).localeCompare(String(b.name),'ja')).slice(0,14);
+    const selected=eligible.slice().sort((a,b)=>score(a)-score(b)||rating(a)-rating(b)||String(a.name).localeCompare(String(b.name),'ja')).slice(0,15);
     return{
       cupId:cup.id,boss:cup.boss,bossRating:cup.bossRating,ceiling,minimumNeeded,
       eligible:eligible.map(ch=>ch.name),selected:selected.map(ch=>ch.name),
@@ -80,7 +81,7 @@
   function patchTournamentAPI(){
     const t=window.AI_SHOGI_TOURNAMENT;
     if(!t||typeof t.start!=='function')return false;
-    if(t.__field21545a){tournamentPatched=true;return true}
+    if(t.__field21545b){tournamentPatched=true;return true}
     const originalStart=t.start.bind(t);
     t.start=function(id,...args){
       const cup=begin(id);
@@ -92,6 +93,7 @@
       return cup?ruleFor(cup,all):null;
     };
     t.__field21545a=true;
+    t.__field21545b=true;
     tournamentPatched=true;
     return true;
   }
@@ -110,7 +112,7 @@
   install();
 
   window.AI_SHOGI_TOURNAMENT_FIELD_RULE={
-    version:'21545a',
+    version:'21545b',
     audit:(id='akiou')=>{
       const cup=CUPS[id]||CUPS.akiou;
       const all=originalCharacters?originalCharacters():(window.AIShogiIOS?.characters?.()||[]);
