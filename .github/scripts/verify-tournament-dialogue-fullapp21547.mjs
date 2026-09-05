@@ -134,7 +134,8 @@ try{
       const a=t.state()?.active||null,da=d.audit?.()||{},box=document.getElementById('tourDialogue21547');
       return {label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,status:a?.status||null,round:Number(a?.round??-1),pending:a?.pending||null,bossStatus:a?.bossChallenge?.status||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portrait:!!box?.querySelector('.tourDialoguePortrait img')?.src};
     };
-    const result=async kind=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-'+kind;r.textContent=kind;await delay(220)};\n    const waitBoss=async status=>{for(let i=0;i<30;i++){if(t.state()?.active?.bossChallenge?.status===status)return true;await delay(80)}return false};
+    const result=async kind=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-'+kind;r.textContent=kind;await delay(220)};
+    const waitBoss=async status=>{for(let i=0;i<30;i++){if(t.state()?.active?.bossChallenge?.status===status)return true;await delay(80)}return false};
     if(t.state()?.active)t.exit();
     t.start('shinji');await delay(180);
     const seen=[snap('intro')];
@@ -149,8 +150,8 @@ try{
     t.challengeBoss();await delay(180);seen.push(snap('bossStart'));
     const evalNode=document.getElementById('evalNumber');
     if(evalNode){evalNode.textContent='+900';await delay(700);seen.push(snap('bossAdvantage'));evalNode.textContent='-900';await delay(700);seen.push(snap('bossDisadvantage'));evalNode.textContent='—'}
-    await result('draw');seen.push(snap('bossDraw'));
-    t.challengeBoss();await delay(160);await result('lose');seen.push(snap('bossLoss'));
+    await result('draw');await waitBoss('draw');seen.push(snap('bossDraw'));
+    t.challengeBoss();await waitBoss('active');await result('lose');await waitBoss('lost');seen.push(snap('bossLoss'));
     localStorage.setItem('aiShogiTournament21540',pendingSnapshot);t.render();await delay(120);seen.push(snap('restoredPending'));
     t.challengeBoss();await waitBoss('active');await result('win');await waitBoss('won');seen.push(snap('bossWin'));
     const final=t.state();
