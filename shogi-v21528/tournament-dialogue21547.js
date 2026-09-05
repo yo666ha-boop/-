@@ -1,11 +1,12 @@
-/* みつき将棋 大会画像付き状況セリフ v2.15.47b
+/* みつき将棋 大会画像付き状況セリフ v2.15.47c
  * 杯ボスはトーナメント参加者ではなく「大会主」として実況し、優勝後だけ対局相手になる。
  * 既存26キャラ画像を再利用。状況変化時だけ台詞を選び、直近5件の同一台詞を避ける。
+ * ボス戦の優勢/劣勢はAI先生の表示評価を優先し、未解析時だけ本体と同じ駒価値の駒得差を補助判定に使う。
  */
 (function installTournamentDialogue21547(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547B)return;
-  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547B=true;
+  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547C)return;
+  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547C=true;
 
   const KEY='aiShogiTournament21540';
   const HISTORY_KEY='aiShogiTournamentDialogue21547';
@@ -13,6 +14,7 @@
   const ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const CUP_BOSS={shinji:'しんじ',ayanami:'あやなみ',kenshiro:'ケンシロウ',kaworu:'カヲル',akiou:'あき王',micchan:'みっちゃん',mitsuki:'みつき',future:'未来からやってきたみつき'};
   const CUP_NAME={shinji:'しんじ杯',ayanami:'あやなみ杯',kenshiro:'ケンシロウ杯',kaworu:'カヲル杯',akiou:'あき王杯',micchan:'みっちゃん杯',mitsuki:'みつき杯',future:'未来みつき杯'};
+  const MATERIAL_VAL={P:100,L:280,N:300,S:420,G:500,B:700,R:850,K:20000,'+P':500,'+L':500,'+N':500,'+S':500,'+B':900,'+R':1050};
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
   const readHistory=()=>{try{const x=JSON.parse(localStorage.getItem(HISTORY_KEY)||'null');return x&&typeof x==='object'?x:{version:1,byKey:{}}}catch(e){return{version:1,byKey:{}}}};
@@ -34,6 +36,13 @@
   function currentOpponent(a){const row=a?.bracket?.rounds?.[a?.round];if(!Array.isArray(row))return null;return row[(Number(a.playerSlot)||0)^1]||null}
   function moveCount(){const s=gameState();return Array.isArray(s?.log)?s.log.length:0}
   function visibleEvalScore(){const t=(document.getElementById('evalNumber')?.textContent||'').trim();if(!t||t==='—')return null;const n=Number(t.replace(/[^+\-\d.]/g,''));return Number.isFinite(n)?n:null}
+  function materialEvalScore(){
+    const s=gameState();if(!Array.isArray(s?.b)||!s?.h)return null;let v=0,seen=false;
+    for(const p of s.b){if(!p||p.k==='K')continue;const val=MATERIAL_VAL[p.k];if(!Number.isFinite(val))continue;const side=Number(p.o);if(side!==1&&side!==-1)continue;v+=(side===1?1:-1)*val;seen=true}
+    for(const side of[1,-1]){const hand=s.h?.[side];if(!hand||typeof hand!=='object')continue;for(const k in hand){const n=Number(hand[k])||0,val=MATERIAL_VAL[k];if(!n||!Number.isFinite(val)||k==='K')continue;v+=(side===1?1:-1)*n*val*.94;seen=true}}
+    return seen?Math.round(v):0;
+  }
+  function bossSituationScore(){const teacher=visibleEvalScore();if(teacher!=null)return{score:teacher,threshold:350,source:'teacher'};const material=materialEvalScore();return material==null?null:{score:material,threshold:500,source:'material'}}
 
   function latestUpset(a){
     const entries=Object.entries(a?.bracket?.results||{}).map(([key,r])=>({key,...r})).filter(r=>r?.kind==='ai'&&r?.winner&&r?.resolvedAt).sort((x,y)=>Number(y.resolvedAt)-Number(x.resolvedAt));
@@ -47,12 +56,12 @@
     const cupId=a.cupId,boss=CUP_BOSS[cupId],opp=currentOpponent(a),now=Date.now();
     if(lastCup!==cupId){lastCup=cupId;cupSince=now;lastOpponent=opp||'';opponentSince=now}
     if(opp&&opp!==lastOpponent){lastOpponent=opp;opponentSince=now}
-    const b=a.bossChallenge||{};let context='r1',label='',extra='';
+    const b=a.bossChallenge||{};let context='r1',label='',extra='',scoreSource=null;
     if(b.status==='pending')context='boss_pending';
     else if(b.status==='active'){
-      const moves=moveCount(),score=visibleEvalScore();
-      if(score!=null&&score>=350){context='boss_advantage';extra='score+'+Math.floor(score/100)}
-      else if(score!=null&&score<=-350){context='boss_disadvantage';extra='score'+Math.ceil(score/100)}
+      const moves=moveCount(),sit=bossSituationScore();scoreSource=sit?.source||null;
+      if(sit&&sit.score>=sit.threshold){context='boss_advantage';extra=sit.source+'+'+Math.floor(sit.score/100)}
+      else if(sit&&sit.score<=-sit.threshold){context='boss_disadvantage';extra=sit.source+Math.ceil(sit.score/100)}
       else{context=moves<18?'boss_start':moves<54?'boss_mid':'boss_end';extra='moves'+(moves<18?'0':moves<54?'1':'2')}
     }else if(b.status==='won')context='boss_won';
     else if(b.status==='lost')context='boss_lost';
@@ -70,7 +79,7 @@
     label=bank()?.events?.[context]?.label||'大会中';
     const role=b.status==='active'||b.status==='pending'||b.status==='won'||b.status==='lost'||b.status==='draw'?'杯ボス':'大会主・トーナメント外';
     const sig=[cupId,context,a.round,a.pending||'',a.status||'',opp||'',b.status||'',extra].join('|');
-    return{store,a,cupId,boss,opp,context,label,role,vars,sig};
+    return{store,a,cupId,boss,opp,context,label,role,vars,sig,scoreSource};
   }
 
   function choose(d,force=false){
@@ -107,16 +116,16 @@ body.tournamentFire21542 #tournament21540Panel .tourDialogue21547{grid-template-
     if(!d||!activeRoot){document.getElementById('tourDialogue21547')?.remove();lastSignature='';lastPick=null;return false}
     const p=choose(d,force);if(!p)return false;const src=portrait(d.boss),box=ensureBox(activeRoot);
     const oldImg=box.querySelector('img');const same=!force&&box.dataset.context===d.context&&box.dataset.cup===d.cupId&&box.dataset.speaker===d.boss&&box.dataset.role===d.role&&box.dataset.lineId===p.id&&(!src||oldImg?.src===src);if(same)return true;
-    box.dataset.context=d.context;box.dataset.cup=d.cupId;box.dataset.speaker=d.boss;box.dataset.role=d.role;box.dataset.lineId=p.id;
+    box.dataset.context=d.context;box.dataset.cup=d.cupId;box.dataset.speaker=d.boss;box.dataset.role=d.role;box.dataset.lineId=p.id;box.dataset.scoreSource=d.scoreSource||'';
     box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.boss)+'">':'<span aria-hidden="true">'+esc(Array.from(d.boss)[0]||'王')+'</span>')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(p.label)+'</span><span class="tourDialogueRole">'+esc(d.role)+'</span></div><div class="tourDialogueName">'+esc(d.boss)+'</div><div class="tourDialogueBubble">'+esc(p.text)+'</div></div>';
     return true;
   }
   function audit(){
     const d=derive(),b=bank()?.audit?.()||{},box=document.getElementById('tourDialogue21547'),img=box?.querySelector('img'),panel=document.getElementById('tournament21540Panel');
-    return{ok:!!b.ok&&(!d||!!box),version:'21547b',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
+    return{ok:!!b.ok&&(!d||!!box),version:'21547c',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
   }
 
-  window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547b',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
+  window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547c',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
   observer=new MutationObserver(()=>setTimeout(()=>render(false),0));observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
   let tries=0;const boot=setInterval(()=>{render(false);if(++tries>120)clearInterval(boot)},120);setInterval(()=>render(false),600);
   window.addEventListener('resize',()=>render(false));window.addEventListener('orientationchange',()=>setTimeout(()=>render(false),100));window.addEventListener('ai-shogi-local-save',()=>setTimeout(()=>render(false),0));
