@@ -26,7 +26,8 @@
       .replace('</head>','<style id="visualPolish21544Style">'+skin+'</style></head>')
       .replace('大会モード16人・画像完全＋Fireフィット確認版','大会モード16人・優勝後ボス戦＋状況セリフ')
       .replace('16人・画像完全＋Fireフィット確認版','16人トーナメント → 優勝後ボス戦＋状況セリフ')
-      .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。杯ボスは16人トーナメントには参加せず、大会主として画像付きの状況セリフを話します。まず4勝してトーナメント優勝、そのあとに杯ボスへ挑戦します。AI同士の勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。');
+      .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。杯ボスは16人トーナメントには参加せず、大会主として画像付きの状況セリフを話します。まず4勝してトーナメント優勝、そのあとに杯ボスへ挑戦します。AI同士の勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。')
+      .replaceAll('決勝ボス','優勝後ボス');
     html=html.replace(bootMarker,bank+'\n'+field+'\n'+patch+'\n'+boss+'\n'+dialogue+'\nrenderCups();hydrate();\n'+closeScript+'</body></html>');
     document.open();document.write(html);document.close();
   }catch(e){document.getElementById('boot').textContent='確認ページの準備に失敗しました: '+String(e);throw e}
