@@ -153,3 +153,49 @@
     document.head.appendChild(s);
   }catch(e){console.error('tournament21543 bracket loader failed',e)}
 })();
+
+/* v2.15.48a: page reload restore compatibility.
+ * Stored tournament state is authoritative. On a fresh page only, reopen the
+ * tournament panel for bracket/pending/draw states. For boss_active, restore
+ * the actual AI opponent to the saved cup boss before the dialogue battle dock
+ * takes over. Never poll-select an already-correct opponent because select()
+ * starts a new board.
+ */
+(function installTournamentReloadRestore21548(){
+  'use strict';
+  if(window.__AI_SHOGI_TOURNAMENT_RELOAD_RESTORE_21548A)return;
+  window.__AI_SHOGI_TOURNAMENT_RELOAD_RESTORE_21548A=true;
+  const KEY='aiShogiTournament21540';
+  let done=false,tries=0;
+  const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
+  const currentOpponent=()=>String(document.getElementById('oppName')?.textContent||'').trim();
+  function restoreOnce(){
+    if(done)return true;
+    const panel=document.getElementById('tournament21540Panel'),api=window.AIShogiIOS,store=read(),a=store?.active,b=a?.bossChallenge;
+    if(!panel||!api?.characters||!api?.select)return false;
+    if(!a)return false;
+    if(b?.status==='active'){
+      const boss=String(b.boss||'');
+      if(!boss)return false;
+      if(!currentOpponent().startsWith(boss)){
+        const idx=api.characters().findIndex(c=>c?.name===boss);
+        if(idx<0)return false;
+        try{api.select(idx)}catch(e){console.error('tournament reload boss opponent restore failed',e);return false}
+      }
+      panel.classList.remove('on');
+      const st=document.getElementById('status');
+      if(st)st.textContent='復元した杯ボス戦：'+boss+' に挑戦中';
+    }else{
+      panel.classList.add('on');
+      try{window.AI_SHOGI_TOURNAMENT?.render?.()}catch(e){}
+    }
+    done=true;
+    document.documentElement.dataset.tournamentRestore21548='1';
+    return true;
+  }
+  const timer=setInterval(()=>{
+    if(restoreOnce()||++tries>120)clearInterval(timer);
+  },100);
+  setTimeout(restoreOnce,0);
+  window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE={version:'21548a',audit:()=>({done,active:!!read()?.active,bossStatus:read()?.active?.bossChallenge?.status||null,opponent:currentOpponent(),panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on')})};
+})();
