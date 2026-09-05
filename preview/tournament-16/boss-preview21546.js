@@ -39,13 +39,13 @@
   renderBracket=function(){oldRender();setTimeout(()=>{promote();decorate()},0)};
   if(winBtn)winBtn.onclick=()=>{
     if(active?.bossChallenge?.status==='active'){
-      active.bossChallenge.status='won';active.status='cup_clear';statusEl.textContent=`🏆 ${active.cup.name} 完全制覇！`;news.textContent=`16人トーナメント優勝後、杯ボス ${active.cup.boss} も撃破しました。`;oldRender();decorate();return;
+      active.bossChallenge.status='won';active.status='cup_clear';oldRender();statusEl.textContent=`🏆 ${active.cup.name} 完全制覇！`;news.textContent=`16人トーナメント優勝後、杯ボス ${active.cup.boss} も撃破しました。`;decorate();return;
     }
     oldWin?.();promote();decorate();
   };
   if(lossBtn)lossBtn.onclick=()=>{
     if(active?.bossChallenge?.status==='active'){
-      active.bossChallenge.status='lost';active.status='boss_lost';statusEl.textContent='トーナメント優勝・ボス戦敗北';news.textContent=`トーナメントは優勝。杯ボス ${active.cup.boss} には敗れ、完全制覇ならず。`;oldRender();decorate();return;
+      active.bossChallenge.status='lost';active.status='boss_lost';oldRender();statusEl.textContent='トーナメント優勝・ボス戦敗北';news.textContent=`トーナメントは優勝。杯ボス ${active.cup.boss} には敗れ、完全制覇ならず。`;decorate();return;
     }
     oldLoss?.();decorate();
   };
@@ -54,5 +54,5 @@
     const base=oldAudit();const cup=active?.cup,boss=cup?.boss||null,r0=active?.rounds?.[0]||[];
     return{...base,format:'16-player-then-boss',bossSeparate:true,boss,bossInBracket:!!(boss&&r0.includes(boss)),bossStatus:active?.bossChallenge?.status||null,tournamentChampion:!!(active?.rounds?.[4]?.[0]===PLAYER),cupClear:active?.status==='cup_clear'};
   };
-  ensureBossBox();button();decorate();
+  ensureBossBox();button();decorate();setTimeout(decorate,0);setTimeout(decorate,500);
 })();
