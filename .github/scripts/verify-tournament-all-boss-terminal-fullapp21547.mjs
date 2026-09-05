@@ -67,7 +67,10 @@ try{
     await waitRuntime();
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.version==='21548a',{timeout:10000});
     await page.waitForFunction(()=>document.documentElement.dataset.tournamentRestore21548==='1',{timeout:10000});
-    await page.waitForTimeout(850);
+    await page.waitForFunction(()=>{
+      const box=document.getElementById('tourDialogue21547'),img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
+      return !!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0&&!!img&&img.complete&&Number(img.naturalWidth)>0;
+    },{timeout:10000});
     return await snapReload(label,false);
   };
   const forceAdvance=async label=>await page.evaluate(label=>{
