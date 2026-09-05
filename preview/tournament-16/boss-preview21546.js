@@ -32,7 +32,7 @@
   }
   function promote(){
     if(active?.status!=='champion'||active?.bossChallenge?.status!=='locked')return false;
-    active.status='boss_pending';active.bossChallenge.status='pending';statusEl.textContent='🏆 16人トーナメント優勝！ 杯ボスへの挑戦権を獲得';news.textContent=`次は杯ボス ${active.cup.boss} R${active.cup.bossRating} への挑戦です。`;decorate();return true;
+    active.status='boss_pending';active.bossChallenge.status='pending';active.bossChallenge.tournamentWonAt=Date.now();statusEl.textContent='🏆 16人トーナメント優勝！ 杯ボスへの挑戦権を獲得';news.textContent=`次は杯ボス ${active.cup.boss} R${active.cup.bossRating} への挑戦です。`;decorate();return true;
   }
 
   start=function(id){oldStart(id);if(active){active.bossChallenge={boss:active.cup.boss,bossRating:active.cup.bossRating,status:'locked'};if(active.rounds?.[0]?.includes(active.cup.boss))throw Error('cup boss must not be in 16-player bracket')}decorate()};
