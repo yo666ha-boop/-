@@ -88,10 +88,10 @@
   };
 })();
 
-/* v2.15.47c: tournament + separate boss challenge + image-backed situation dialogue. */
+/* v2.15.47d: tournament + separate boss challenge + image-backed situation dialogue. */
 (function loadTournament21547(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21547C)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21547C=true;
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21547D)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21547D=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
@@ -115,11 +115,11 @@
             skin.async=false;
             skin.addEventListener('load',()=>{
               const bank=document.createElement('script');
-              bank.src=new URL('./tournament-dialogue-bank21547.js?v=21547c',scriptURL).href;
+              bank.src=new URL('./tournament-dialogue-bank21547.js?v=21547d',scriptURL).href;
               bank.async=false;
               bank.addEventListener('load',()=>{
                 const dialogue=document.createElement('script');
-                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547c',scriptURL).href;
+                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547d',scriptURL).href;
                 dialogue.async=false;
                 document.head.appendChild(dialogue);
               },{once:true});
