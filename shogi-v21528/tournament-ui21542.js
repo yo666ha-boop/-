@@ -89,6 +89,7 @@
 #tournament21540Panel.tourFireFit .tourBracketRating,#tournament21540Panel.tourFireFit .tourMatchState{font-size:clamp(6px,.65vw,8px)!important;padding:0 2px!important}
 #tournament21540Panel.tourFireFit .tourActions{margin-top:3px}
 #tournament21540Panel.tourFireFit .tourActions .btn{padding:5px 7px;font-size:10px}
+@media(max-width:720px){#tournament21540Panel .tourCup .btn,#tournament21540Panel .tourActions .btn{min-height:44px}}
 @media (orientation:landscape) and (max-height:700px){#tournament21540Panel.tourFireFit .tourBracketRoundBody{height:calc(100vh - 180px)!important}#tournament21540Panel.tourFireFit .tourNews{display:none}}
 `;
     document.head.appendChild(style);
