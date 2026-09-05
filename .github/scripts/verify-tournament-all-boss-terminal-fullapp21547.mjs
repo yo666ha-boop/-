@@ -43,6 +43,12 @@ try{
     for(const cup of t.cups()){
       await reachBoss(cup);
       rows.push(snap(cup,'start'));
+      await result('draw');
+      if(!await waitBoss('draw'))throw new Error(cup.id+': boss draw timeout');
+      await delay(320);rows.push(snap(cup,'draw'));
+      if(!t.challengeBoss())throw new Error(cup.id+': boss draw retry failed');
+      if(!await waitBoss('active'))throw new Error(cup.id+': boss draw retry active timeout');
+      await delay(320);rows.push(snap(cup,'retry'));
       await result('loss');
       if(!await waitBoss('lost'))throw new Error(cup.id+': boss lost timeout');
       await delay(320);rows.push(snap(cup,'lost'));
@@ -58,8 +64,8 @@ try{
   });
 
   const failures=[];
-  const expectedContext={start:'boss_start',lost:'boss_lost',won:'boss_won'};
-  if(report.rows.length!==24)failures.push('rows '+report.rows.length);
+  const expectedContext={start:'boss_start',draw:'boss_draw',retry:'boss_start',lost:'boss_lost',won:'boss_won'};
+  if(report.rows.length!==40)failures.push('rows '+report.rows.length);
   for(const x of report.rows){
     if(x.context!==expectedContext[x.label])failures.push(`${x.cupId}/${x.label}: context ${x.context}`);
     if(x.speaker!==x.boss)failures.push(`${x.cupId}/${x.label}: speaker ${x.speaker}`);
@@ -67,8 +73,8 @@ try{
     if(!x.text)failures.push(`${x.cupId}/${x.label}: text missing`);
     if(!x.portraitMatch||!x.imageComplete||x.imageWidth<1)failures.push(`${x.cupId}/${x.label}: portrait mismatch`);
     if(!x.visible)failures.push(`${x.cupId}/${x.label}: dialogue hidden`);
-    if(x.label==='start'&&(!x.dock?.bossActive||!x.dock?.docked||!x.dock?.connected))failures.push(`${x.cupId}/start: battle dock ${JSON.stringify(x.dock)}`);
-    if(x.label!=='start'&&x.dock?.docked)failures.push(`${x.cupId}/${x.label}: battle dock not restored`);
+    if(['start','retry'].includes(x.label)&&(!x.dock?.bossActive||!x.dock?.docked||!x.dock?.connected))failures.push(`${x.cupId}/${x.label}: battle dock ${JSON.stringify(x.dock)}`);
+    if(!['start','retry'].includes(x.label)&&x.dock?.docked)failures.push(`${x.cupId}/${x.label}: battle dock not restored`);
   }
   if(report.activeAfter)failures.push('active state remains after all-boss terminal checks');
   if(pageErrors.length)failures.push('page errors '+JSON.stringify(pageErrors));
@@ -79,13 +85,15 @@ try{
     bosses:bosses.length,
     bossNames:bosses,
     starts:report.rows.filter(x=>x.label==='start'&&x.context==='boss_start').length,
+    draws:report.rows.filter(x=>x.label==='draw'&&x.context==='boss_draw').length,
+    retries:report.rows.filter(x=>x.label==='retry'&&x.context==='boss_start').length,
     losses:report.rows.filter(x=>x.label==='lost'&&x.context==='boss_lost').length,
     wins:report.rows.filter(x=>x.label==='won'&&x.context==='boss_won').length,
     portraitMatches:report.rows.filter(x=>x.portraitMatch).length,
     bossRoles:report.rows.filter(x=>x.role==='杯ボス').length,
     visible:report.rows.filter(x=>x.visible).length,
-    battleDockStarts:report.rows.filter(x=>x.label==='start'&&x.dock?.docked).length,
-    restoredAfterTerminal:report.rows.filter(x=>x.label!=='start'&&!x.dock?.docked).length,
+    battleDockActive:report.rows.filter(x=>['start','retry'].includes(x.label)&&x.dock?.docked).length,
+    restoredAfterTerminal:report.rows.filter(x=>['draw','lost','won'].includes(x.label)&&!x.dock?.docked).length,
     activeAfter:report.activeAfter,
     pageErrors
   }));
