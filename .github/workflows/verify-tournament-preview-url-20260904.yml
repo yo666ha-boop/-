@@ -4,6 +4,8 @@ on:
     paths:
       - 'shogi-v21528/tournament21540.js'
       - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
       - 'shogi-v21528/tournament-ui21542.js'
       - 'shogi-v21528/tournament-ui21543.js'
       - 'shogi-v21528/rating-progress21536.js'
@@ -14,6 +16,7 @@ on:
       - 'preview/tournament-16/index21543.html'
       - 'preview/tournament-16/field-preview21545.js'
       - 'preview/tournament-16/bracket-preview21543.js'
+      - 'preview/tournament-16/boss-preview21546.js'
       - 'preview/tournament-16/visual-polish21544.css'
       - '.github/scripts/verify-tournament-preview-url-20260904.mjs'
       - '.github/workflows/verify-tournament-preview-url-20260904.yml'
@@ -31,9 +34,11 @@ jobs:
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
       - name: Syntax check
         run: |
+          node --check shogi-v21528/tournament-boss21546.js
           node --check shogi-v21528/tournament-ui21543.js
           node --check preview/tournament-16/field-preview21545.js
           node --check preview/tournament-16/bracket-preview21543.js
+          node --check preview/tournament-16/boss-preview21546.js
           node --check .github/scripts/verify-tournament-preview-url-20260904.mjs
       - name: Verify immutable preview URL
         env:
