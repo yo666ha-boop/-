@@ -9,10 +9,11 @@ try{
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?allBossTerminal='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d',{timeout:20000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK?.version==='21547e',{timeout:20000});
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.__boss21546a===true&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
 
   const report=await page.evaluate(async()=>{
-    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,dock=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK;
     const delay=ms=>new Promise(r=>setTimeout(r,ms));
     const result=async kind=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-'+kind;r.textContent=kind;await delay(90)};
     const waitBoss=async status=>{for(let i=0;i<40;i++){if(t.state()?.active?.bossChallenge?.status===status)return true;await delay(50)}return false};
@@ -22,7 +23,7 @@ try{
       d.render();
       const box=document.getElementById('tourDialogue21547'),da=d.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img');
       const actual=img?.currentSrc||img?.src||'',expected=rosterPortrait(cup.boss),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
-      return{cupId:cup.id,boss:cup.boss,label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portraitMatch:!!expected&&actual===expected,imageComplete:!!img?.complete,imageWidth:Number(img?.naturalWidth)||0,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,bossStatus:t.state()?.active?.bossChallenge?.status||null};
+      return{cupId:cup.id,boss:cup.boss,label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portraitMatch:!!expected&&actual===expected,imageComplete:!!img?.complete,imageWidth:Number(img?.naturalWidth)||0,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,bossStatus:t.state()?.active?.bossChallenge?.status||null,dock:dock?.audit?.()||null};
     };
     const reachBoss=async cup=>{
       if(t.state()?.active)t.exit();
@@ -35,7 +36,7 @@ try{
       if(!await waitBoss('pending'))throw new Error(cup.id+': boss pending timeout');
       if(!t.challengeBoss())throw new Error(cup.id+': boss challenge failed');
       if(!await waitBoss('active'))throw new Error(cup.id+': boss active timeout');
-      await delay(60);
+      await delay(320);
     };
 
     const rows=[];
@@ -44,14 +45,14 @@ try{
       rows.push(snap(cup,'start'));
       await result('loss');
       if(!await waitBoss('lost'))throw new Error(cup.id+': boss lost timeout');
-      await delay(60);rows.push(snap(cup,'lost'));
-      t.exit();await delay(50);
+      await delay(320);rows.push(snap(cup,'lost'));
+      t.exit();await delay(80);
 
       await reachBoss(cup);
       await result('win');
       if(!await waitBoss('won'))throw new Error(cup.id+': boss won timeout');
-      await delay(60);rows.push(snap(cup,'won'));
-      t.exit();await delay(50);
+      await delay(320);rows.push(snap(cup,'won'));
+      t.exit();await delay(80);
     }
     return{rows,activeAfter:!!t.state()?.active};
   });
@@ -62,25 +63,29 @@ try{
   for(const x of report.rows){
     if(x.context!==expectedContext[x.label])failures.push(`${x.cupId}/${x.label}: context ${x.context}`);
     if(x.speaker!==x.boss)failures.push(`${x.cupId}/${x.label}: speaker ${x.speaker}`);
-    if(x.role!=='大会主・トーナメント外')failures.push(`${x.cupId}/${x.label}: role ${x.role}`);
+    if(x.role!=='杯ボス')failures.push(`${x.cupId}/${x.label}: role ${x.role}`);
     if(!x.text)failures.push(`${x.cupId}/${x.label}: text missing`);
     if(!x.portraitMatch||!x.imageComplete||x.imageWidth<1)failures.push(`${x.cupId}/${x.label}: portrait mismatch`);
     if(!x.visible)failures.push(`${x.cupId}/${x.label}: dialogue hidden`);
+    if(x.label==='start'&&(!x.dock?.bossActive||!x.dock?.docked||!x.dock?.connected))failures.push(`${x.cupId}/start: battle dock ${JSON.stringify(x.dock)}`);
+    if(x.label!=='start'&&x.dock?.docked)failures.push(`${x.cupId}/${x.label}: battle dock not restored`);
   }
   if(report.activeAfter)failures.push('active state remains after all-boss terminal checks');
   if(pageErrors.length)failures.push('page errors '+JSON.stringify(pageErrors));
   if(failures.length)throw new Error(failures.join(' | '));
 
   const bosses=[...new Set(report.rows.map(x=>x.boss))];
-  console.log('PASS_TOURNAMENT21547D_ALL_BOSS_TERMINALS '+JSON.stringify({
+  console.log('PASS_TOURNAMENT21547E_ALL_BOSS_TERMINALS '+JSON.stringify({
     bosses:bosses.length,
     bossNames:bosses,
     starts:report.rows.filter(x=>x.label==='start'&&x.context==='boss_start').length,
     losses:report.rows.filter(x=>x.label==='lost'&&x.context==='boss_lost').length,
     wins:report.rows.filter(x=>x.label==='won'&&x.context==='boss_won').length,
     portraitMatches:report.rows.filter(x=>x.portraitMatch).length,
-    hostRoles:report.rows.filter(x=>x.role==='大会主・トーナメント外').length,
+    bossRoles:report.rows.filter(x=>x.role==='杯ボス').length,
     visible:report.rows.filter(x=>x.visible).length,
+    battleDockStarts:report.rows.filter(x=>x.label==='start'&&x.dock?.docked).length,
+    restoredAfterTerminal:report.rows.filter(x=>x.label!=='start'&&!x.dock?.docked).length,
     activeAfter:report.activeAfter,
     pageErrors
   }));
