@@ -271,7 +271,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     else if(a.status==='draw')result='<div class="tourResult">引き分けのため同じ対局を指し直します。</div>';
     else if(a.pending==='next')result='<div class="tourResult">勝ち！ 他の山も結果が出て、次は '+esc(ROUNDS[a.round])+' です。</div>';
     else result='<div class="tourResult">'+esc(phaseText(a))+'　他のAI戦も同時進行中</div>';
-    const bossMark=opponent===cup.boss?'<span class="bossMark"> 👑 決勝ボス</span>':'';
+    const bossMark=opponent===cup.boss?'<span class="bossMark"> 👑 優勝後ボス</span>':'';
     const current=opponent&&['active','draw'].includes(a.status)?'<div class="tourCurrentMatch">あなたの相手：'+esc(opponent)+' R'+(ratingOf(opponent)||'—')+bossMark+'</div>':'';
     let action='';
     if(a.status==='champion')action='<button class="btn primary" data-tour-retry="'+cup.id+'">もう一度この杯</button><button class="btn" data-tour-exit="1">大会を終える</button>';
@@ -290,7 +290,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     const btn=document.getElementById('tournament21540Btn');if(btn)btn.innerHTML='🏆 大会モード'+(store.active&&['active','draw'].includes(store.active.status)?'<span class="tourDot"></span>':'');
     const cards=CUPS.map(c=>{
       const wins=Number(store.trophies?.[c.id]||0),recommended=c.id===rec.id;
-      return'<div class="tourCup '+(recommended?'recommended ':'')+(wins?'won':'')+'"><div class="tourCupName">'+esc(c.name)+(recommended?'<span class="tourTag">おすすめ</span>':'')+(wins?'<span class="tourTrophy">🏆×'+wins+'</span>':'')+'</div><div class="tourCupMeta">'+esc(c.label)+' ／ 決勝ボス '+esc(c.boss)+' R'+c.bossRating+'<br>16人・4勝で優勝</div><button class="btn '+(recommended?'primary':'')+'" data-tour-start="'+c.id+'">挑戦する</button></div>';
+      return'<div class="tourCup '+(recommended?'recommended ':'')+(wins?'won':'')+'"><div class="tourCupName">'+esc(c.name)+(recommended?'<span class="tourTag">おすすめ</span>':'')+(wins?'<span class="tourTrophy">🏆×'+wins+'</span>':'')+'</div><div class="tourCupMeta">'+esc(c.label)+' ／ 優勝後ボス '+esc(c.boss)+' R'+c.bossRating+'<br>16人・4勝で優勝</div><button class="btn '+(recommended?'primary':'')+'" data-tour-start="'+c.id+'">挑戦する</button></div>';
     }).join('');
     body.innerHTML='<div class="tourLead">あなたは <b>R'+rating+'</b>。現在のおすすめは <span class="tourRecommended">'+esc(rec.name)+'</span>。他のAI同士もあなたと同じ回戦をリアルタイム進行し、勝者は最初から決まっていません。</div>'+renderActive(store)+'<div class="tourGrid">'+cards+'</div>';
     body.querySelectorAll('[data-tour-start]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourStart)));
