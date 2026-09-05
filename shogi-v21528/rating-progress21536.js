@@ -70,9 +70,7 @@
     if(now.total>Number(prev.total||0)){
       const delta=now.rating-(Number(prev.rating)||1500),kind=resultLabel(prev,now);
       const msg='前局：'+kind+'　R'+(Number(prev.rating)||1500)+' → R'+now.rating+'（'+signed(delta)+'）';
-      e.seen=now;e.last={message:msg,delta,rating:now.rating,result:kind,at:Date.now(),total:now.total};write(store);persistLast(key,e.last);render(e.last);
-      try{window.AI_SHOGI_PROFILE_STATS.saveNow?.()}catch(err){}
-      return;
+      e.seen=now;e.last={message:msg,delta,rating:now.rating,result:kind,at:Date.now(),total:now.total};write(store);persistLast(key,e.last);render(e.last);try{window.AI_SHOGI_PROFILE_STATS.saveNow?.()}catch(err){};return;
     }
     if(now.rating!==Number(prev.rating||now.rating)||now.w!==Number(prev.w||0)||now.l!==Number(prev.l||0)||now.d!==Number(prev.d||0)){
       e.seen=now;write(store);
@@ -90,10 +88,10 @@
   };
 })();
 
-/* v2.15.47a: tournament + separate boss challenge + image-backed situation dialogue. */
+/* v2.15.47c: tournament + separate boss challenge + image-backed situation dialogue. */
 (function loadTournament21547(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21547A)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21547A=true;
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21547C)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21547C=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
@@ -117,11 +115,11 @@
             skin.async=false;
             skin.addEventListener('load',()=>{
               const bank=document.createElement('script');
-              bank.src=new URL('./tournament-dialogue-bank21547.js?v=21547a',scriptURL).href;
+              bank.src=new URL('./tournament-dialogue-bank21547.js?v=21547c',scriptURL).href;
               bank.async=false;
               bank.addEventListener('load',()=>{
                 const dialogue=document.createElement('script');
-                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547a',scriptURL).href;
+                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547c',scriptURL).href;
                 dialogue.async=false;
                 document.head.appendChild(dialogue);
               },{once:true});
