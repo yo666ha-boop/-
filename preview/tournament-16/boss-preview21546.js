@@ -14,6 +14,7 @@
   function bossImg(){const cup=active?.cup;if(!cup)return'';const src=IMG[cup.boss];return src?`<span class="avatar" style="display:inline-block;vertical-align:middle;margin-right:6px"><img src="${src}" alt=""></span>`:''}
   function button(){let b=document.getElementById('bossChallengeBtn21546');if(b)return b;b=document.createElement('button');b.id='bossChallengeBtn21546';b.className='btn primary';b.onclick=()=>{if(active?.status!=='boss_pending'&&active?.status!=='boss_draw')return;active.status='boss_active';active.bossChallenge.status='active';statusEl.textContent=`完全制覇戦：${active.cup.boss} R${active.cup.bossRating}`;news.textContent=`トーナメント優勝者として杯ボス ${active.cup.boss} に挑戦します。`;decorate()};actions?.prepend(b);return b}
   function decorate(){
+    document.querySelectorAll('.cup small').forEach(el=>{if(el.textContent.includes('決勝ボス'))el.textContent=el.textContent.replace('決勝ボス','優勝後ボス')});
     const box=ensureBossBox(),b=button();
     if(!active){box.style.display='none';b.hidden=true;if(winBtn){winBtn.hidden=false;winBtn.textContent='この対局に勝った'}if(lossBtn){lossBtn.hidden=false;lossBtn.textContent='負けた'}return}
     const phase=active.bossChallenge?.status||'locked';
