@@ -6,7 +6,7 @@
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const ROUND_CTX=['r1','qf','sf','final'],ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const history={},seen={cup:'',opp:'',cupAt:0,oppAt:0,sig:'',pick:null};
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]));
   function opponent(){const row=active?.rounds?.[active?.round];if(!Array.isArray(row))return null;return row[(Number(active?.playerSlot)||0)^1]||null}
   function derive(){
     if(!active?.cup?.id)return null;const now=Date.now(),cup=active.cup,opp=opponent();
@@ -14,7 +14,7 @@
     if(opp&&seen.opp!==opp){seen.opp=opp;seen.oppAt=now}
     const bs=active.bossChallenge?.status;let ctx;
     if(bs==='pending')ctx='boss_pending';else if(bs==='active')ctx='boss_start';else if(bs==='won')ctx='boss_won';else if(bs==='lost')ctx='boss_lost';else if(bs==='draw')ctx='boss_draw';
-    else if(active.status==='lost')ctx='round_loss';else if(active.pending==='next')ctx='round_win';else if(now-seen.cupAt<2500)ctx='intro';else if(Number(active.round)>0&&opp&&now-seen.oppAt<2200)ctx='opponent';else ctx=ROUND_CTX[Number(active.round)||0]||'r1';
+    else if(active.status==='lost')ctx='round_loss';else if(active.pending==='next')ctx='round_win';else if(Number(active.round)>0&&opp&&now-seen.oppAt<2200)ctx='opponent';else if(now-seen.cupAt<2500)ctx='intro';else ctx=ROUND_CTX[Number(active.round)||0]||'r1';
     const vars={cup:cup.name,boss:cup.boss,round:ROUNDS[Number(active.round)||0]||'大会',opponent:opp==='__PLAYER__'?'あなた':opp||'未定'};
     return{cup,opp,ctx,vars,sig:[cup.id,ctx,active.round,active.pending||'',active.status||'',opp||'',bs||''].join('|')};
   }
