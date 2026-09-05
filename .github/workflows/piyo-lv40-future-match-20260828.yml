@@ -1,0 +1,38 @@
+name: Future vs Piyo Lv40 20260828
+on:
+  push:
+    branches: [fire/shogi-webview-v1-20260828]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  match:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - run: node .github/scripts/build-lower8-quality-page-20260825.mjs
+      - run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/piyo-ai-server.log 2>&1 &
+          sleep 1
+      - name: Future Mitsuki R3400 proxy vs Piyo Lv40 normal public UI
+        run: |
+          set -o pipefail
+          node .github/scripts/run-piyo-lv40-future-match-20260828.mjs 2>&1 | tee /tmp/piyo-lv40-match.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: piyo-lv40-future-match-20260828
+          path: |
+            /tmp/piyo-lv40-match.log
+            /tmp/piyo-lv40-future-match.png
+            /tmp/piyo-ai-server.log
+          if-no-files-found: warn

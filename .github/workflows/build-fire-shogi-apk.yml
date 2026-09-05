@@ -1,0 +1,211 @@
+name: Build Fire Shogi APK
+
+on:
+  push:
+    branches:
+      - fire/shogi-webview-v1-20260828
+    paths:
+      - 'fire-app/**'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future21520.js'
+      - 'shogi-side-test/top5-yaneura21529.js'
+      - 'shogi-side-test/cohort7-12-yaneura21533.js'
+      - 'shogi-side-test/cohort13-18-yaneura21534.js'
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
+      - '.github/workflows/build-fire-shogi-apk.yml'
+  pull_request:
+    paths:
+      - 'fire-app/**'
+      - 'shogi-v21528/future-yaneura-worker21528.js'
+      - 'shogi-side-test/future21520.js'
+      - 'shogi-side-test/top5-yaneura21529.js'
+      - 'shogi-side-test/cohort7-12-yaneura21533.js'
+      - 'shogi-side-test/cohort13-18-yaneura21534.js'
+      - 'shogi-side-test/cohort19-26-yaneura21536.js'
+      - '.github/workflows/build-fire-shogi-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply Fire Stage 3.8 native worker gate patch
+        run: |
+          set -euxo pipefail
+          python fire-app/scripts/apply-stage38-fire-native-worker-gate.py
+          node --check shogi-v21528/future-yaneura-worker21528.js
+          node --check shogi-side-test/future21520.js
+          node --check shogi-side-test/top5-yaneura21529.js
+          node --check shogi-side-test/cohort7-12-yaneura21533.js
+          node --check shogi-side-test/cohort13-18-yaneura21534.js
+          node --check shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F 'JSONObject preflight()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'private long warmedCursor;' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'return "warm:" + id + ":" + cursor' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'JSONObject poll(String id, long cursor, long waitMs)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 's.poll(cursor, waitMs)' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'scheduleMovetimeWatchdog' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'nativeWarmup()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F 'waitMs = Math.max(0L, Math.min(1000L, waitMs))' fire-app/app/src/main/java/com/mitsuki/shogi/fire/LoopbackHttpServer.java
+          grep -F '&wait=250' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F "__fireNativeBridgeVersion:'3.7-longpoll-cursor'" fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_THREADS=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_HASH_MB=96' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_NODE_MULTIPLIER=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'resetNativeTransport' shogi-v21528/future-yaneura-worker21528.js
+          grep -F "if(!globalThis.crossOriginIsolated&&!FIRE_NATIVE_APP)throw new Error('crossOriginIsolated=false')" shogi-side-test/future21520.js
+          grep -F "AI_SHOGI_FIRE_NATIVE_WORKER_GATE='3.8-coi-bypass'" shogi-side-test/future21520.js
+          grep -F 'Fireネイティブ再起動中' shogi-side-test/future21520.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/top5-yaneura21529.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort7-12-yaneura21533.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort13-18-yaneura21534.js
+          grep -F '弱い内蔵AIには切り替えず停止しました' shogi-side-test/cohort19-26-yaneura21536.js
+          grep -F 'versionCode = 8' fire-app/app/build.gradle.kts
+          grep -F 'versionName = "3.8-fire-native-v970-worker-gate"' fire-app/app/build.gradle.kts
+          grep -F 'MitsukiShogiFire/3.8' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'android:icon="@drawable/micchan_launcher"' fire-app/app/src/main/AndroidManifest.xml
+          grep -F 'android:roundIcon="@drawable/micchan_launcher"' fire-app/app/src/main/AndroidManifest.xml
+          test -s fire-app/icon/micchan_stage38_app_icon.webp.b64
+          grep -F 'launcherIconSha256 = "21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db"' fire-app/app/build.gradle.kts
+          if grep -F 'synchronized JSONObject selfTest()' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java; then
+            echo 'startup self-test still holds the global engine-manager monitor' >&2
+            exit 1
+          fi
+
+      - name: Set up Android NDK r23b
+        id: setup_ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r23b
+
+      - name: Build production-matched YaneuraOu V9.70git Android executables
+        env:
+          NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
+        run: |
+          set -euxo pipefail
+          YANE_COMMIT=33ccf1f907eb7184889fa23051243f81ab0bf973
+          grep -F "commit=$YANE_COMMIT" shogi-side-test/yaneuraou/build-info.txt
+          git clone --filter=blob:none https://github.com/yaneurao/YaneuraOu.git /tmp/YaneuraOu
+          cd /tmp/YaneuraOu
+          git checkout "$YANE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$YANE_COMMIT"
+          grep -F '#define ENGINE_VERSION "9.70git"' source/config.h
+          grep -F 'EVAL_EMBEDDING = OFF' script/jni/Android.mk
+          grep -F 'const char* default_eval_dir = "eval"' source/eval/nnue/evaluate_nnue.cpp
+          grep -F '#define EvalFileDefaultName "nn.bin"' source/eval/nnue/evaluate_nnue.h
+          for ABI in arm64-v8a armeabi-v7a; do
+            rm -rf libs obj
+            "$NDK_HOME/ndk-build" \
+              NDK_PROJECT_PATH="$PWD" \
+              APP_BUILD_SCRIPT="$PWD/script/jni/Android.mk" \
+              NDK_APPLICATION_MK="$PWD/script/jni/Application.mk" \
+              APP_ABI="$ABI" \
+              YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE \
+              -j2 V=1
+            SRC="libs/$ABI/YaneuraOu_NNUE_$ABI"
+            test -s "$SRC"
+            file "$SRC"
+            mkdir -p "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI"
+            cp "$SRC" "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI/libyaneuraou_v970_exec.so"
+          done
+          git archive --format=tar.gz --output="$GITHUB_WORKSPACE/YaneuraOu-V9.70git-source-33ccf1f.tar.gz" HEAD
+          test -s "$GITHUB_WORKSPACE/YaneuraOu-V9.70git-source-33ccf1f.tar.gz"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Guard Fire strength contract
+        run: |
+          set -euxo pipefail
+          grep -F '813cad97b764c142bfb34b12498790c2759fd899' fire-app/app/src/main/java/com/mitsuki/shogi/fire/OfflineContentStore.java
+          grep -F 'YaneuraOu V9.70 Android NDK + Suisho5' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'libyaneuraou_v970_exec.so' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'new File(engineDir, "eval")' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'new File(evalDir, "nn.bin")' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F "return 'setoption name EvalDir value eval'" fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_THREADS=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_HASH_MB=96' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_NODE_MULTIPLIER=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'Silk/MitsukiFire' fire-app/app/src/main/java/com/mitsuki/shogi/fire/MainActivity.java
+          grep -F 'android:extractNativeLibs="true"' fire-app/app/src/main/AndroidManifest.xml
+          grep -F 'shared:!0' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
+          grep -F 'instanceof SharedArrayBuffer' shogi-side-test/yaneuraou/yaneuraou.halfkp.noeval.js
+          grep -F "bright:{label:'明るい木目'" fire-app/app/src/main/assets/fire/fire-theme.js
+          grep -F "contrast:{label:'くっきり'" fire-app/app/src/main/assets/fire/fire-theme.js
+
+      - name: Build offline native-engine debug APK
+        working-directory: fire-app
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify Stage 3.8 APK payload
+        run: |
+          set -euxo pipefail
+          APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          test "$(stat -c%s "$APK")" -gt 60000000
+          test -s fire-app/app/build/generated/launcherRes/drawable/micchan_launcher.webp
+          echo '21b1c501ebf828dea3085a4da604224d686d79d92f1936453531ecbecffc24db  fire-app/app/build/generated/launcherRes/drawable/micchan_launcher.webp' | sha256sum -c -
+          unzip -l "$APK" > /tmp/fire-apk-list.txt
+          grep -F 'assets/shogi-v21528/index.html' /tmp/fire-apk-list.txt
+          grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-apk-list.txt
+          grep -F 'assets/fire/yaneuraou-native-shim.js' /tmp/fire-apk-list.txt
+          grep -F 'lib/arm64-v8a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
+          grep -F 'lib/armeabi-v7a/libyaneuraou_v970_exec.so' /tmp/fire-apk-list.txt
+          grep -F 'assets/fire/fire-theme.js' /tmp/fire-apk-list.txt
+          grep -F 'micchan_launcher' /tmp/fire-apk-list.txt || true
+          sha256sum "$APK"
+          ls -lh "$APK"
+
+      - name: Upload offline APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mitsuki-shogi-fire-stage38-native-worker-gate-debug-apk
+          path: fire-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload corresponding YaneuraOu source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YaneuraOu-V9.70git-source-33ccf1f
+          path: YaneuraOu-V9.70git-source-33ccf1f.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish stable Fire sideload test link
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
+          ASSET=mitsuki-shogi-fire-offline-test.apk
+          SOURCE=YaneuraOu-V9.70git-source-33ccf1f.tar.gz
+          TAG=fire-offline-test
+          cp "$APK" "$ASSET"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+          NOTES='Fire実機検証用 Stage 3.8。ブラウザ版のAI動作は変更しません。Stage 3.7でも対局開始直後に「弱い内蔵AIには切り替えず停止しました。新規対局で再試行」が出る実機報告を受け、実際の即時停止原因を修正。Fire WebViewはcrossOriginIsolated=falseだが、AndroidネイティブYaneuraOu経路はSharedArrayBufferを使わないため、本来不要なブラウザWASM用COIゲートをFireネイティブ時だけ迂回します。さらに同期XHRを廃止してasync fetch＋直列コマンドキューへ変更し、通信エラー時は具体的な原因を画面へ出します。非FireブラウザのCOI/SAB要件は変更しません。Stage 3.7のcursor handoff/long-poll、Stage 3.6 watchdog、YaneuraOu V9.70git＋水匠5、26キャラR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍、弱い内蔵AI退避禁止を維持。Androidランチャーアイコンはユーザー確認済みの「みっちゃん＋日本の将棋駒」のアプリ風デザインを採用し、ビルド時にSHA256を照合します。'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" "$SOURCE" --clobber
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃん将棋アイコン修正版' --notes "$NOTES" --prerelease
+          else
+            gh release create "$TAG" "$ASSET" "$SOURCE" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.8 即停止・みっちゃん将棋アイコン修正版' --notes "$NOTES" --prerelease
+          fi
+          echo 'Stable sideload URL:'
+          echo 'https://github.com/yo666ha-boop/-/releases/download/fire-offline-test/mitsuki-shogi-fire-offline-test.apk'
