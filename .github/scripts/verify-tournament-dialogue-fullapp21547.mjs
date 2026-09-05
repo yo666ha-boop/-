@@ -164,7 +164,11 @@ try{
   const expect=(label,ctx)=>{const x=by[label];if(!x)transitionFailures.push(label+': missing');else if(x.context!==ctx)transitionFailures.push(label+': context '+x.context+' expected '+ctx);else if(!x.text||!x.portrait)transitionFailures.push(label+': visible dialogue missing')};
   expect('intro','intro');expect('round1','r1');
   expect('win1','round_win');expect('win2','round_win');expect('win3','round_win');
-  for(const n of [1,2,3]){const x=by['next'+n];if(!x||!['opponent','qf','sf','final'].includes(x.context))transitionFailures.push('next'+n+': context '+x?.context)}
+  for(const n of [1,2,3]){
+    const x=by['next'+n];
+    if(!x||!['opponent','qf','sf','final','upset'].includes(x.context))transitionFailures.push('next'+n+': context '+x?.context);
+    else if(!x.text||!x.portrait)transitionFailures.push('next'+n+': visible dialogue missing');
+  }
   expect('champion','tournament_champion');expect('bossPending','boss_pending');expect('bossStart','boss_start');
   if(by.bossAdvantage&&by.bossAdvantage.context!=='boss_advantage')transitionFailures.push('bossAdvantage: '+by.bossAdvantage.context);
   if(by.bossDisadvantage&&by.bossDisadvantage.context!=='boss_disadvantage')transitionFailures.push('bossDisadvantage: '+by.bossDisadvantage.context);
@@ -174,7 +178,7 @@ try{
   if(transitions.activeAfter)transitionFailures.push('active state remains after transition cleanup');
   if(errors.length)transitionFailures.push('page errors '+JSON.stringify(errors));
   if(transitionFailures.length)throw new Error(transitionFailures.join(' | '));
-  console.log('PASS_TOURNAMENT21547D_FULLAPP_TRANSITIONS '+JSON.stringify({contexts:transitions.seen.map(x=>x.context),finalStatus:transitions.finalStatus,trophy:transitions.trophy,activeAfter:transitions.activeAfter,pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21547D_FULLAPP_TRANSITIONS '+JSON.stringify({contexts:transitions.seen.map(x=>x.context),upsetObserved:transitions.seen.filter(x=>x.context==='upset').length,finalStatus:transitions.finalStatus,trophy:transitions.trophy,activeAfter:transitions.activeAfter,pageErrors:errors}));
 
 } finally {
   await browser.close();
