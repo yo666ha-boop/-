@@ -4,8 +4,10 @@ on:
     paths:
       - 'shogi-v21528/tournament21541.js'
       - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
       - 'shogi-v21528/rating-progress21536.js'
       - 'preview/tournament-16/field-preview21545.js'
+      - 'preview/tournament-16/boss-preview21546.js'
       - 'preview/tournament-16/index21543.html'
       - '.github/scripts/verify-tournament-field21545.mjs'
       - '.github/workflows/verify-tournament-field21545.yml'
@@ -24,6 +26,8 @@ jobs:
       - name: Syntax check
         run: |
           node --check shogi-v21528/tournament-field21545.js
+          node --check shogi-v21528/tournament-boss21546.js
+          node --check preview/tournament-16/boss-preview21546.js
           node --check .github/scripts/verify-tournament-field21545.mjs
-      - name: Verify cup field ceilings
+      - name: Verify cup field ceilings and boss separation
         run: node .github/scripts/verify-tournament-field21545.mjs
