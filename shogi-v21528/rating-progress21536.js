@@ -90,10 +90,10 @@
   };
 })();
 
-/* v2.15.45a: live 16-player tournament + field ceiling + portrait repair + Fire fit + integrated skin loader. */
-(function loadTournament21545(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21545A)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21545A=true;
+/* v2.15.46a: 16-player tournament first, then separate cup-boss challenge. */
+(function loadTournament21546(){
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21546A)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21546A=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
@@ -101,22 +101,28 @@
     core.async=false;
     core.addEventListener('load',()=>{
       const field=document.createElement('script');
-      field.src=new URL('./tournament-field21545.js?v=21545a',scriptURL).href;
+      field.src=new URL('./tournament-field21545.js?v=21545b',scriptURL).href;
       field.async=false;
       field.addEventListener('load',()=>{
-        const ui=document.createElement('script');
-        ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
-        ui.async=false;
-        ui.addEventListener('load',()=>{
-          const skin=document.createElement('script');
-          skin.src=new URL('./tournament-skin21544.js?v=21544c',scriptURL).href;
-          skin.async=false;
-          document.head.appendChild(skin);
+        const boss=document.createElement('script');
+        boss.src=new URL('./tournament-boss21546.js?v=21546a',scriptURL).href;
+        boss.async=false;
+        boss.addEventListener('load',()=>{
+          const ui=document.createElement('script');
+          ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
+          ui.async=false;
+          ui.addEventListener('load',()=>{
+            const skin=document.createElement('script');
+            skin.src=new URL('./tournament-skin21544.js?v=21544c',scriptURL).href;
+            skin.async=false;
+            document.head.appendChild(skin);
+          },{once:true});
+          document.head.appendChild(ui);
         },{once:true});
-        document.head.appendChild(ui);
+        document.head.appendChild(boss);
       },{once:true});
       document.head.appendChild(field);
     },{once:true});
     document.head.appendChild(core);
-  }catch(e){console.error('tournament21545 loader failed',e)}
+  }catch(e){console.error('tournament21546 loader failed',e)}
 })();
