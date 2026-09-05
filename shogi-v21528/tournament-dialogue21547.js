@@ -57,8 +57,8 @@
     else if(a.pending==='next')context='round_win';
     else{
       const upset=latestUpset(a);if(upset){context='upset';extra=upset.key+'@'+upset.resolvedAt}
-      else if(now-cupSince<3200)context='intro';
       else if(Number(a.round)>0&&opp&&now-opponentSince<2800)context='opponent';
+      else if(now-cupSince<3200)context='intro';
       else context=['r1','qf','sf','final'][Number(a.round)||0]||'r1';
     }
     const upset=context==='upset'?latestUpset(a):null;
