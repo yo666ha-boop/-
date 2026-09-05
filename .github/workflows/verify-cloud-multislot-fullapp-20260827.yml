@@ -35,11 +35,17 @@ jobs:
           echo $! > /tmp/shogi-server.pid
           sleep 2
       - name: Run 26-character Future engine Firefox smoke
-        run: node .github/scripts/shogi-v21528-smoke.js 2>&1 | tee /tmp/firefox-fullapp.log
+        run: |
+          set -o pipefail
+          node .github/scripts/shogi-v21528-smoke.js 2>&1 | tee /tmp/firefox-fullapp.log
       - name: Verify tournament dialogue live fullapp API and 21547c cache key
-        run: node .github/scripts/verify-tournament-dialogue-fullapp21547.mjs 2>&1 | tee /tmp/tournament-dialogue-fullapp.log
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-dialogue-fullapp21547.mjs 2>&1 | tee /tmp/tournament-dialogue-fullapp.log
       - name: Run TOP5 shared YaneuraOu smoke
-        run: node .github/scripts/shogi-top5-yaneura-smoke.js 2>&1 | tee /tmp/top5.log
+        run: |
+          set -o pipefail
+          node .github/scripts/shogi-top5-yaneura-smoke.js 2>&1 | tee /tmp/top5.log
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
