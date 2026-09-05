@@ -125,6 +125,56 @@ try{
     minBoxHeight:Math.min(...live.cups.map(x=>x.height)),
     pageErrors:errors
   }));
+
+  const transitions=await page.evaluate(async()=>{
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
+    const delay=ms=>new Promise(r=>setTimeout(r,ms));
+    const snap=label=>{
+      d.render();
+      const a=t.state()?.active||null,da=d.audit?.()||{},box=document.getElementById('tourDialogue21547');
+      return {label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,status:a?.status||null,round:Number(a?.round??-1),pending:a?.pending||null,bossStatus:a?.bossChallenge?.status||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portrait:!!box?.querySelector('.tourDialoguePortrait img')?.src};
+    };
+    const result=async kind=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-'+kind;r.textContent=kind;await delay(220)};
+    if(t.state()?.active)t.exit();
+    t.start('shinji');await delay(180);
+    const seen=[snap('intro')];
+    await delay(3300);seen.push(snap('round1'));
+    for(let round=0;round<4;round++){
+      await result('win');seen.push(snap('win'+(round+1)));
+      if(round<3){t.next();await delay(120);seen.push(snap('next'+(round+1)))}
+    }
+    seen.push(snap('champion'));
+    await delay(3400);seen.push(snap('bossPending'));
+    const pendingSnapshot=localStorage.getItem('aiShogiTournament21540');
+    t.challengeBoss();await delay(180);seen.push(snap('bossStart'));
+    const evalNode=document.getElementById('evalNumber');
+    if(evalNode){evalNode.textContent='+900';await delay(700);seen.push(snap('bossAdvantage'));evalNode.textContent='-900';await delay(700);seen.push(snap('bossDisadvantage'));evalNode.textContent='—'}
+    await result('draw');seen.push(snap('bossDraw'));
+    t.challengeBoss();await delay(160);await result('lose');seen.push(snap('bossLoss'));
+    localStorage.setItem('aiShogiTournament21540',pendingSnapshot);t.render();await delay(120);seen.push(snap('restoredPending'));
+    t.challengeBoss();await delay(160);await result('win');seen.push(snap('bossWin'));
+    const final=t.state();
+    t.exit();await delay(80);
+    return{seen,finalStatus:final?.active?.status||null,trophy:Number(final?.trophies?.shinji)||0,activeAfter:!!t.state()?.active};
+  });
+
+  const transitionFailures=[];
+  const by=Object.fromEntries(transitions.seen.map(x=>[x.label,x]));
+  const expect=(label,ctx)=>{const x=by[label];if(!x)transitionFailures.push(label+': missing');else if(x.context!==ctx)transitionFailures.push(label+': context '+x.context+' expected '+ctx);else if(!x.text||!x.portrait)transitionFailures.push(label+': visible dialogue missing')};
+  expect('intro','intro');expect('round1','r1');
+  expect('win1','round_win');expect('win2','round_win');expect('win3','round_win');
+  for(const n of [1,2,3]){const x=by['next'+n];if(!x||!['opponent','qf','sf','final'].includes(x.context))transitionFailures.push('next'+n+': context '+x?.context)}
+  expect('champion','tournament_champion');expect('bossPending','boss_pending');expect('bossStart','boss_start');
+  if(by.bossAdvantage&&by.bossAdvantage.context!=='boss_advantage')transitionFailures.push('bossAdvantage: '+by.bossAdvantage.context);
+  if(by.bossDisadvantage&&by.bossDisadvantage.context!=='boss_disadvantage')transitionFailures.push('bossDisadvantage: '+by.bossDisadvantage.context);
+  expect('bossDraw','boss_draw');expect('bossLoss','boss_lost');expect('restoredPending','boss_pending');expect('bossWin','boss_won');
+  if(transitions.finalStatus!=='champion')transitionFailures.push('finalStatus '+transitions.finalStatus);
+  if(transitions.trophy!==1)transitionFailures.push('trophy '+transitions.trophy);
+  if(transitions.activeAfter)transitionFailures.push('active state remains after transition cleanup');
+  if(errors.length)transitionFailures.push('page errors '+JSON.stringify(errors));
+  if(transitionFailures.length)throw new Error(transitionFailures.join(' | '));
+  console.log('PASS_TOURNAMENT21547D_FULLAPP_TRANSITIONS '+JSON.stringify({contexts:transitions.seen.map(x=>x.context),finalStatus:transitions.finalStatus,trophy:transitions.trophy,activeAfter:transitions.activeAfter,pageErrors:errors}));
+
 } finally {
   await browser.close();
 }
