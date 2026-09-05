@@ -1,0 +1,89 @@
+import { firefox } from 'playwright';
+
+const browser=await firefox.launch({headless:true});
+try{
+  const page=await browser.newPage();
+  const pageErrors=[];
+  page.on('pageerror',e=>pageErrors.push(String(e?.message||e)));
+  page.on('dialog',async dialog=>{await dialog.accept()});
+  await page.goto('http://127.0.0.1:8000/shogi-v21528/?allBossTerminal='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d',{timeout:20000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.__boss21546a===true&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
+
+  const report=await page.evaluate(async()=>{
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
+    const delay=ms=>new Promise(r=>setTimeout(r,ms));
+    const result=async kind=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-'+kind;r.textContent=kind;await delay(90)};
+    const waitBoss=async status=>{for(let i=0;i<40;i++){if(t.state()?.active?.bossChallenge?.status===status)return true;await delay(50)}return false};
+    const cardName=card=>(card?.querySelector?.('.chName')?.textContent||card?.querySelector?.('img')?.alt||'').trim();
+    const rosterPortrait=name=>{const card=[...document.querySelectorAll('#chars .ch')].find(c=>cardName(c)===name);const img=card?.querySelector('img');return img?.currentSrc||img?.src||''};
+    const snap=(cup,label)=>{
+      d.render();
+      const box=document.getElementById('tourDialogue21547'),da=d.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img');
+      const actual=img?.currentSrc||img?.src||'',expected=rosterPortrait(cup.boss),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
+      return{cupId:cup.id,boss:cup.boss,label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portraitMatch:!!expected&&actual===expected,imageComplete:!!img?.complete,imageWidth:Number(img?.naturalWidth)||0,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,bossStatus:t.state()?.active?.bossChallenge?.status||null};
+    };
+    const reachBoss=async cup=>{
+      if(t.state()?.active)t.exit();
+      if(!t.start(cup.id))throw new Error(cup.id+': start failed');
+      await delay(80);
+      for(let round=0;round<4;round++){
+        await result('win');
+        if(round<3){t.next();await delay(60)}
+      }
+      if(!await waitBoss('pending'))throw new Error(cup.id+': boss pending timeout');
+      if(!t.challengeBoss())throw new Error(cup.id+': boss challenge failed');
+      if(!await waitBoss('active'))throw new Error(cup.id+': boss active timeout');
+      await delay(60);
+    };
+
+    const rows=[];
+    for(const cup of t.cups()){
+      await reachBoss(cup);
+      rows.push(snap(cup,'start'));
+      await result('loss');
+      if(!await waitBoss('lost'))throw new Error(cup.id+': boss lost timeout');
+      await delay(60);rows.push(snap(cup,'lost'));
+      t.exit();await delay(50);
+
+      await reachBoss(cup);
+      await result('win');
+      if(!await waitBoss('won'))throw new Error(cup.id+': boss won timeout');
+      await delay(60);rows.push(snap(cup,'won'));
+      t.exit();await delay(50);
+    }
+    return{rows,activeAfter:!!t.state()?.active};
+  });
+
+  const failures=[];
+  const expectedContext={start:'boss_start',lost:'boss_lost',won:'boss_won'};
+  if(report.rows.length!==24)failures.push('rows '+report.rows.length);
+  for(const x of report.rows){
+    if(x.context!==expectedContext[x.label])failures.push(`${x.cupId}/${x.label}: context ${x.context}`);
+    if(x.speaker!==x.boss)failures.push(`${x.cupId}/${x.label}: speaker ${x.speaker}`);
+    if(x.role!=='大会主・トーナメント外')failures.push(`${x.cupId}/${x.label}: role ${x.role}`);
+    if(!x.text)failures.push(`${x.cupId}/${x.label}: text missing`);
+    if(!x.portraitMatch||!x.imageComplete||x.imageWidth<1)failures.push(`${x.cupId}/${x.label}: portrait mismatch`);
+    if(!x.visible)failures.push(`${x.cupId}/${x.label}: dialogue hidden`);
+  }
+  if(report.activeAfter)failures.push('active state remains after all-boss terminal checks');
+  if(pageErrors.length)failures.push('page errors '+JSON.stringify(pageErrors));
+  if(failures.length)throw new Error(failures.join(' | '));
+
+  const bosses=[...new Set(report.rows.map(x=>x.boss))];
+  console.log('PASS_TOURNAMENT21547D_ALL_BOSS_TERMINALS '+JSON.stringify({
+    bosses:bosses.length,
+    bossNames:bosses,
+    starts:report.rows.filter(x=>x.label==='start'&&x.context==='boss_start').length,
+    losses:report.rows.filter(x=>x.label==='lost'&&x.context==='boss_lost').length,
+    wins:report.rows.filter(x=>x.label==='won'&&x.context==='boss_won').length,
+    portraitMatches:report.rows.filter(x=>x.portraitMatch).length,
+    hostRoles:report.rows.filter(x=>x.role==='大会主・トーナメント外').length,
+    visible:report.rows.filter(x=>x.visible).length,
+    activeAfter:report.activeAfter,
+    pageErrors
+  }));
+} finally {
+  await browser.close();
+}
