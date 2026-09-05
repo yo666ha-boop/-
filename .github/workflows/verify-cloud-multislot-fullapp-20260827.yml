@@ -24,6 +24,7 @@ jobs:
           node --check shogi-v21528/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
           node --check .github/scripts/verify-tournament-dialogue-fullapp21547.mjs
+          node --check .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
       - name: Install Playwright Firefox
         run: |
           npm init -y
@@ -42,6 +43,10 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-dialogue-fullapp21547.mjs 2>&1 | tee /tmp/tournament-dialogue-fullapp.log
+      - name: Verify all 8 boss terminal dialogue states in fullapp
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs 2>&1 | tee /tmp/tournament-all-boss-terminal.log
       - name: Run TOP5 shared YaneuraOu smoke
         run: |
           set -o pipefail
