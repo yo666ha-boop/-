@@ -207,3 +207,40 @@
   const timer=setInterval(()=>{if(restoreOnce()||++tries>120)clearInterval(timer)},100);
   setTimeout(restoreOnce,0);
 })();
+
+/* v2.15.48b: reload visual restore after dialogue initialization.
+ * The tournament UI script loads before the situation-dialogue module. For a
+ * tournament that already existed at page start, wait until that module is
+ * actually usable, then re-open/re-render non-active-boss states once so the
+ * real portrait dialogue is visible. This never applies to tournaments that
+ * the user starts after page load.
+ */
+(function installTournamentReloadVisual21548b(){
+  'use strict';
+  if(window.__AI_SHOGI_TOURNAMENT_RELOAD_VISUAL_21548B)return;
+  window.__AI_SHOGI_TOURNAMENT_RELOAD_VISUAL_21548B=true;
+  const KEY='aiShogiTournament21540';
+  const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
+  const initial=read()?.active?JSON.parse(JSON.stringify(read().active)):null;
+  const initialStatus=initial?.bossChallenge?.status||null;
+  let done=!initial||initialStatus==='active',tries=0;
+  const publish=()=>{window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL={version:'21548b',audit:()=>({done,hadInitialActive:!!initial,initialStatus,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),dialogueReady:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'})}};
+  publish();
+  if(done)return;
+  function restoreVisual(){
+    if(done)return true;
+    const current=read()?.active,panel=document.getElementById('tournament21540Panel'),t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
+    if(!current||!panel||!t?.render||d?.version!=='21547d'||typeof d.render!=='function')return false;
+    panel.classList.add('on');
+    try{t.render()}catch(e){}
+    panel.classList.add('on');
+    try{d.render()}catch(e){}
+    try{window.AI_SHOGI_TOURNAMENT_UI?.repair?.()}catch(e){}
+    panel.classList.add('on');
+    const box=document.getElementById('tourDialogue21547'),img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.();
+    if(!box||!img||!img.src||!rect||rect.width<=0||rect.height<=0)return false;
+    done=true;document.documentElement.dataset.tournamentRestoreVisual21548='1';publish();return true;
+  }
+  const timer=setInterval(()=>{if(restoreVisual()||++tries>120)clearInterval(timer)},100);
+  setTimeout(restoreVisual,0);
+})();
