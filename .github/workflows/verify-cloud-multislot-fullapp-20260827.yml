@@ -73,7 +73,9 @@ jobs:
           node /tmp/coi-server.mjs >/tmp/coi-server.log 2>&1 &
           sleep 1
       - name: Run iPhone WebKit Future prewarm sound and ready search
-        run: node .github/scripts/verify-prewarm-sound-20260819.mjs 2>&1 | tee /tmp/prewarm-sound.log
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-prewarm-sound-20260819.mjs 2>&1 | tee /tmp/prewarm-sound.log
       - name: Show COI server log on failure
         if: failure()
         run: cat /tmp/coi-server.log || true
