@@ -90,10 +90,10 @@
   };
 })();
 
-/* v2.15.46a: 16-player tournament first, then separate cup-boss challenge. */
-(function loadTournament21546(){
-  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21546A)return;
-  window.__AI_SHOGI_TOURNAMENT_LOADER_21546A=true;
+/* v2.15.47a: tournament + separate boss challenge + image-backed situation dialogue. */
+(function loadTournament21547(){
+  if(window.__AI_SHOGI_TOURNAMENT_LOADER_21547A)return;
+  window.__AI_SHOGI_TOURNAMENT_LOADER_21547A=true;
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
@@ -115,6 +115,18 @@
             const skin=document.createElement('script');
             skin.src=new URL('./tournament-skin21544.js?v=21544c',scriptURL).href;
             skin.async=false;
+            skin.addEventListener('load',()=>{
+              const bank=document.createElement('script');
+              bank.src=new URL('./tournament-dialogue-bank21547.js?v=21547a',scriptURL).href;
+              bank.async=false;
+              bank.addEventListener('load',()=>{
+                const dialogue=document.createElement('script');
+                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547a',scriptURL).href;
+                dialogue.async=false;
+                document.head.appendChild(dialogue);
+              },{once:true});
+              document.head.appendChild(bank);
+            },{once:true});
             document.head.appendChild(skin);
           },{once:true});
           document.head.appendChild(ui);
@@ -124,5 +136,5 @@
       document.head.appendChild(field);
     },{once:true});
     document.head.appendChild(core);
-  }catch(e){console.error('tournament21546 loader failed',e)}
+  }catch(e){console.error('tournament21547 loader failed',e)}
 })();
