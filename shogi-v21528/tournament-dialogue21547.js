@@ -1,12 +1,13 @@
-/* みつき将棋 大会画像付き状況セリフ v2.15.47c
+/* みつき将棋 大会画像付き状況セリフ v2.15.47d
  * 杯ボスはトーナメント参加者ではなく「大会主」として実況し、優勝後だけ対局相手になる。
  * 既存26キャラ画像を再利用。状況変化時だけ台詞を選び、直近5件の同一台詞を避ける。
  * ボス戦の優勢/劣勢はAI先生の表示評価を優先し、未解析時だけ本体と同じ駒価値の駒得差を補助判定に使う。
+ * 4勝直後は「16人トーナメント優勝」を独立表示し、その後「杯ボス挑戦前」へ遷移する。
  */
 (function installTournamentDialogue21547(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547C)return;
-  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547C=true;
+  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547D)return;
+  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_21547D=true;
 
   const KEY='aiShogiTournament21540';
   const HISTORY_KEY='aiShogiTournamentDialogue21547';
@@ -57,8 +58,11 @@
     if(lastCup!==cupId){lastCup=cupId;cupSince=now;lastOpponent=opp||'';opponentSince=now}
     if(opp&&opp!==lastOpponent){lastOpponent=opp;opponentSince=now}
     const b=a.bossChallenge||{};let context='r1',label='',extra='',scoreSource=null;
-    if(b.status==='pending')context='boss_pending';
-    else if(b.status==='active'){
+    if(b.status==='pending'){
+      const wonAt=Number(b.tournamentWonAt)||0;
+      if(wonAt&&now-wonAt<3200){context='tournament_champion';extra='champion@'+wonAt}
+      else context='boss_pending';
+    }else if(b.status==='active'){
       const moves=moveCount(),sit=bossSituationScore();scoreSource=sit?.source||null;
       if(sit&&sit.score>=sit.threshold){context='boss_advantage';extra=sit.source+'+'+Math.floor(sit.score/100)}
       else if(sit&&sit.score<=-sit.threshold){context='boss_disadvantage';extra=sit.source+Math.ceil(sit.score/100)}
@@ -77,7 +81,7 @@
     const upset=context==='upset'?latestUpset(a):null;
     const vars={cup:CUP_NAME[cupId],boss,round:ROUNDS[Number(a.round)||0]||'大会',opponent:display(opp),winner:upset?.winner||'',loser:upset?.loser||'',winnerRating:upset?.winnerRating||'',loserRating:upset?.loserRating||''};
     label=bank()?.events?.[context]?.label||'大会中';
-    const role=b.status==='active'||b.status==='pending'||b.status==='won'||b.status==='lost'||b.status==='draw'?'杯ボス':'大会主・トーナメント外';
+    const role=context==='tournament_champion'?'大会主・トーナメント外':(b.status==='active'||b.status==='pending'||b.status==='won'||b.status==='lost'||b.status==='draw'?'杯ボス':'大会主・トーナメント外');
     const sig=[cupId,context,a.round,a.pending||'',a.status||'',opp||'',b.status||'',extra].join('|');
     return{store,a,cupId,boss,opp,context,label,role,vars,sig,scoreSource};
   }
@@ -122,10 +126,10 @@ body.tournamentFire21542 #tournament21540Panel .tourDialogue21547{grid-template-
   }
   function audit(){
     const d=derive(),b=bank()?.audit?.()||{},box=document.getElementById('tourDialogue21547'),img=box?.querySelector('img'),panel=document.getElementById('tournament21540Panel');
-    return{ok:!!b.ok&&(!d||!!box),version:'21547c',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
+    return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
   }
 
-  window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547c',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
+  window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547d',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
   observer=new MutationObserver(()=>setTimeout(()=>render(false),0));observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
   let tries=0;const boot=setInterval(()=>{render(false);if(++tries>120)clearInterval(boot)},120);setInterval(()=>render(false),600);
   window.addEventListener('resize',()=>render(false));window.addEventListener('orientationchange',()=>setTimeout(()=>render(false),100));window.addEventListener('ai-shogi-local-save',()=>setTimeout(()=>render(false),0));
