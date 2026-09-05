@@ -1,11 +1,11 @@
-/* みつき将棋 大会セリフバンク v2.15.47b
+/* みつき将棋 大会セリフバンク v2.15.47d
  * 杯ボスを大会主/実況役として見せるための、完全オリジナルの状況別短文バンク。
  * 1コンテキストにつき boss voice 5種 × event 5種 = 最大25通りを合成する。
  */
 (function installTournamentDialogueBank21547(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_BANK_21547B)return;
-  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_BANK_21547B=true;
+  if(window.__AI_SHOGI_TOURNAMENT_DIALOGUE_BANK_21547D)return;
+  window.__AI_SHOGI_TOURNAMENT_DIALOGUE_BANK_21547D=true;
 
   const VOICES={
     shinji:{name:'しんじ',watch:['ちゃんと見てるよ。','焦らなくて大丈夫。','ここまで来たんだね。','一手ずつ進めよう。','次の一手を見てるよ。'],pressure:['少し緊張するね。','ここは大事な場面だね。','まだ決まったわけじゃないよ。','慎重にいこう。','落ち着いて盤面を見よう。'],praise:['いい流れだね。','その勝ちは大きいよ。','ここまでよく進んだね。','次も自分の将棋でいこう。','一つずつ結果がついてきたね。'],challenge:['最後はぼくが相手だよ。','ここからは直接指そう。','準備ができたら来てね。','トーナメントの先で待ってる。','ここまで来た力を見せてほしい。'],bossWin:['今回はぼくの勝ちだね。','またここまで上がってきてね。','次はもっといい勝負になりそう。','この一局はもらったよ。','挑戦、ちゃんと受け取ったよ。'],bossLose:['強かったよ。','最後まで押し切ったね。','その勝ちは本物だよ。','完全制覇、おめでとう。','今日は君の大会だね。'],draw:['まだ終われないね。','もう一局、指そう。','決着は次の一局だね。','同じ舞台でもう一度。','今度こそ決めよう。']},
@@ -28,6 +28,7 @@
     round_win:{mood:'praise',label:'勝ち上がり',lines:['{round}突破。次の舞台へ。','一つ勝ち上がった。次の対局に備えよう。','この勝利でブラケットを一段進んだ。','勝ち切った。次の相手を待とう。','{round}を突破。大会はまだ続く。']},
     round_loss:{mood:'watch',label:'トーナメント敗退',lines:['今回はここでトーナメント敗退。','この大会はここまで。また挑戦できる。','勝ち上がりは止まったけれど、次がある。','今回は相手が一枚上だった。','ここで敗退。次の大会で取り返そう。']},
     upset:{mood:'pressure',label:'大会速報・番狂わせ',lines:['番狂わせ。R{winnerRating}の{winner}がR{loserRating}の{loser}を破った。','大会が動いた。{winner}が格上の{loser}に勝利。','予想外の結果。{winner}が次へ進んだ。','ブラケットに波乱。{winner}が{loser}を倒した。','この結果で組み合わせが変わった。{winner}が勝ち上がり。']},
+    tournament_champion:{mood:'praise',label:'16人トーナメント優勝',lines:['{cup}の16人トーナメント優勝。4勝を勝ち切った。','ブラケット制覇。まずはトーナメント王者だ。','決勝も突破。16人の頂点に立った。','4連勝でトーナメント優勝。次の舞台へ進める。','ここまでの4戦を制した。大会優勝おめでとう。']},
     boss_pending:{mood:'challenge',label:'トーナメント優勝・ボス挑戦権',lines:['トーナメント優勝。次は{boss}への挑戦だ。','4勝達成。ここから杯ボス{boss}との5戦目。','ブラケット制覇。最後に{boss}が待っている。','挑戦権獲得。{boss}との一局で完全制覇を決めよう。','トーナメントは優勝。残るのは杯ボス{boss}だけ。']},
     boss_start:{mood:'challenge',label:'杯ボス戦・開始',lines:['杯ボス戦開始。{boss}と直接対局。','完全制覇をかけた5戦目が始まった。','ここからはトーナメント外のボス戦。','優勝者対{boss}。最後の一局。','杯の最後を決める対局が始まった。']},
     boss_advantage:{mood:'praise',label:'杯ボス戦・あなた優勢',lines:['形勢はあなたが優勢。ここから丁寧に押し切ろう。','あなたがリードしている。急がず優位を広げよう。','完全制覇へ一歩前。優勢を崩さず進めよう。','今はあなたの流れ。反撃だけ消していこう。','優勢の局面。勝ち急がず確実に。']},
@@ -57,7 +58,7 @@
   function audit(){
     const contexts=Object.keys(EVENTS),bosses=Object.keys(VOICES);let minVariants=Infinity;
     for(const id of bosses)for(const ctx of contexts){const v=VOICES[id],e=EVENTS[ctx],n=(v[e.mood]||v.watch||[]).length*(e.lines||[]).length;minVariants=Math.min(minVariants,n)}
-    return{ok:bosses.length===8&&contexts.length>=16&&minVariants>=25,version:'21547b',bosses:bosses.length,contexts:contexts.length,minVariants,totalContextVariants:bosses.length*contexts.length*minVariants};
+    return{ok:bosses.length===8&&contexts.length>=19&&minVariants>=25,version:'21547d',bosses:bosses.length,contexts:contexts.length,minVariants,totalContextVariants:bosses.length*contexts.length*minVariants};
   }
-  window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK={version:'21547b',voices:VOICES,events:EVENTS,pick,audit};
+  window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK={version:'21547d',voices:VOICES,events:EVENTS,pick,audit};
 })();
