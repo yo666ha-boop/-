@@ -20,6 +20,7 @@ jobs:
         run: |
           node --check shogi-v21528/cloud-save21531.js
           node --check shogi-v21528/coi-serviceworker.js
+          node --check shogi-v21528/rating-progress21536.js
           node --check shogi-side-test/future21520.js
           node --check shogi-v21528/future-yaneura-worker21528.js
           node --check shogi-side-test/top5-yaneura21529.js
