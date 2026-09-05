@@ -6,7 +6,7 @@
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const ROUND_CTX=['r1','qf','sf','final'],ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const history={},seen={cup:'',opp:'',cupAt:0,oppAt:0,sig:'',pick:null};
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   function opponent(){const row=active?.rounds?.[active?.round];if(!Array.isArray(row))return null;return row[(Number(active?.playerSlot)||0)^1]||null}
   function derive(){
     if(!active?.cup?.id)return null;const now=Date.now(),cup=active.cup,opp=opponent();
