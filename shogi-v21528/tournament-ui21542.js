@@ -193,7 +193,7 @@
       }
       panel.classList.remove('on');
       const st=document.getElementById('status');if(st)st.textContent='復元した杯ボス戦：'+boss+' に挑戦中';
-    }else if(['active','draw'].includes(String(initialActive?.status||''))&&!initialActive?.pending){
+    }else if(String(initialActive?.status||'')==='active'&&!initialActive?.pending){
       const round=Number(current?.round)||0,slot=Number(current?.playerSlot)||0,row=current?.bracket?.rounds?.[round];
       const opponent=Array.isArray(row)?String(row[slot^1]||''):'';
       if(!opponent)return false;
@@ -234,7 +234,7 @@
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
   const initial=read()?.active?JSON.parse(JSON.stringify(read().active)):null;
   const initialStatus=initial?.bossChallenge?.status||null;
-  const initialRoundActive=!!initial&&['active','draw'].includes(String(initial.status||''))&&!initial.pending&&initialStatus!=='active';
+  const initialRoundActive=!!initial&&String(initial.status||'')==='active'&&!initial.pending&&initialStatus!=='active';
   let done=!initial||initialStatus==='active',tries=0;
   const publish=()=>{window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL={version:'21548c',audit:()=>({done,hadInitialActive:!!initial,initialStatus,initialRoundActive,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),dialogueReady:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'})}};
   publish();
