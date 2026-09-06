@@ -208,29 +208,59 @@
   setTimeout(restoreOnce,0);
 })();
 
-/* v2.15.48b: reload visual restore after dialogue initialization.
- * The tournament UI script loads before the situation-dialogue module. For a
- * tournament that already existed at page start, wait until that module is
- * actually usable, then re-open/re-render non-active-boss states once so the
- * real portrait dialogue is visible. This never applies to tournaments that
- * the user starts after page load.
+/* v2.15.48c: keep a pre-existing tournament visually restored through late startup.
+ * A saved tournament can be reopened before the base UI finishes its default
+ * opponent initialization; that later initialization may close overlays again.
+ * For a finite startup window only, keep the saved non-boss-active tournament
+ * panel + image dialogue rendered. Any trusted user pointer/key interaction
+ * stops this stabilizer immediately, so manual close/navigation always wins.
+ * New tournaments started after page load are never eligible.
  */
-(function installTournamentReloadVisual21548b(){
+(function installTournamentReloadVisual21548c(){
   'use strict';
-  if(window.__AI_SHOGI_TOURNAMENT_RELOAD_VISUAL_21548B)return;
-  window.__AI_SHOGI_TOURNAMENT_RELOAD_VISUAL_21548B=true;
+  if(window.__AI_SHOGI_TOURNAMENT_RELOAD_VISUAL_21548C)return;
+  window.__AI_SHOGI_TOURNAMENT_RELOAD_VISUAL_21548C=true;
   const KEY='aiShogiTournament21540';
+  const HOLD_MS=8000;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
-  const initial=read()?.active?JSON.parse(JSON.stringify(read().active)):null;
+  const initialRaw=read()?.active;
+  const initial=initialRaw?JSON.parse(JSON.stringify(initialRaw)):null;
   const initialStatus=initial?.bossChallenge?.status||null;
-  let done=!initial||initialStatus==='active',tries=0;
-  const publish=()=>{window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL={version:'21548b',audit:()=>({done,hadInitialActive:!!initial,initialStatus,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),dialogueReady:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'})}};
+  const fingerprint=a=>a?[a.cupId,a.round,a.status,a.pending||'',a?.bossChallenge?.status||''].join('|'):'';
+  const initialFingerprint=fingerprint(initial);
+  let done=!initial||initialStatus==='active',cancelled=false,readyAt=0,attempts=0,timer=0;
+  const panelOpen=()=>!!document.getElementById('tournament21540Panel')?.classList.contains('on');
+  const publish=()=>{
+    window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL={
+      version:'21548c',
+      audit:()=>({done,cancelled,hadInitialActive:!!initial,initialStatus,panelOpen:panelOpen(),dialogueReady:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d',attempts,elapsedMs:readyAt?Date.now()-readyAt:0})
+    };
+  };
+  const stop=cancel=>{
+    if(done)return;
+    done=true;cancelled=!!cancel;
+    if(timer)clearInterval(timer);
+    document.removeEventListener('pointerdown',onUser,true);
+    document.removeEventListener('keydown',onUser,true);
+    document.removeEventListener('touchstart',onUser,true);
+    document.documentElement.dataset.tournamentRestoreVisual21548=cancelled?'cancelled':'1';
+    publish();
+  };
+  const onUser=e=>{if(e?.isTrusted)stop(true)};
   publish();
-  if(done)return;
-  function restoreVisual(){
+  if(done){document.documentElement.dataset.tournamentRestoreVisual21548=initialStatus==='active'?'boss-active':'idle';return}
+  document.addEventListener('pointerdown',onUser,true);
+  document.addEventListener('keydown',onUser,true);
+  document.addEventListener('touchstart',onUser,true);
+
+  function maintain(){
     if(done)return true;
     const current=read()?.active,panel=document.getElementById('tournament21540Panel'),t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
-    if(!current||!panel||!t?.render||d?.version!=='21547d'||typeof d.render!=='function')return false;
+    if(!current){stop(false);return true}
+    if(fingerprint(current)!==initialFingerprint){stop(false);return true}
+    if(!panel||!t?.render||d?.version!=='21547d'||typeof d.render!=='function')return false;
+    if(!readyAt)readyAt=Date.now();
+    attempts++;
     panel.classList.add('on');
     try{t.render()}catch(e){}
     panel.classList.add('on');
@@ -238,9 +268,18 @@
     try{window.AI_SHOGI_TOURNAMENT_UI?.repair?.()}catch(e){}
     panel.classList.add('on');
     const box=document.getElementById('tourDialogue21547'),img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.();
-    if(!box||!img||!img.src||!rect||rect.width<=0||rect.height<=0)return false;
-    done=true;document.documentElement.dataset.tournamentRestoreVisual21548='1';publish();return true;
+    const visible=!!box&&!!img&&!!img.src&&!!rect&&rect.width>0&&rect.height>0;
+    document.documentElement.dataset.tournamentRestoreVisual21548=visible?'holding':'warming';
+    publish();
+    if(Date.now()-readyAt>=HOLD_MS){
+      panel.classList.add('on');
+      try{d.render()}catch(e){}
+      panel.classList.add('on');
+      stop(false);
+      return true;
+    }
+    return false;
   }
-  const timer=setInterval(()=>{if(restoreVisual()||++tries>120)clearInterval(timer)},100);
-  setTimeout(restoreVisual,0);
+  timer=setInterval(maintain,160);
+  setTimeout(maintain,0);
 })();
