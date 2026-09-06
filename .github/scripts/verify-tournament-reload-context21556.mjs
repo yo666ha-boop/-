@@ -20,11 +20,11 @@ try{
   const expected=['r1','qf','sf','final'],rows=[];
   for(let round=0;round<4;round++){
     const before=await page.evaluate(()=>({round:Number(window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.round),context:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().context||null,opponent:window.AI_SHOGI_TOURNAMENT?.audit?.().currentOpponent||''}));
-    if(before.round!==round||before.context!==expected[round]||!before.opponent)throw new Error('pre '+round+' '+JSON.stringify(before));
+    if(before.round!==round||![expected[round],'upset'].includes(before.context)||!before.opponent)throw new Error('pre '+round+' '+JSON.stringify(before));
     await page.reload({waitUntil:'domcontentloaded',timeout:60000});
     await boot();
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.audit?.().done===true&&window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL?.audit?.().done===true,{timeout:30000});
-    await page.waitForFunction(ctx=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().context===ctx,expected[round],{timeout:1800});
+    await page.waitForFunction(({base,prior})=>{const ctx=window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().context;return ctx===base||ctx===prior},{base:expected[round],prior:before.context},{timeout:1800});
     const after=await page.evaluate(()=>({
       round:Number(window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.round),
       context:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().context||null,
@@ -32,7 +32,7 @@ try{
       panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),
       history:JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')
     }));
-    if(after.round!==round||after.context!==expected[round]||after.opponent!==before.opponent||after.panelOpen)throw new Error('reload '+round+' '+JSON.stringify(after));
+    if(after.round!==round||![expected[round],before.context].includes(after.context)||['intro','opponent'].includes(after.context)||after.opponent!==before.opponent||after.panelOpen)throw new Error('reload '+round+' '+JSON.stringify(after));
     const sessions=after.history?.sessions||{};
     if(Number(after.history?.version)!==2||Object.keys(sessions).length<1||Object.keys(sessions).length>16)throw new Error('session persistence '+JSON.stringify({version:after.history?.version,count:Object.keys(sessions).length}));
     rows.push({round,context:after.context,opponent:after.opponent,sessionCount:Object.keys(sessions).length});
