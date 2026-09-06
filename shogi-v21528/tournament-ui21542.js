@@ -193,6 +193,17 @@
       }
       panel.classList.remove('on');
       const st=document.getElementById('status');if(st)st.textContent='復元した杯ボス戦：'+boss+' に挑戦中';
+    }else if(['active','draw'].includes(String(initialActive?.status||''))&&!initialActive?.pending){
+      const round=Number(current?.round)||0,slot=Number(current?.playerSlot)||0,row=current?.bracket?.rounds?.[round];
+      const opponent=Array.isArray(row)?String(row[slot^1]||''):'';
+      if(!opponent)return false;
+      if(!currentOpponent().startsWith(opponent)){
+        const idx=api.characters().findIndex(c=>c?.name===opponent);
+        if(idx<0)return false;
+        try{api.select(idx)}catch(e){console.error('tournament reload round opponent restore failed',e);return false}
+      }
+      panel.classList.remove('on');
+      const st=document.getElementById('status');if(st)st.textContent='復元した大会対局：'+opponent+' と対局中';
     }else{
       const reopen=()=>{
         const p=document.getElementById('tournament21540Panel');if(!p)return;
@@ -223,22 +234,25 @@
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
   const initial=read()?.active?JSON.parse(JSON.stringify(read().active)):null;
   const initialStatus=initial?.bossChallenge?.status||null;
+  const initialRoundActive=!!initial&&['active','draw'].includes(String(initial.status||''))&&!initial.pending&&initialStatus!=='active';
   let done=!initial||initialStatus==='active',tries=0;
-  const publish=()=>{window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL={version:'21548b',audit:()=>({done,hadInitialActive:!!initial,initialStatus,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),dialogueReady:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'})}};
+  const publish=()=>{window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL={version:'21548c',audit:()=>({done,hadInitialActive:!!initial,initialStatus,initialRoundActive,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),dialogueReady:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'})}};
   publish();
   if(done)return;
   function restoreVisual(){
     if(done)return true;
     const current=read()?.active,panel=document.getElementById('tournament21540Panel'),t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
     if(!current||!panel||!t?.render||d?.version!=='21547d'||typeof d.render!=='function')return false;
-    panel.classList.add('on');
+    if(initialRoundActive)panel.classList.remove('on');else panel.classList.add('on');
     try{t.render()}catch(e){}
-    panel.classList.add('on');
+    if(initialRoundActive)panel.classList.remove('on');else panel.classList.add('on');
     try{d.render()}catch(e){}
     try{window.AI_SHOGI_TOURNAMENT_UI?.repair?.()}catch(e){}
-    panel.classList.add('on');
+    if(initialRoundActive)panel.classList.remove('on');else panel.classList.add('on');
     const box=document.getElementById('tourDialogue21547'),img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.();
+    const opp=document.getElementById('tourOpponentVoice21549'),oppImg=opp?.querySelector('.tourDialoguePortrait img'),oppRect=opp?.getBoundingClientRect?.();
     if(!box||!img||!img.src||!rect||rect.width<=0||rect.height<=0)return false;
+    if(initialRoundActive&&(!opp||!oppImg||!oppImg.src||!oppRect||oppRect.width<=0||oppRect.height<=0||panel.classList.contains('on')))return false;
     done=true;document.documentElement.dataset.tournamentRestoreVisual21548='1';publish();return true;
   }
   const timer=setInterval(()=>{if(restoreVisual()||++tries>120)clearInterval(timer)},100);
