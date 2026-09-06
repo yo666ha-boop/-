@@ -1,0 +1,36 @@
+name: Verify tournament dialogue 21547
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament-dialogue-bank21547.js'
+      - 'shogi-v21528/tournament-dialogue21547.js'
+      - 'preview/tournament-16/dialogue-preview21547.js'
+      - 'preview/tournament-16/index21543.html'
+      - 'shogi-v21528/rating-progress21536.js'
+      - '.github/scripts/verify-tournament-dialogue21547.mjs'
+      - '.github/scripts/verify-tournament-all-boss-dialogue21547.mjs'
+      - '.github/workflows/verify-tournament-dialogue21547.yml'
+  workflow_dispatch:
+
+jobs:
+  dialogue:
+    runs-on: ubuntu-22.04
+    container: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install matching Playwright package
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check
+        run: |
+          node --check shogi-v21528/tournament-dialogue-bank21547.js
+          node --check shogi-v21528/tournament-dialogue21547.js
+          node --check preview/tournament-16/dialogue-preview21547.js
+          node --check shogi-v21528/rating-progress21536.js
+          node --check .github/scripts/verify-tournament-dialogue21547.mjs
+          node --check .github/scripts/verify-tournament-all-boss-dialogue21547.mjs
+      - name: Verify portrait dialogue, situation changes, anti-repeat, and mobile fit
+        run: node .github/scripts/verify-tournament-dialogue21547.mjs
+      - name: Verify all eight boss portraits and voice separation
+        run: node .github/scripts/verify-tournament-all-boss-dialogue21547.mjs

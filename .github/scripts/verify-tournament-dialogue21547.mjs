@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import { chromium } from 'playwright';
+
+const bank=await fs.readFile('shogi-v21528/tournament-dialogue-bank21547.js','utf8');
+const dialogue=await fs.readFile('shogi-v21528/tournament-dialogue21547.js','utf8');
+const characters=[['みつき',3000],['みっちゃん',2850],['あき王',2700],['おにまま',2600],['まま',2500],['ケンシロウ',2100],['ジャギ',1450],['しんじ',1550],['直江兼続',1700],['あやなみ',1800],['バット',1600],['伊達政宗',1750],['あすか',1900],['ユリア',1680],['玉ちゃん',1380],['まり',1950],['ぺんぺん',1250],['げんどー',2050],['前田慶次',1820],['シン',2000],['みさとさん',1880],['サウザー',2180],['リン',1500],['ラオウ',2250],['カヲル',2400],['未来からやってきたみつき',3400]].map(([name,rating])=>({name,rating}));
+const img='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3Crect width="80" height="80" fill="%23577"/%3E%3C/svg%3E';
+const cards=characters.map(c=>`<div class="ch"><img src="${img}" alt="${c.name}"><span class="chName">${c.name}</span></div>`).join('');
+const active={cupId:'akiou',round:1,playerSlot:0,status:'active',pending:null,bracket:{rounds:[['__PLAYER__','まま','おにまま','げんどー','シン','まり','あすか','みさとさん','前田慶次','あやなみ','伊達政宗','直江兼続','ユリア','バット','リン','玉ちゃん'],['__PLAYER__','まま','おにまま','シン','まり','あすか','前田慶次','あやなみ'],[null,null,null,null],[null,null],[null]],results:{}},bossChallenge:{status:'locked'}};
+const html=`<!doctype html><html><head><meta charset="utf-8"></head><body class="tournamentFire21542"><div id="chars">${cards}</div><div id="evalNumber">—</div><div id="tournament21540Panel" class="on" style="width:1180px;max-width:100%;box-sizing:border-box"><div class="tourActive"><div class="tourActiveTitle">あき王杯</div><div class="tourCurrentMatch">準々決勝 対局中</div><div class="tourNews"></div></div></div><script>window.__state={log:[],b:Array(81).fill(null),h:{'1':{},'-1':{}}};window.__chars=${JSON.stringify(characters)};window.AIShogiIOS={characters:()=>window.__chars,state:()=>window.__state};localStorage.setItem('aiShogiTournament21540',${JSON.stringify(JSON.stringify({version:3,active,trophies:{},history:[]}))});</script><script src="/bank.js"></script><script src="/dialogue.js"></script></body></html>`;
+const server=http.createServer((req,res)=>{if(req.url==='/bank.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(bank);return}if(req.url==='/dialogue.js'){res.writeHead(200,{'content-type':'application/javascript'});res.end(dialogue);return}res.writeHead(200,{'content-type':'text/html'});res.end(html)});
+await new Promise(r=>server.listen(43147,'127.0.0.1',r));
+const browser=await chromium.launch({headless:true});
+try{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});await page.goto('http://127.0.0.1:43147/',{waitUntil:'load'});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK?.audit?.().ok&&window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit);
+  const bankAudit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK.audit());
+  assert.equal(bankAudit.bosses,8);assert.equal(bankAudit.contexts,19);assert.ok(bankAudit.minVariants>=25);assert.ok(bankAudit.totalContextVariants>=3800);
+  const anti=await page.evaluate(()=>{const b=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK,h=[];const ids=[];for(let i=0;i<6;i++){const p=b.pick('akiou','qf',{cup:'あき王杯',boss:'あき王'},h,0);ids.push(p.id);h.push(p.id)}return ids});
+  assert.equal(new Set(anti).size,6,'anti-repeat must avoid the previous five exact lines');
+  await page.waitForTimeout(3500);
+  let audit=await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT_DIALOGUE.render();return window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit()});
+  assert.equal(audit.context,'qf');assert.equal(audit.label,'準々決勝・対局中');assert.equal(audit.speaker,'あき王');assert.equal(audit.role,'大会主・トーナメント外');assert.equal(audit.portrait,true);assert.ok(audit.text.length>12);assert.equal(audit.opponentSpeaker,'まま');assert.equal(audit.opponentRole,'対戦相手・トーナメント参加者');assert.equal(audit.opponentPortrait,true);assert.ok(audit.opponentText.length>0);
+  const bracketHasBoss=await page.evaluate(()=>JSON.parse(localStorage.getItem('aiShogiTournament21540')).active.bracket.rounds[0].includes('あき王'));assert.equal(bracketHasBoss,false);
+  await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('aiShogiTournament21540'));s.active.status='boss_pending';s.active.bossChallenge.status='pending';s.active.bossChallenge.tournamentWonAt=Date.now();localStorage.setItem('aiShogiTournament21540',JSON.stringify(s));window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'tournament_champion');assert.equal(audit.label,'16人トーナメント優勝');assert.equal(audit.role,'大会主・トーナメント外');assert.equal(audit.portrait,true);
+  await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('aiShogiTournament21540'));s.active.bossChallenge.tournamentWonAt=Date.now()-5000;localStorage.setItem('aiShogiTournament21540',JSON.stringify(s));window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_pending');assert.equal(audit.label,'杯ボス挑戦前');assert.equal(audit.role,'杯ボス');assert.equal(audit.portrait,true);
+  await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('aiShogiTournament21540'));s.active.status='boss_active';s.active.bossChallenge.status='active';localStorage.setItem('aiShogiTournament21540',JSON.stringify(s));window.__state.log=Array.from({length:30},(_,i)=>i);window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_mid');assert.equal(audit.label,'杯ボス戦・中盤');assert.equal(audit.scoreSource,'material');assert.equal(audit.opponentSpeaker,null,'opponent participant card must be absent during boss match');
+  await page.evaluate(()=>{document.getElementById('evalNumber').textContent='—';window.__state.b=Array(81).fill(null);window.__state.b[0]={k:'R',o:1};window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_advantage');assert.equal(audit.label,'杯ボス戦・あなた優勢');assert.equal(audit.scoreSource,'material');
+  await page.evaluate(()=>{window.__state.b=Array(81).fill(null);window.__state.b[0]={k:'B',o:-1};window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_disadvantage');assert.equal(audit.label,'杯ボス戦・あなた劣勢');assert.equal(audit.scoreSource,'material');
+  await page.evaluate(()=>{window.__state.b=Array(81).fill(null);window.__state.b[0]={k:'R',o:-1};document.getElementById('evalNumber').textContent='+650';window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_advantage');assert.equal(audit.scoreSource,'teacher');
+  await page.evaluate(()=>{document.getElementById('evalNumber').textContent='-650';window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_disadvantage');assert.equal(audit.scoreSource,'teacher');
+  await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('aiShogiTournament21540'));s.active.status='champion';s.active.bossChallenge.status='won';localStorage.setItem('aiShogiTournament21540',JSON.stringify(s));window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
+  audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_won');assert.equal(audit.label,'杯・完全制覇');
+  const allBossSamples=await page.evaluate(()=>{const b=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;return Object.keys(b.voices).map(id=>({id,p:b.pick(id,'boss_pending',{cup:'杯',boss:b.voices[id].name},[],.2)}))});assert.equal(allBossSamples.length,8);assert.ok(allBossSamples.every(x=>x.p?.text&&x.p.total>=25));
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.render());const mobile=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,vw:document.documentElement.clientWidth,box:document.getElementById('tourDialogue21547')?.getBoundingClientRect().width||0}));assert.ok(mobile.doc<=mobile.vw+1,JSON.stringify(mobile));assert.ok(mobile.box>0&&mobile.box<=390);
+  console.log('PASS_TOURNAMENT21547D_DIALOGUE '+JSON.stringify({bosses:bankAudit.bosses,contexts:bankAudit.contexts,minVariants:bankAudit.minVariants,totalContextVariants:bankAudit.totalContextVariants,antiRepeatUnique:new Set(anti).size,qfPortrait:true,qfRole:'host-outside-bracket',opponentPortrait:true,opponentRole:'participant',opponentSpeaker:'まま',bossInBracket:false,tournamentChampionDialogue:true,bossPendingDialogue:true,bossMid:true,materialFallbackAdvantage:true,materialFallbackDisadvantage:true,teacherEvalPriority:true,completeClear:true,mobileOverflow:Math.max(0,mobile.doc-mobile.vw)}));
+} finally {await browser.close();await new Promise(r=>server.close(r))}

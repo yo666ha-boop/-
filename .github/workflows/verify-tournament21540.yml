@@ -1,0 +1,31 @@
+name: Verify tournament cups 21540
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament21540.js'
+      - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
+      - 'shogi-v21528/rating-progress21536.js'
+      - '.github/scripts/verify-tournament21540.mjs'
+      - '.github/workflows/verify-tournament21540.yml'
+  workflow_dispatch:
+jobs:
+  tournament:
+    runs-on: ubuntu-22.04
+    container: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install matching Playwright package
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check
+        run: |
+          node --check shogi-v21528/tournament21541.js
+          node --check shogi-v21528/tournament-field21545.js
+          node --check shogi-v21528/tournament-boss21546.js
+          node --check shogi-v21528/rating-progress21536.js
+          node --check .github/scripts/verify-tournament21540.mjs
+      - name: Verify tournament then boss flow
+        run: node .github/scripts/verify-tournament21540.mjs
