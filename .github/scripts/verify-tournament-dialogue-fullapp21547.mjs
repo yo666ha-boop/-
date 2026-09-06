@@ -140,6 +140,7 @@ try{
     t.start('shinji');await delay(180);
     const seen=[snap('intro')];
     await delay(3300);seen.push(snap('round1'));
+    const speech=document.getElementById('charSpeech'),speechBefore=speech?.textContent||'';if(speech){speech.textContent='SYNC_SENTINEL_21549';await delay(180);seen.push(snap('speechSync'));speech.textContent=speechBefore;await delay(80)}
     for(let round=0;round<4;round++){
       await result('win');seen.push(snap('win'+(round+1)));
       if(round<3){t.next();await delay(120);seen.push(snap('next'+(round+1)))}
@@ -163,6 +164,7 @@ try{
   const by=Object.fromEntries(transitions.seen.map(x=>[x.label,x]));
   const expect=(label,ctx)=>{const x=by[label];if(!x)transitionFailures.push(label+': missing');else if(x.context!==ctx)transitionFailures.push(label+': context '+x.context+' expected '+ctx);else if(!x.text||!x.portrait)transitionFailures.push(label+': visible dialogue missing')};
   expect('intro','intro');expect('round1','r1');
+  if(by.speechSync?.opponentText!=='SYNC_SENTINEL_21549')transitionFailures.push('speechSync: opponent card did not follow charSpeech');
   for(const label of ['round1','next1','next2','next3']){const x=by[label];if(!x?.opponentSpeaker||x.opponentRole!=='対戦相手・トーナメント参加者'||!x.opponentPortrait||!x.opponentText)transitionFailures.push(label+': participant dialogue missing')}
   expect('win1','round_win');expect('win2','round_win');expect('win3','round_win');
   for(const label of ['win1','win2','win3','champion','bossPending','bossStart','bossDraw','bossLoss','restoredPending','bossWin']){if(by[label]?.opponentSpeaker)transitionFailures.push(label+': participant card should be hidden')}
