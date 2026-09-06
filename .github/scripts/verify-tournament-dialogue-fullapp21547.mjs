@@ -131,8 +131,8 @@ try{
     const delay=ms=>new Promise(r=>setTimeout(r,ms));
     const snap=label=>{
       d.render();
-      const a=t.state()?.active||null,da=d.audit?.()||{},box=document.getElementById('tourDialogue21547');
-      return {label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,status:a?.status||null,round:Number(a?.round??-1),pending:a?.pending||null,bossStatus:a?.bossChallenge?.status||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portrait:!!box?.querySelector('.tourDialoguePortrait img')?.src};
+      const a=t.state()?.active||null,da=d.audit?.()||{},box=document.getElementById('tourDialogue21547'),ob=document.getElementById('tourOpponentVoice21549');
+      return {label,context:da.context||null,speaker:da.speaker||null,role:box?.dataset.role||null,status:a?.status||null,round:Number(a?.round??-1),pending:a?.pending||null,bossStatus:a?.bossChallenge?.status||null,text:(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),portrait:!!box?.querySelector('.tourDialoguePortrait img')?.src,opponentSpeaker:ob?.dataset.speaker||null,opponentRole:ob?.dataset.role||null,opponentPortrait:!!ob?.querySelector('.tourDialoguePortrait img')?.src,opponentText:(ob?.querySelector('.tourDialogueBubble')?.textContent||'').trim()};
     };
     const result=async kind=>{const r=document.getElementById('resultBanner');r.className='resultBanner';void r.offsetWidth;r.className='resultBanner on result-'+kind;r.textContent=kind;await delay(220)};
     const waitBoss=async status=>{for(let i=0;i<30;i++){if(t.state()?.active?.bossChallenge?.status===status)return true;await delay(80)}return false};
@@ -163,6 +163,7 @@ try{
   const by=Object.fromEntries(transitions.seen.map(x=>[x.label,x]));
   const expect=(label,ctx)=>{const x=by[label];if(!x)transitionFailures.push(label+': missing');else if(x.context!==ctx)transitionFailures.push(label+': context '+x.context+' expected '+ctx);else if(!x.text||!x.portrait)transitionFailures.push(label+': visible dialogue missing')};
   expect('intro','intro');expect('round1','r1');
+  for(const label of ['round1','next1','next2','next3']){const x=by[label];if(!x?.opponentSpeaker||x.opponentRole!=='対戦相手・トーナメント参加者'||!x.opponentPortrait||!x.opponentText)transitionFailures.push(label+': participant dialogue missing')}
   expect('win1','round_win');expect('win2','round_win');expect('win3','round_win');
   for(const n of [1,2,3]){
     const x=by['next'+n];
