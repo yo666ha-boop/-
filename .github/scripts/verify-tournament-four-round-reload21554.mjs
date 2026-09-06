@@ -49,7 +49,7 @@ try{
       const panel=document.getElementById('tournament21540Panel'),host=document.getElementById('tourDialogue21547'),opp=document.getElementById('tourOpponentVoice21549'),hi=host?.querySelector('img'),oi=opp?.querySelector('img'),hr=host?.getBoundingClientRect?.()||{},or=opp?.getBoundingClientRect?.()||{},side=document.querySelector('.side');
       return{
         round:Number(a?.round),playerSlot:Number(a?.playerSlot),opponent:t.audit?.().currentOpponent||'',oppName:String(document.getElementById('oppName')?.textContent||'').trim(),
-        panelOpen:!!panel?.classList.contains('on'),restore:tournamentRestore=window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.audit?.()||null,visual:window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL?.audit?.()||null,
+        panelOpen:!!panel?.classList.contains('on'),restore:window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.audit?.()||null,visual:window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL?.audit?.()||null,
         hostSpeaker:host?.dataset.speaker||'',oppSpeaker:opp?.dataset.speaker||'',hostRole:host?.dataset.role||'',oppRole:opp?.dataset.role||'',
         hostDocked:host?.classList.contains('tourRoundBattleDock21550')===true,oppDocked:opp?.classList.contains('tourRoundBattleDock21550')===true,
         hostParent:host?.parentElement?.classList?.contains('side')?'side':'other',oppParent:opp?.parentElement?.classList?.contains('side')?'side':'other',
