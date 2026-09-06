@@ -122,11 +122,22 @@ body.tournamentFire21542 #tournament21540Panel .tourDialogue21547{grid-template-
     const oldImg=box.querySelector('img');const same=!force&&box.dataset.context===d.context&&box.dataset.cup===d.cupId&&box.dataset.speaker===d.boss&&box.dataset.role===d.role&&box.dataset.lineId===p.id&&(!src||oldImg?.src===src);if(same)return true;
     box.dataset.context=d.context;box.dataset.cup=d.cupId;box.dataset.speaker=d.boss;box.dataset.role=d.role;box.dataset.lineId=p.id;box.dataset.scoreSource=d.scoreSource||'';
     box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.boss)+'">':'<span aria-hidden="true">'+esc(Array.from(d.boss)[0]||'王')+'</span>')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(p.label)+'</span><span class="tourDialogueRole">'+esc(d.role)+'</span></div><div class="tourDialogueName">'+esc(d.boss)+'</div><div class="tourDialogueBubble">'+esc(p.text)+'</div></div>';
+    renderOpponentVoice();return true;
+  }
+  function renderOpponentVoice(){
+    const d=derive(),root=document.querySelector('#tournament21540Panel .tourActive');let box=document.getElementById('tourOpponentVoice21549');
+    const bossState=d?.a?.bossChallenge?.status||'locked';
+    if(!d||!root||!d.opp||d.opp===PLAYER||bossState!=='locked'||d.a.pending||!['active','draw'].includes(d.a.status)){box?.remove();return false}
+    if(!box){box=document.createElement('section');box.id='tourOpponentVoice21549';box.className='tourDialogue21547';const host=document.getElementById('tourDialogue21547');host?.parentElement===root?host.insertAdjacentElement('afterend',box):root.prepend(box)}
+    const src=portrait(d.opp),speech=(document.getElementById('charSpeech')?.textContent||'').trim()||'いい勝負にしよう。';
+    box.dataset.speaker=d.opp;box.dataset.role='対戦相手・トーナメント参加者';box.dataset.round=String(Number(d.a.round)||0);
+    box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.opp)+'">':'')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(ROUNDS[Number(d.a.round)||0]||'大会')+'・対戦相手</span><span class="tourDialogueRole">対戦相手・トーナメント参加者</span></div><div class="tourDialogueName">'+esc(d.opp)+'</div><div class="tourDialogueBubble">'+esc(speech)+'</div></div>';
     return true;
   }
+
   function audit(){
     const d=derive(),b=bank()?.audit?.()||{},box=document.getElementById('tourDialogue21547'),img=box?.querySelector('img'),panel=document.getElementById('tournament21540Panel');
-    return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
+    const ob=document.getElementById('tourOpponentVoice21549'),oi=ob?.querySelector('img');return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,opponentSpeaker:ob?.dataset.speaker||null,opponentRole:ob?.dataset.role||null,opponentPortrait:!!oi?.src,opponentText:ob?.querySelector('.tourDialogueBubble')?.textContent||'',overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
   }
 
   window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547d',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
