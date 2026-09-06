@@ -106,6 +106,8 @@
 #tournament21540Panel .tourDialogueBubble{position:relative;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:7px 8px;font-size:12px;line-height:1.55;color:#f4ead0;overflow-wrap:anywhere}
 #tournament21540Panel .tourDialogueBubble:before{content:'';position:absolute;left:-7px;top:13px;width:12px;height:12px;background:#172a22;border-left:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);transform:rotate(45deg)}
 #tournament21540Panel.tourFireFit .tourDialogue21547{grid-template-columns:52px minmax(0,1fr);gap:7px;padding:6px;margin:5px 0}#tournament21540Panel.tourFireFit .tourDialoguePortrait{width:48px;height:48px;border-radius:10px}#tournament21540Panel.tourFireFit .tourDialogueBubble{font-size:10px;line-height:1.4;padding:5px 6px}#tournament21540Panel.tourFireFit .tourDialogueName{font-size:11px}#tournament21540Panel.tourFireFit .tourDialogueStatus{font-size:9px;padding:1px 5px}
+.side .tourDialogue21547.tourRoundBattleDock21550{display:grid;grid-template-columns:48px minmax(0,1fr);gap:7px;align-items:center;width:100%;min-width:0;margin:5px 0;padding:6px;border:1px solid rgba(222,181,77,.62);border-radius:11px;background:linear-gradient(135deg,rgba(22,40,31,.98),rgba(8,20,17,.98));box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.side .tourRoundBattleDock21550 .tourDialoguePortrait{width:44px;height:44px;border-radius:9px;overflow:hidden;border:2px solid #d8aa45;background:#0b1512}.side .tourRoundBattleDock21550 .tourDialoguePortrait img{width:100%;height:100%;object-fit:cover;display:block}.side .tourRoundBattleDock21550 .tourDialogueBody{min-width:0}.side .tourRoundBattleDock21550 .tourDialogueTop{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px}.side .tourRoundBattleDock21550 .tourDialogueStatus,.side .tourRoundBattleDock21550 .tourDialogueRole{font-size:9px;border-radius:999px;padding:1px 5px;white-space:nowrap}.side .tourRoundBattleDock21550 .tourDialogueStatus{font-weight:900;border:1px solid #c89b37;color:#ffe39a}.side .tourRoundBattleDock21550 .tourDialogueRole{color:#97c8b0;border:1px solid #416756}.side .tourRoundBattleDock21550 .tourDialogueName{font-size:10px;font-weight:900;color:#f8dc8d;margin-bottom:1px}.side .tourRoundBattleDock21550 .tourDialogueBubble{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:4px 6px;font-size:10px;line-height:1.35;color:#f4ead0;overflow-wrap:anywhere}
 @media(max-width:520px){#tournament21540Panel .tourDialogue21547{grid-template-columns:58px minmax(0,1fr);gap:8px;padding:7px}#tournament21540Panel .tourDialoguePortrait{width:54px;height:54px}#tournament21540Panel .tourDialogueBubble{font-size:11px}}
 `;
     document.head.appendChild(s);
@@ -115,14 +117,35 @@
     box=document.createElement('section');box.id='tourDialogue21547';box.className='tourDialogue21547';box.setAttribute('aria-live','polite');box.setAttribute('aria-label','大会キャラクターのセリフ');
     const anchor=root.querySelector('.tourCurrentMatch')||root.querySelector('.tourActiveTitle');if(anchor)anchor.insertAdjacentElement('afterend',box);else root.prepend(box);return box;
   }
+  function syncRoundBattleDock(d=derive(),root=document.querySelector('#tournament21540Panel .tourActive')){
+    const panel=document.getElementById('tournament21540Panel'),side=document.querySelector('.side'),host=document.getElementById('tourDialogue21547'),opp=document.getElementById('tourOpponentVoice21549');
+    const bossState=d?.a?.bossChallenge?.status||'locked',want=!!d&&bossState==='locked'&&!d.a.pending&&['active','draw'].includes(d.a.status)&&!panel?.classList.contains('on');
+    if(want&&side&&host&&opp){
+      host.classList.add('tourRoundBattleDock21550');opp.classList.add('tourRoundBattleDock21550');
+      host.dataset.roundBattleDock='1';opp.dataset.roundBattleDock='1';
+      const anchor=side.querySelector('.controls');
+      if(anchor){anchor.insertAdjacentElement('afterend',host);host.insertAdjacentElement('afterend',opp)}
+      else{side.prepend(opp);side.prepend(host)}
+      return true;
+    }
+    const docked=[host,opp].filter(x=>x?.classList.contains('tourRoundBattleDock21550'));
+    if(docked.length&&root){
+      for(const box of docked){box.classList.remove('tourRoundBattleDock21550');delete box.dataset.roundBattleDock}
+      const anchor=root.querySelector('.tourCurrentMatch')||root.querySelector('.tourActiveTitle');
+      if(host&&docked.includes(host)){if(anchor)anchor.insertAdjacentElement('afterend',host);else root.prepend(host)}
+      if(opp&&docked.includes(opp)){if(host?.parentElement===root)host.insertAdjacentElement('afterend',opp);else if(anchor)anchor.insertAdjacentElement('afterend',opp);else root.prepend(opp)}
+    }
+    return false;
+  }
+
   function render(force=false){
     ensureStyle();const d=derive(),activeRoot=document.querySelector('#tournament21540Panel .tourActive');
     if(!d||!activeRoot){document.getElementById('tourDialogue21547')?.remove();lastSignature='';lastPick=null;return false}
     const p=choose(d,force);if(!p)return false;const src=portrait(d.boss),box=ensureBox(activeRoot);
-    const oldImg=box.querySelector('img');const same=!force&&box.dataset.context===d.context&&box.dataset.cup===d.cupId&&box.dataset.speaker===d.boss&&box.dataset.role===d.role&&box.dataset.lineId===p.id&&(!src||oldImg?.src===src);if(same){renderOpponentVoice();return true}
+    const oldImg=box.querySelector('img');const same=!force&&box.dataset.context===d.context&&box.dataset.cup===d.cupId&&box.dataset.speaker===d.boss&&box.dataset.role===d.role&&box.dataset.lineId===p.id&&(!src||oldImg?.src===src);if(same){renderOpponentVoice();syncRoundBattleDock(d,activeRoot);return true}
     box.dataset.context=d.context;box.dataset.cup=d.cupId;box.dataset.speaker=d.boss;box.dataset.role=d.role;box.dataset.lineId=p.id;box.dataset.scoreSource=d.scoreSource||'';
     box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.boss)+'">':'<span aria-hidden="true">'+esc(Array.from(d.boss)[0]||'王')+'</span>')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(p.label)+'</span><span class="tourDialogueRole">'+esc(d.role)+'</span></div><div class="tourDialogueName">'+esc(d.boss)+'</div><div class="tourDialogueBubble">'+esc(p.text)+'</div></div>';
-    renderOpponentVoice();return true;
+    renderOpponentVoice();syncRoundBattleDock(d,activeRoot);return true;
   }
   function renderOpponentVoice(){
     const d=derive(),root=document.querySelector('#tournament21540Panel .tourActive');let box=document.getElementById('tourOpponentVoice21549');
@@ -133,12 +156,12 @@
     if(box.dataset.speaker===d.opp&&box.dataset.role==='対戦相手・トーナメント参加者'&&box.dataset.round===round&&oldBubble===speech&&(!src||oldImg?.src===src))return true;
     box.dataset.speaker=d.opp;box.dataset.role='対戦相手・トーナメント参加者';box.dataset.round=round;
     box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.opp)+'">':'')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(ROUNDS[Number(d.a.round)||0]||'大会')+'・対戦相手</span><span class="tourDialogueRole">対戦相手・トーナメント参加者</span></div><div class="tourDialogueName">'+esc(d.opp)+'</div><div class="tourDialogueBubble">'+esc(speech)+'</div></div>';
-    return true;
+    syncRoundBattleDock(d,root);return true;
   }
 
   function audit(){
     const d=derive(),b=bank()?.audit?.()||{},box=document.getElementById('tourDialogue21547'),img=box?.querySelector('img'),panel=document.getElementById('tournament21540Panel');
-    const ob=document.getElementById('tourOpponentVoice21549'),oi=ob?.querySelector('img');return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,opponentSpeaker:ob?.dataset.speaker||null,opponentRole:ob?.dataset.role||null,opponentPortrait:!!oi?.src,opponentText:ob?.querySelector('.tourDialogueBubble')?.textContent||'',overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
+    const ob=document.getElementById('tourOpponentVoice21549'),oi=ob?.querySelector('img');return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,opponentSpeaker:ob?.dataset.speaker||null,opponentRole:ob?.dataset.role||null,opponentPortrait:!!oi?.src,opponentText:ob?.querySelector('.tourDialogueBubble')?.textContent||'',roundBattleDocked:box?.classList.contains('tourRoundBattleDock21550')===true&&ob?.classList.contains('tourRoundBattleDock21550')===true,roundBattleDockCards:[box,ob].filter(x=>x?.classList.contains('tourRoundBattleDock21550')).length,roundBattleDockParent:box?.parentElement?.classList?.contains('side')?'side':(box?.parentElement?.classList?.contains('tourActive')?'panel':'other'),overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
   }
 
   window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547d',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
