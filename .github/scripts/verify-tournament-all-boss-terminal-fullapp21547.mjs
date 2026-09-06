@@ -73,7 +73,7 @@ try{
     await waitRuntime();
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.version==='21548a',{timeout:10000});
     await page.waitForFunction(()=>document.documentElement.dataset.tournamentRestore21548==='1',{timeout:10000});
-    await page.waitForFunction(({ctx,bossActive})=>{
+    await page.waitForFunction(({ctx,bossActive,roundActive})=>{
       const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,dock=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK?.audit?.()||{};
       const cup=t?.cups?.().find(c=>c.id==='shinji'),box=document.getElementById('tourDialogue21547'),da=d?.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
       const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===cup?.boss),ri=card?.querySelector('img');
