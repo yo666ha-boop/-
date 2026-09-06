@@ -165,6 +165,7 @@ try{
   expect('intro','intro');expect('round1','r1');
   for(const label of ['round1','next1','next2','next3']){const x=by[label];if(!x?.opponentSpeaker||x.opponentRole!=='対戦相手・トーナメント参加者'||!x.opponentPortrait||!x.opponentText)transitionFailures.push(label+': participant dialogue missing')}
   expect('win1','round_win');expect('win2','round_win');expect('win3','round_win');
+  for(const label of ['win1','win2','win3','champion','bossPending','bossStart','bossDraw','bossLoss','restoredPending','bossWin']){if(by[label]?.opponentSpeaker)transitionFailures.push(label+': participant card should be hidden')}
   for(const n of [1,2,3]){
     const x=by['next'+n];
     if(!x||!['opponent','qf','sf','final','upset'].includes(x.context))transitionFailures.push('next'+n+': context '+x?.context);
