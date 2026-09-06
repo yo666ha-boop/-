@@ -24,7 +24,7 @@
   const gameState=()=>{try{return window.AIShogiIOS?.state?.()||null}catch(e){return null}};
   const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-  let lastSignature='',lastPick=null,lastOpponent='',opponentSince=0,lastCup='',cupSince=0,observer=null;
+  let lastSignature='',lastPick=null,lastOpponent='',opponentSince=0,lastTournamentKey='',cupSince=0,observer=null;
 
   function cardName(card){return (card?.querySelector?.('.chName')?.textContent||card?.querySelector?.('img')?.alt||'').trim()}
   function portrait(name){
@@ -55,7 +55,11 @@
   function derive(){
     const store=read(),a=store?.active;if(!a?.cupId||!CUP_BOSS[a.cupId])return null;
     const cupId=a.cupId,boss=CUP_BOSS[cupId],opp=currentOpponent(a),now=Date.now();
-    if(lastCup!==cupId){lastCup=cupId;cupSince=now;lastOpponent=opp||'';opponentSince=now}
+    const tournamentKey=cupId+'@'+String(a.startedAt||'legacy');
+    if(lastTournamentKey!==tournamentKey){
+      lastTournamentKey=tournamentKey;cupSince=now;lastOpponent=opp||'';opponentSince=now;
+      lastSignature='';lastPick=null;
+    }
     if(opp&&opp!==lastOpponent){lastOpponent=opp;opponentSince=now}
     const b=a.bossChallenge||{};let context='r1',label='',extra='',scoreSource=null;
     if(b.status==='pending'){
