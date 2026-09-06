@@ -34,7 +34,7 @@ jobs:
           node --check shogi-v21528/rating-progress21536.js
           node --check .github/scripts/verify-tournament-fire-ui21542.mjs
           node --check .github/scripts/verify-tournament-fire-boss-wrap21549.mjs
-      - name: Verify all portraits, boss separation, Fire fit, and integrated skin
-        run: node .github/scripts/verify-tournament-fire-ui21542.mjs
       - name: Verify worst-case Fire boss dialogue wrapping
         run: node .github/scripts/verify-tournament-fire-boss-wrap21549.mjs
+      - name: Verify all portraits, boss separation, Fire fit, and integrated skin
+        run: node .github/scripts/verify-tournament-fire-ui21542.mjs
