@@ -18,8 +18,15 @@
   const MATERIAL_VAL={P:100,L:280,N:300,S:420,G:500,B:700,R:850,K:20000,'+P':500,'+L':500,'+N':500,'+S':500,'+B':900,'+R':1050};
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
-  const readHistory=()=>{try{const x=JSON.parse(localStorage.getItem(HISTORY_KEY)||'null');return x&&typeof x==='object'?x:{version:1,byKey:{}}}catch(e){return{version:1,byKey:{}}}};
-  const writeHistory=x=>{try{localStorage.setItem(HISTORY_KEY,JSON.stringify(x));return true}catch(e){return false}};
+  const readHistory=()=>{try{const x=JSON.parse(localStorage.getItem(HISTORY_KEY)||'null');if(x&&typeof x==='object'){x.byKey=x.byKey&&typeof x.byKey==='object'?x.byKey:{};x.sessions=x.sessions&&typeof x.sessions==='object'?x.sessions:{};return x}return{version:2,byKey:{},sessions:{}}}catch(e){return{version:2,byKey:{},sessions:{}}}};
+  const writeHistory=x=>{try{x.version=2;x.byKey=x.byKey&&typeof x.byKey==='object'?x.byKey:{};x.sessions=x.sessions&&typeof x.sessions==='object'?x.sessions:{};localStorage.setItem(HISTORY_KEY,JSON.stringify(x));return true}catch(e){return false}};
+  function persistSession(key,patch={}){
+    const h=readHistory(),now=Date.now(),prev=h.sessions[key]&&typeof h.sessions[key]==='object'?h.sessions[key]:{};
+    h.sessions[key]={...prev,...patch,updatedAt:now};
+    h.sessions=Object.fromEntries(Object.entries(h.sessions).sort((a,b)=>Number(b[1]?.updatedAt||0)-Number(a[1]?.updatedAt||0)).slice(0,16));
+    writeHistory(h);return h.sessions[key]||null;
+  }
+  function readSession(key){const h=readHistory();return h.sessions?.[key]&&typeof h.sessions[key]==='object'?h.sessions[key]:null}
   const chars=()=>{try{return window.AIShogiIOS?.characters?.()||[]}catch(e){return[]}};
   const gameState=()=>{try{return window.AIShogiIOS?.state?.()||null}catch(e){return null}};
   const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -57,10 +64,12 @@
     const cupId=a.cupId,boss=CUP_BOSS[cupId],opp=currentOpponent(a),now=Date.now();
     const tournamentKey=cupId+'@'+String(a.startedAt||'legacy');
     if(lastTournamentKey!==tournamentKey){
-      lastTournamentKey=tournamentKey;cupSince=now;lastOpponent=opp||'';opponentSince=now;
+      const saved=readSession(tournamentKey);
+      lastTournamentKey=tournamentKey;cupSince=Number(saved?.cupSince)||now;lastOpponent=String(saved?.lastOpponent||opp||'');opponentSince=Number(saved?.opponentSince)||now;
+      if(!saved)persistSession(tournamentKey,{cupId,startedAt:Number(a.startedAt)||0,cupSince,lastOpponent,opponentSince});
       lastSignature='';lastPick=null;
     }
-    if(opp&&opp!==lastOpponent){lastOpponent=opp;opponentSince=now}
+    if(opp&&opp!==lastOpponent){lastOpponent=opp;opponentSince=now;persistSession(tournamentKey,{cupId,startedAt:Number(a.startedAt)||0,cupSince,lastOpponent,opponentSince})}
     const b=a.bossChallenge||{};let context='r1',label='',extra='',scoreSource=null;
     if(b.status==='pending'){
       const wonAt=Number(b.tournamentWonAt)||0;
@@ -92,7 +101,7 @@
 
   function choose(d,force=false){
     const b=bank();if(!b||!d)return null;if(!force&&lastSignature===d.sig&&lastPick)return lastPick;
-    const h=readHistory();h.version=1;h.byKey=h.byKey||{};const key=d.cupId+':'+d.context,old=Array.isArray(h.byKey[key])?h.byKey[key]:[];
+    const h=readHistory();h.version=2;h.byKey=h.byKey||{};h.sessions=h.sessions||{};const key=d.cupId+':'+d.context,old=Array.isArray(h.byKey[key])?h.byKey[key]:[];
     const p=b.pick(d.cupId,d.context,d.vars,old);if(!p)return null;
     h.byKey[key]=[...old,p.id].slice(-5);writeHistory(h);lastSignature=d.sig;lastPick=p;return p;
   }
