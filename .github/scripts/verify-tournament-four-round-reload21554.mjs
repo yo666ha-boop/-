@@ -83,11 +83,22 @@ try{
     }
   }
 
+  await page.evaluate(async()=>{
+    const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
+    t.exit();if(!t.start('shinji'))throw new Error('draw start failed');await delay(3500);
+    const b=document.getElementById('resultBanner');b.className='resultBanner';void b.offsetWidth;b.className='resultBanner on result-draw';b.textContent='draw';await delay(300);
+  });
+  await page.reload({waitUntil:'domcontentloaded',timeout:60000});
+  await boot();
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.audit?.().done===true&&window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL?.audit?.().done===true,{timeout:30000});
+  const drawReload=await page.evaluate(()=>({status:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.status||'',panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),visual:window.AI_SHOGI_TOURNAMENT_RELOAD_VISUAL?.audit?.()||null}));
+  if(drawReload.status!=='draw'||!drawReload.panelOpen||drawReload.visual?.initialRoundActive!==false)throw new Error('draw reload panel regression '+JSON.stringify(drawReload));
+
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());
   console.log('PASS_TOURNAMENT21554_FOUR_ROUND_RELOAD_RESTORE '+JSON.stringify({
     rounds:rounds.map(x=>({round:x.after.round,opponent:x.after.opponent,panelOpen:x.after.panelOpen,hostHeight:x.after.hostHeight,oppHeight:x.after.oppHeight,sideOverflow:x.after.sideOverflow,docOverflow:x.after.docOverflow,restoreVersion:x.after.restore?.version||null,visualVersion:x.after.visual?.version||null})),
-    pageErrors:errors
+    drawReload,pageErrors:errors
   }));
 }finally{
   await browser.close();
