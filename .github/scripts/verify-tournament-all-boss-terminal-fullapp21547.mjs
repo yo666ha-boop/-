@@ -68,7 +68,7 @@ try{
 
   const expectedContext={introAfter:'intro',pendingAfter:'boss_pending',activeAfter:'boss_start',drawAfter:'boss_draw',retryAfter:'boss_start'};
   const stableReload=async label=>{
-    const ctx=expectedContext[label],bossActive=label==='activeAfter'||label==='retryAfter';
+    const ctx=expectedContext[label],bossActive=label==='activeAfter'||label==='retryAfter',roundActive=label==='introAfter';
     await page.reload({waitUntil:'domcontentloaded',timeout:60000});
     await waitRuntime();
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_RELOAD_RESTORE?.version==='21548a',{timeout:10000});
@@ -82,12 +82,13 @@ try{
       const visible=!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0;
       const panelOpen=!!document.getElementById('tournament21540Panel')?.classList.contains('on');
       const opponent=(document.getElementById('oppName')?.textContent||'').trim();
-      const ok=da.context===ctx&&da.speaker===cup?.boss&&samePortrait&&visible&&(bossActive?(dock.bossActive&&dock.docked&&dock.connected&&opponent.startsWith(cup.boss)):(panelOpen&&!dock.docked));
+      const roundOpp=document.getElementById('tourOpponentVoice21549'),roundDocked=box?.classList.contains('tourRoundBattleDock21550')&&roundOpp?.classList.contains('tourRoundBattleDock21550')&&box?.parentElement?.classList?.contains('side')&&roundOpp?.parentElement?.classList?.contains('side');
+      const ok=da.context===ctx&&da.speaker===cup?.boss&&samePortrait&&visible&&(bossActive?(dock.bossActive&&dock.docked&&dock.connected&&opponent.startsWith(cup.boss)):(roundActive?(!panelOpen&&roundDocked):(panelOpen&&!dock.docked)));
       const k='__tourReloadStable21547F';
       if(!ok){window[k]=0;return false}
       if(!window[k])window[k]=performance.now();
       return performance.now()-window[k]>=900;
-    },{ctx,bossActive},{timeout:12000,polling:100});
+    },{ctx,bossActive,roundActive},{timeout:12000,polling:100});
     return await snapReload(label,false);
   };
 
