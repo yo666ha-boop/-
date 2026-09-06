@@ -103,3 +103,4 @@ try{
 }finally{
   await browser.close();
 }
+await import('./verify-tournament-reload-context21556.mjs');
