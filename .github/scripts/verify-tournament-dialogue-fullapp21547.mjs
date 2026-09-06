@@ -184,6 +184,32 @@ try{
   if(transitionFailures.length)throw new Error(transitionFailures.join(' | '));
   console.log('PASS_TOURNAMENT21547D_FULLAPP_TRANSITIONS '+JSON.stringify({contexts:transitions.seen.map(x=>x.context),upsetObserved:transitions.seen.filter(x=>x.context==='upset').length,finalStatus:transitions.finalStatus,trophy:transitions.trophy,activeAfter:transitions.activeAfter,pageErrors:errors}));
 
+  await page.setViewportSize({width:390,height:844});
+  const narrow=await page.evaluate(async()=>{
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(r=>setTimeout(r,ms));
+    if(t.state()?.active)t.exit();
+    if(!t.start('shinji'))throw new Error('narrow start failed');
+    await delay(3500);d.render();await delay(220);
+    const panel=document.getElementById('tournament21540Panel'),btn=document.getElementById('tournament21540Btn');
+    const snap=label=>{const host=document.getElementById('tourDialogue21547'),opp=document.getElementById('tourOpponentVoice21549'),side=document.querySelector('.side'),hr=host?.getBoundingClientRect?.()||{width:0,height:0},or=opp?.getBoundingClientRect?.()||{width:0,height:0};return{label,panelOpen:!!panel?.classList.contains('on'),hostDocked:host?.classList.contains('tourRoundBattleDock21550')===true,oppDocked:opp?.classList.contains('tourRoundBattleDock21550')===true,hostParent:host?.parentElement?.classList?.contains('side')?'side':(host?.parentElement?.classList?.contains('tourActive')?'panel':'other'),oppParent:opp?.parentElement?.classList?.contains('side')?'side':(opp?.parentElement?.classList?.contains('tourActive')?'panel':'other'),hostHeight:Math.round(hr.height),oppHeight:Math.round(or.height),hostWidth:Math.round(hr.width),oppWidth:Math.round(or.width),sideOverflow:side?Math.max(0,side.scrollWidth-side.clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),opponentText:(opp?.querySelector('.tourDialogueBubble')?.textContent||'').trim()};};
+    const closed=snap('closed');
+    const speech=document.getElementById('charSpeech'),before=speech?.textContent||'';if(speech)speech.textContent='NARROW_SYNC_SENTINEL_21550';await delay(250);const synced=snap('synced');if(speech)speech.textContent=before;
+    btn?.click();await delay(250);d.render();await delay(120);const opened=snap('opened');
+    btn?.click();await delay(250);d.render();await delay(120);const redocked=snap('redocked');
+    t.exit();await delay(80);return{closed,synced,opened,redocked};
+  });
+  const narrowFailures=[];
+  for(const x of [narrow.closed,narrow.synced,narrow.redocked]){
+    if(x.panelOpen||!x.hostDocked||!x.oppDocked||x.hostParent!=='side'||x.oppParent!=='side')narrowFailures.push(x.label+': dock state '+JSON.stringify(x));
+    if(x.hostHeight<1||x.oppHeight<1||x.hostHeight>110||x.oppHeight>110)narrowFailures.push(x.label+': height '+x.hostHeight+'/'+x.oppHeight);
+    if(x.hostWidth<1||x.oppWidth<1||x.sideOverflow!==0||x.docOverflow!==0)narrowFailures.push(x.label+': overflow/width '+JSON.stringify(x));
+  }
+  if(narrow.synced.opponentText!=='NARROW_SYNC_SENTINEL_21550')narrowFailures.push('narrow speech sync failed: '+narrow.synced.opponentText);
+  if(!narrow.opened.panelOpen||narrow.opened.hostDocked||narrow.opened.oppDocked||narrow.opened.hostParent!=='panel'||narrow.opened.oppParent!=='panel')narrowFailures.push('panel reopen restore failed '+JSON.stringify(narrow.opened));
+  if(errors.length)narrowFailures.push('page errors '+JSON.stringify(errors));
+  if(narrowFailures.length)throw new Error(narrowFailures.join(' | '));
+  console.log('PASS_TOURNAMENT21550_NARROW_ROUND_DOCK '+JSON.stringify({...narrow,viewport:{width:390,height:844},pageErrors:errors}));
+
 } finally {
   await browser.close();
 }
