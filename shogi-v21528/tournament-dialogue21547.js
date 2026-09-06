@@ -119,7 +119,7 @@ body.tournamentFire21542 #tournament21540Panel .tourDialogue21547{grid-template-
     ensureStyle();const d=derive(),activeRoot=document.querySelector('#tournament21540Panel .tourActive');
     if(!d||!activeRoot){document.getElementById('tourDialogue21547')?.remove();lastSignature='';lastPick=null;return false}
     const p=choose(d,force);if(!p)return false;const src=portrait(d.boss),box=ensureBox(activeRoot);
-    const oldImg=box.querySelector('img');const same=!force&&box.dataset.context===d.context&&box.dataset.cup===d.cupId&&box.dataset.speaker===d.boss&&box.dataset.role===d.role&&box.dataset.lineId===p.id&&(!src||oldImg?.src===src);if(same)return true;
+    const oldImg=box.querySelector('img');const same=!force&&box.dataset.context===d.context&&box.dataset.cup===d.cupId&&box.dataset.speaker===d.boss&&box.dataset.role===d.role&&box.dataset.lineId===p.id&&(!src||oldImg?.src===src);if(same){renderOpponentVoice();return true}
     box.dataset.context=d.context;box.dataset.cup=d.cupId;box.dataset.speaker=d.boss;box.dataset.role=d.role;box.dataset.lineId=p.id;box.dataset.scoreSource=d.scoreSource||'';
     box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.boss)+'">':'<span aria-hidden="true">'+esc(Array.from(d.boss)[0]||'王')+'</span>')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(p.label)+'</span><span class="tourDialogueRole">'+esc(d.role)+'</span></div><div class="tourDialogueName">'+esc(d.boss)+'</div><div class="tourDialogueBubble">'+esc(p.text)+'</div></div>';
     renderOpponentVoice();return true;
