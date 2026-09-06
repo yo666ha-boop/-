@@ -104,3 +104,4 @@ try{
   await browser.close();
 }
 await import('./verify-tournament-reload-context21556.mjs');
+await import('./verify-tournament-session-history21557.mjs');
