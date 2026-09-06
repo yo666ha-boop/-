@@ -92,7 +92,8 @@ try{
   };
 
   const forceAdvance=async label=>await page.evaluate(label=>{
-    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,cup=t.cups().find(c=>c.id==='shinji'),before=document.getElementById('tourDialogue21547')?.dataset.lineId||null,context=d.audit?.()?.context||null;
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,cup=t.cups().find(c=>c.id==='shinji');
+    d.render();const before=document.getElementById('tourDialogue21547')?.dataset.lineId||null,context=d.audit?.()?.context||null;
     d.render();const after=document.getElementById('tourDialogue21547')?.dataset.lineId||null;let h={};try{h=JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')}catch{}
     const ids=Array.isArray(h?.byKey?.[cup.id+':'+context])?h.byKey[cup.id+':'+context].slice():[];
     return{label,context,before,after,historyIds:ids,historySentinel:Array.isArray(h?.byKey?.__reload21547f__)&&h.byKey.__reload21547f__.includes('sentinel-21547f')};
