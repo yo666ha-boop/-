@@ -77,9 +77,10 @@
     if(Number(a.round)<4&&['active','draw'].includes(a.status)&&!a.pending&&(a.bossChallenge?.status||'locked')==='locked'){
       const row=rounds[Number(a.round)],rowSlots=row?[...row.querySelectorAll('.tourBracketSlot')]:[],ps=Number(a.playerSlot)||0;[ps,ps^1].forEach(i=>rowSlots[i]?.classList.add('tourGameNow21559'));
     }
-    for(let r=0;r<Math.min(4,rounds.length-1);r++){
-      const srcSlots=[...rounds[r].querySelectorAll('.tourBracketSlot')],dstSlots=[...rounds[r+1].querySelectorAll('.tourBracketSlot')];
-      srcSlots.forEach((s,i)=>{const name=clean(s.querySelector('.tourSlotName')?.textContent),next=clean(dstSlots[Math.floor(i/2)]?.querySelector('.tourSlotName')?.textContent);if(name&&name!=='—'&&next&&next===name){const stamp=document.createElement('span');stamp.className='tourWinStamp21559';stamp.textContent='WIN';s.appendChild(stamp)}});
+    const stamp=s=>{if(!s||s.querySelector(':scope > .tourWinStamp21559'))return;const mark=document.createElement('span');mark.className='tourWinStamp21559';mark.textContent='WIN';s.appendChild(mark)};
+    slots.filter(s=>s.classList.contains('tourAdvanced')).forEach(stamp);
+    if(a.pending==='next'&&Number(a.round)<4){
+      const row=rounds[Number(a.round)],rowSlots=row?[...row.querySelectorAll('.tourBracketSlot')]:[],ps=Number(a.playerSlot)||0;stamp(rowSlots[ps]);
     }
     return true;
   }
