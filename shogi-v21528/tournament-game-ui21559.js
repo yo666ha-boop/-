@@ -54,6 +54,15 @@
   function winsLeft(a){
     if(!a)return 4;const b=a.bossChallenge?.status||'locked';if(b!=='locked'||a.status==='champion')return 0;return Math.max(0,4-(Number(a.round)||0)-(a.pending==='next'?1:0));
   }
+  function progressMetric(a){
+    const b=a?.bossChallenge?.status||'locked';
+    if(b==='pending')return{value:'EX',label:'杯ボス解放'};
+    if(b==='active'||b==='draw')return{value:'5戦目',label:b==='draw'?'杯ボス指し直し':'杯ボス挑戦中'};
+    if(b==='won')return{value:'🏆',label:'完全制覇'};
+    if(b==='lost')return{value:'EX',label:'ボス戦終了'};
+    if(a?.status==='champion')return{value:'EX',label:'杯ボス解放'};
+    return{value:String(Math.max(0,winsLeft(a))),label:'優勝まであと'};
+  }
   function bossUnlocked(a){const b=a?.bossChallenge?.status;return a?.status==='champion'||['pending','active','draw','won','lost'].includes(b)}
 
   function decorate(){
@@ -62,8 +71,8 @@
     const cup=cupFor(a);if(!cup)return false;
     removeOld();
     const hero=document.createElement('section');hero.className='tourGameHero21559';hero.dataset.gameUi='21559';
-    const left=Math.max(0,winsLeft(a)),phase=stateLabel(a);
-    hero.innerHTML='<div><div class="tourGameCup21559">🏆 '+cup.name+'</div><div class="tourGameSub21559"><span class="tourGameChip21559 now">'+phase+'</span><span class="tourGameChip21559">16人・4勝優勝</span><span class="tourGameChip21559">優勝後ボス戦</span></div></div><div class="tourGameWins21559"><div class="tourGameWinsNum21559">'+left+'</div><div class="tourGameWinsLabel21559">優勝まであと</div></div>';
+    const progress=progressMetric(a),phase=stateLabel(a);
+    hero.innerHTML='<div><div class="tourGameCup21559">🏆 '+cup.name+'</div><div class="tourGameSub21559"><span class="tourGameChip21559 now">'+phase+'</span><span class="tourGameChip21559">16人・4勝優勝</span><span class="tourGameChip21559">優勝後ボス戦</span></div></div><div class="tourGameWins21559"><div class="tourGameWinsNum21559">'+progress.value+'</div><div class="tourGameWinsLabel21559">'+progress.label+'</div></div>';
     const title=root.querySelector('.tourActiveTitle');if(title)title.insertAdjacentElement('afterend',hero);else root.prepend(hero);
 
     const vault=document.createElement('section');vault.className='tourBossVault21559'+(bossUnlocked(a)?' unlocked':'');vault.dataset.outsideBracket='1';
@@ -92,5 +101,5 @@
   let tries=0;const timer=setInterval(()=>{if(boot()||++tries>120)clearInterval(timer)},120);
   window.addEventListener('resize',request,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(request,120),{passive:true});window.addEventListener('ai-shogi-local-save',request);
 
-  window.AI_SHOGI_TOURNAMENT_GAME_UI={version:'21559a',render:decorate,audit:()=>{const a=active(),panel=document.getElementById('tournament21540Panel'),hero=panel?.querySelector('.tourGameHero21559'),vault=panel?.querySelector('.tourBossVault21559'),bracket=panel?.querySelector('.tourBracket'),rounds=panel?[...panel.querySelectorAll('.tourBracketRound')]:[],stamps=panel?.querySelectorAll('.tourWinStamp21559')?.length||0,now=panel?.querySelectorAll('.tourGameNow21559')?.length||0;return{ok:!!hero&&!!vault,version:'21559a',cupId:a?.cupId||null,hero:!!hero,bossVault:!!vault,bossOutsideBracket:vault?.dataset.outsideBracket==='1'&&!bracket?.contains(vault),bossInBracket:!!(a&&cupFor(a)&&a.bracket?.rounds?.flat?.().includes(cupFor(a).boss)),roundPlates:rounds.length,currentMarkers:now,winnerStamps:stamps,connectors:panel?.querySelectorAll('.tourBracketLines path')?.length||0,roster:document.querySelectorAll('#chars .ch').length,sideOverflow:document.querySelector('.side')?Math.max(0,document.querySelector('.side').scrollWidth-document.querySelector('.side').clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}}};
+  window.AI_SHOGI_TOURNAMENT_GAME_UI={version:'21559a',render:decorate,audit:()=>{const a=active(),panel=document.getElementById('tournament21540Panel'),hero=panel?.querySelector('.tourGameHero21559'),vault=panel?.querySelector('.tourBossVault21559'),bracket=panel?.querySelector('.tourBracket'),rounds=panel?[...panel.querySelectorAll('.tourBracketRound')]:[],stamps=panel?.querySelectorAll('.tourWinStamp21559')?.length||0,now=panel?.querySelectorAll('.tourGameNow21559')?.length||0;return{ok:!!hero&&!!vault,version:'21559a',cupId:a?.cupId||null,hero:!!hero,bossVault:!!vault,bossOutsideBracket:vault?.dataset.outsideBracket==='1'&&!bracket?.contains(vault),bossInBracket:!!(a&&cupFor(a)&&a.bracket?.rounds?.flat?.().includes(cupFor(a).boss)),roundPlates:rounds.length,currentMarkers:now,winnerStamps:stamps,progressValue:hero?.querySelector('.tourGameWinsNum21559')?.textContent||'',progressLabel:hero?.querySelector('.tourGameWinsLabel21559')?.textContent||'',connectors:panel?.querySelectorAll('.tourBracketLines path')?.length||0,roster:document.querySelectorAll('#chars .ch').length,sideOverflow:document.querySelector('.side')?Math.max(0,document.querySelector('.side').scrollWidth-document.querySelector('.side').clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}}};
 })();
