@@ -127,3 +127,54 @@
 
   window.AI_SHOGI_TOURNAMENT_GAME_UI={version:'21559a',render:decorate,audit:()=>{const a=active(),panel=document.getElementById('tournament21540Panel'),hero=panel?.querySelector('.tourGameHero21559'),match=panel?.querySelector('.tourMatchup21559'),oppImg=match?.querySelector('.tourMatchSide21559.opponent img'),oppSrc=oppImg?.currentSrc||oppImg?.src||'',vault=panel?.querySelector('.tourBossVault21559'),bracket=panel?.querySelector('.tourBracket'),rounds=panel?[...panel.querySelectorAll('.tourBracketRound')]:[],stamps=panel?.querySelectorAll('.tourWinStamp21559')?.length||0,now=panel?.querySelectorAll('.tourGameNow21559')?.length||0;return{ok:!!hero&&!!vault,version:'21559a',cupId:a?.cupId||null,hero:!!hero,matchupCard:!!match,matchupOpponent:match?.dataset.opponent||'',matchupBoss:match?.dataset.boss==='1',matchupPortrait:!!oppImg,matchupPortraitCatalogMatch:portraitInRoster(oppSrc),matchupPlayerRating:playerRating(),matchupOpponentRating:Number((match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||'').match(/R(\d+)/)?.[1])||null,matchupOverflow:match?Math.max(0,match.scrollWidth-match.clientWidth):0,bossVault:!!vault,bossOutsideBracket:vault?.dataset.outsideBracket==='1'&&!bracket?.contains(vault),bossInBracket:!!(a&&cupFor(a)&&a.bracket?.rounds?.flat?.().includes(cupFor(a).boss)),roundPlates:rounds.length,currentMarkers:now,winnerStamps:stamps,progressValue:hero?.querySelector('.tourGameWinsNum21559')?.textContent||'',progressLabel:hero?.querySelector('.tourGameWinsLabel21559')?.textContent||'',connectors:panel?.querySelectorAll('.tourBracketLines path')?.length||0,roster:document.querySelectorAll('#chars .ch').length,sideOverflow:document.querySelector('.side')?Math.max(0,document.querySelector('.side').scrollWidth-document.querySelector('.side').clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}}};
 })();
+
+/* 21561: 勝ち上がり直後、次のAI戦が未決着でもVSカードを消さない表示補助。
+ * 大会ロジックには触れず、相手確定時は既存21560実画像カードへ自動復帰する。
+ */
+(function installTournamentNextOpponentWait21561(){
+  'use strict';
+  if(window.__AI_SHOGI_TOURNAMENT_NEXT_OPPONENT_WAIT_21561)return;
+  window.__AI_SHOGI_TOURNAMENT_NEXT_OPPONENT_WAIT_21561=true;
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const api=()=>window.AI_SHOGI_TOURNAMENT;
+  const active=()=>{try{return api()?.state?.()?.active||null}catch(e){return null}};
+  const playerRating=()=>{try{return Number(window.AIShogiIOS?.stats?.()?.rating)||1500}catch(e){return 1500}};
+  function waiting(a){
+    if(!a||a.status!=='active'||a.pending!=='next'||Number(a.round)>=4||(a.bossChallenge?.status||'locked')!=='locked')return false;
+    const row=a.bracket?.rounds?.[Number(a.round)||0];
+    return Array.isArray(row)&&!row[(Number(a.playerSlot)||0)^1];
+  }
+  function ensureStyle(){
+    if(document.getElementById('tournamentNextOpponentWait21561Style'))return;
+    const s=document.createElement('style');s.id='tournamentNextOpponentWait21561Style';s.textContent=`
+#tournament21540Panel .tourMatchup21559.tourMatchWaiting21561{border-style:dashed;border-color:#7f7655;background:linear-gradient(90deg,#0a1713,#161914 48%,#0a1713)}
+#tournament21540Panel .tourMatchWaiting21561 .tourMatchPortrait21559.opponent{border-color:#706b57;box-shadow:none;color:#d8cb99;font-size:14px;letter-spacing:.12em}
+#tournament21540Panel .tourMatchWaiting21561 .tourMatchName21559{color:#ddd3af}
+#tournament21540Panel .tourMatchWaiting21561 .tourMatchMeta21559{color:#928a70}
+#tournament21540Panel .tourMatchWaitPulse21561{display:inline-block;animation:tourWaitPulse21561 1.15s ease-in-out infinite}
+@keyframes tourWaitPulse21561{0%,100%{opacity:.35;transform:scale(.92)}50%{opacity:1;transform:scale(1.05)}}
+@media(prefers-reduced-motion:reduce){#tournament21540Panel .tourMatchWaitPulse21561{animation:none}}
+`;
+    document.head.appendChild(s);
+  }
+  function renderWait(){
+    ensureStyle();
+    const a=active(),panel=document.getElementById('tournament21540Panel'),root=panel?.querySelector('.tourActive');
+    if(!panel||!root||!waiting(a))return false;
+    if(root.querySelector('.tourMatchup21559'))return false;
+    const hero=root.querySelector('.tourGameHero21559');if(!hero)return false;
+    const match=document.createElement('section');
+    match.className='tourMatchup21559 tourMatchWaiting21561';match.dataset.opponent='';match.dataset.boss='0';match.dataset.waiting='1';
+    match.innerHTML='<div class="tourMatchSide21559 player"><div class="tourMatchPortrait21559 player" aria-label="あなた">YOU</div><div><div class="tourMatchName21559">あなた</div><div class="tourMatchMeta21559">R'+playerRating()+'</div></div></div><div class="tourMatchVs21559">VS<small>NEXT MATCH</small></div><div class="tourMatchSide21559 opponent"><div><div class="tourMatchName21559">対戦相手 決定待ち</div><div class="tourMatchMeta21559">他の対局結果を待っています</div></div><div class="tourMatchPortrait21559 opponent"><span class="tourMatchWaitPulse21561">•••</span></div></div>';
+    hero.insertAdjacentElement('afterend',match);return true;
+  }
+  function install(){
+    const base=window.AI_SHOGI_TOURNAMENT_GAME_UI;if(!base||base.__wait21561)return false;
+    base.__wait21561=true;
+    const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
+    base.render=()=>{const out=oldRender();renderWait();return out};
+    base.audit=()=>{renderWait();const out=oldAudit(),match=document.querySelector('#tournament21540Panel .tourMatchup21559');return{...out,matchupWaiting:match?.dataset.waiting==='1',matchupOpponentLabel:match?.querySelector('.tourMatchSide21559.opponent .tourMatchName21559')?.textContent||'',matchupOpponentMeta:match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||''}};
+    renderWait();setInterval(renderWait,250);return true;
+  }
+  let n=0;const t=setInterval(()=>{if(install()||++n>80)clearInterval(t)},100);
+})();
