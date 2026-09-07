@@ -38,7 +38,7 @@
     road.className='tourRoad21562';road.setAttribute('aria-label','大会進行');
     labels.forEach((label,i)=>{
       const el=document.createElement('span');el.textContent=label;
-      el.className='tourRoadStage21562'+(i===4?' boss':'')+(i<p.done?' done':'')+(i===p.current?' current':'')+(i===4&&p.failed?' failed':'');
+      el.className='tourRoadStage21562'+(i===4?' boss':'')+(i<p.done?' done':'')+(i===p.current?' current':'')+(i===p.current&&p.failed?' failed':'');
       road.appendChild(el);
     });
     hero.appendChild(road);return true;
