@@ -17,10 +17,19 @@ try{
       document.documentElement.style.fontSize=scale+'%';
       document.documentElement.style.setProperty('-webkit-text-size-adjust',scale+'%');
       document.body.style.setProperty('-webkit-text-size-adjust',scale+'%');
+      let stress=document.getElementById('tourTextScaleStress21558');
+      if(!stress){stress=document.createElement('style');stress.id='tourTextScaleStress21558';document.head.appendChild(stress)}
+      const k=scale/100;
+      stress.textContent=`
+        #tourDialogue21547 .tourDialogueBubble,#tourOpponentVoice21549 .tourDialogueBubble{font-size:${12*k}px!important;line-height:1.55!important}
+        #tourDialogue21547 .tourDialogueName,#tourOpponentVoice21549 .tourDialogueName{font-size:${12*k}px!important}
+        #tourDialogue21547 .tourDialogueStatus,#tourOpponentVoice21549 .tourDialogueStatus{font-size:${10*k}px!important}
+        #tourDialogue21547 .tourDialogueRole,#tourOpponentVoice21549 .tourDialogueRole{font-size:${9*k}px!important}
+      `;
       const d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
       try{d?.render?.()}catch(e){}
     },scale);
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(120);
     return await page.evaluate(()=> {
       const host=document.getElementById('tourDialogue21547');
       const opp=document.getElementById('tourOpponentVoice21549');
@@ -29,6 +38,8 @@ try{
       const h=host?.getBoundingClientRect?.()||{};
       const o=opp?.getBoundingClientRect?.()||{};
       const p=panel?.getBoundingClientRect?.()||{};
+      const hb=host?.querySelector('.tourDialogueBubble');
+      const ob=opp?.querySelector('.tourDialogueBubble');
       const buttons=[...document.querySelectorAll('#tournament21540Panel button')].filter(x=>getComputedStyle(x).display!=='none');
       const minButtonHeight=buttons.length?Math.min(...buttons.map(x=>x.getBoundingClientRect().height)):0;
       return {
@@ -42,8 +53,10 @@ try{
         docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),
         bodyOverflow:Math.max(0,document.body.scrollWidth-document.body.clientWidth),
         minButtonHeight:Math.round(minButtonHeight||0),
-        hostText:(host?.querySelector('.tourDialogueBubble')?.textContent||'').trim(),
-        oppText:(opp?.querySelector('.tourDialogueBubble')?.textContent||'').trim()
+        hostBubbleFont:hb?Number.parseFloat(getComputedStyle(hb).fontSize)||0:0,
+        oppBubbleFont:ob?Number.parseFloat(getComputedStyle(ob).fontSize)||0:0,
+        hostText:(hb?.textContent||'').trim(),
+        oppText:(ob?.textContent||'').trim()
       };
     });
   };
@@ -65,13 +78,19 @@ try{
     if(row.sideOverflow!==0||row.docOverflow!==0||row.bodyOverflow!==0)f.push('overflow '+JSON.stringify(row));
     if(row.hostWidth>width||row.oppWidth>width||row.panelWidth>width)f.push('width '+JSON.stringify(row));
     if(row.minButtonHeight&&row.minButtonHeight<44)f.push('tap target '+JSON.stringify(row));
+    const expected=12*(scale/100);
+    if(Math.abs(row.hostBubbleFont-expected)>.6||Math.abs(row.oppBubbleFont-expected)>.6)f.push('text scale not applied '+JSON.stringify(row));
     if(f.length)throw new Error(width+'px '+scale+'% '+f.join(' | '));
-    checks.push(row);
+    checks.push({...row,scale});
   }
+
+  const byWidth=new Map();
+  for(const row of checks){const x=byWidth.get(row.width)||{};x[row.scale]=row;byWidth.set(row.width,x)}
+  for(const [width,x] of byWidth){if(!x[100]||!x[150])throw new Error('missing scale pair '+width);if(x[150].hostBubbleFont<=x[100].hostBubbleFont||x[150].oppBubbleFont<=x[100].oppBubbleFont)throw new Error('font did not grow '+width)}
 
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());
-  console.log('PASS_TOURNAMENT21558_NARROW_TEXT_SCALE '+JSON.stringify({checks,pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21558_NARROW_TEXT_SCALE '+JSON.stringify({checks,pageErrors:errors,stressApplied:true}));
 }finally{
   await browser.close();
 }
