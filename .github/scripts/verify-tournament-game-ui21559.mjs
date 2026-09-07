@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import { chromium } from 'playwright';
+
+const files=Object.fromEntries(await Promise.all([
+  ['core','shogi-v21528/tournament21541.js'],['field','shogi-v21528/tournament-field21545.js'],['boss','shogi-v21528/tournament-boss21546.js'],['ui','shogi-v21528/tournament-ui21542.js'],['bracket','shogi-v21528/tournament-ui21543.js'],['skin','shogi-v21528/tournament-skin21544.js'],['game','shogi-v21528/tournament-game-ui21559.js']
+].map(async([k,p])=>[k,await fs.readFile(p,'utf8')])));
+
+const chars=[['みつき',3000],['みっちゃん',2850],['あき王',2700],['おにまま',2600],['まま',2500],['ケンシロウ',2100],['ジャギ',1450],['しんじ',1550],['直江兼続',1700],['あやなみ',1800],['バット',1600],['伊達政宗',1750],['あすか',1900],['ユリア',1680],['玉ちゃん',1380],['まり',1950],['ぺんぺん',1250],['げんどー',2050],['前田慶次',1820],['シン',2000],['みさとさん',1880],['サウザー',2180],['リン',1500],['ラオウ',2250],['カヲル',2400],['未来からやってきたみつき',3400]].map(([name,rating],i)=>({name,rating,i}));
+const img=i=>'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="hsl(${i*31},55%,42%)"/></svg>`);
+const cards=chars.map(c=>`<button class="ch"><img src="${img(c.i)}" alt="${c.name}"><span class="chName">${c.name}</span></button>`).join('');
+const html=`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#06100e}.side{width:100%;min-width:0}.btn{min-height:44px}</style><body><div class="side"><div class="controls"><button class="btn">new</button></div></div><div id="status"></div><div id="resultBanner"></div><div id="chars">${cards}</div><div id="board"></div><script>window.__mock={characters:${JSON.stringify(chars)},state:{log:[]},rating:1500};window.AIShogiIOS={characters:()=>__mock.characters,stats:()=>({rating:__mock.rating,w:0,l:0,d:0}),state:()=>__mock.state,select:()=>true};</script><script src="/core.js"></script><script src="/field.js"></script><script src="/boss.js"></script><script src="/ui.js"></script><script src="/skin.js"></script><script src="/game.js"></script></body>`;
+const server=http.createServer((req,res)=>{const map={'/core.js':files.core,'/field.js':files.field,'/boss.js':files.boss,'/ui.js':files.ui,'/skin.js':files.skin,'/game.js':files.game,'/tournament-ui21543.js':files.bracket};const key=req.url?.split('?')[0];if(map[key]){res.writeHead(200,{'content-type':'text/javascript'});res.end(map[key]);return}res.writeHead(200,{'content-type':'text/html'});res.end(html)});
+await new Promise(r=>server.listen(43159,'127.0.0.1',r));
+const browser=await chromium.launch({headless:true});
+try{
+  const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];page.on('pageerror',e=>errors.push(String(e?.message||e)));page.on('dialog',d=>d.accept());
+  await page.goto('http://127.0.0.1:43159/',{waitUntil:'load'});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI?.version==='21559a'&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI,{timeout:15000});
+  await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('shinji');document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
+  await page.waitForTimeout(500);
+  const first=await page.evaluate(()=>({game:window.AI_SHOGI_TOURNAMENT_GAME_UI.audit(),ui:window.AI_SHOGI_TOURNAMENT_UI.audit(),boss:window.AI_SHOGI_TOURNAMENT_BOSS.audit(),panelOverflow:Math.max(0,document.getElementById('tournament21540Panel').scrollWidth-document.getElementById('tournament21540Panel').clientWidth)}));
+  assert.equal(first.game.hero,true);assert.equal(first.game.bossVault,true);assert.equal(first.game.bossOutsideBracket,true);assert.equal(first.game.bossInBracket,false);assert.equal(first.game.roundPlates,5);assert.equal(first.game.currentMarkers,2);assert.equal(first.game.connectors,30);assert.equal(first.game.roster,26);assert.equal(first.ui.rosterPortraits,26);assert.equal(first.ui.fit,true);assert.equal(first.boss.bossInBracket,false);assert.equal(first.game.docOverflow,0);assert.equal(first.panelOverflow,0);
+  await page.evaluate(async()=>{const b=document.getElementById('resultBanner');b.className='resultBanner on result-win';b.textContent='win';await new Promise(r=>setTimeout(r,180));window.AI_SHOGI_TOURNAMENT.render();document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
+  await page.waitForTimeout(450);
+  const after=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_GAME_UI.audit());
+  assert.ok(after.winnerStamps>=1,'winner stamp missing after win');assert.equal(after.bossOutsideBracket,true);assert.equal(after.bossInBracket,false);assert.equal(after.connectors,30);assert.equal(after.docOverflow,0);assert.deepEqual(errors,[]);
+  console.log('PASS_TOURNAMENT21559_GAME_UI '+JSON.stringify({first:first.game,after,winnerStampGeometryOverlay:true,fireFit:first.ui.fit,rosterPortraits:first.ui.rosterPortraits,bossInBracket:first.boss.bossInBracket,pageErrors:errors}));
+}finally{await browser.close();await new Promise(r=>server.close(r))}
