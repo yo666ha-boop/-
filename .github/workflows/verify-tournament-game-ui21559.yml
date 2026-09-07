@@ -1,0 +1,42 @@
+name: Verify tournament game UI 21559
+
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament-game-ui21559.js'
+      - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
+      - 'shogi-v21528/tournament-ui21542.js'
+      - 'shogi-v21528/tournament-ui21543.js'
+      - 'shogi-v21528/tournament-skin21544.js'
+      - 'preview/tournament-16/index21543.html'
+      - '.github/scripts/verify-tournament-game-ui21559.mjs'
+      - '.github/workflows/verify-tournament-game-ui21559.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  game-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check game UI
+        run: |
+          node --check shogi-v21528/tournament-game-ui21559.js
+          node --check .github/scripts/verify-tournament-game-ui21559.mjs
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Verify game-style tournament UI and invariants
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-game-ui21559.mjs 2>&1 | tee /tmp/tournament-game-ui21559.log
