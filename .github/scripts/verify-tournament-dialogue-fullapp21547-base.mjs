@@ -71,6 +71,7 @@ try{
       if(panel&&!panel.classList.contains('on'))document.getElementById('tournament21540Btn')?.click();
       await delay(80);
       d.render();
+      for(let n=0;n<10;n++){const b=document.getElementById('tourDialogue21547');if(b?.dataset.role==='大会主・トーナメント外'&&(b.querySelector('.tourDialogueBubble')?.textContent||'').trim())break;await delay(100);d.render()}
       await delay(100);
       const box=document.getElementById('tourDialogue21547'),img=box?.querySelector('.tourDialoguePortrait img');
       const state=t.state()?.active||null,dialogue=d.audit?.()||{};
