@@ -15,7 +15,6 @@ try{
       const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
       if(t.state()?.active)t.exit();
       if(!t.start(cupId))throw new Error('start failed '+cupId);
-      await delay(250);
       window.AI_SHOGI_TOURNAMENT_DIALOGUE?.render?.();
     },cupId);
     return await page.evaluate(()=>({
