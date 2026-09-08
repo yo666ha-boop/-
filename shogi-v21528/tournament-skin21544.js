@@ -136,7 +136,7 @@
   }
   function renderRoad21562(panel){
     let road=panel?.querySelector('.tourRoad21562');
-    if(window.AI_SHOGI_TOURNAMENT_GAME_UI){road?.remove();return false}
+    if(window.AI_SHOGI_TOURNAMENT_GAME_UI)return false
     let a=null;try{a=window.AI_SHOGI_TOURNAMENT?.state?.()?.active||null}catch(e){}
     const host=panel?.querySelector('.tourActiveTitle');
     if(!a||!host){road?.remove();return false}
