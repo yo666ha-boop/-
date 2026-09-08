@@ -5,6 +5,7 @@ try{
  await page.goto('http://127.0.0.1:8000/shogi-v21528/?upset='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
+ await page.waitForLoadState('load',{timeout:20000}).catch(()=>{});await page.waitForTimeout(500);
  const r=await page.evaluate(async()=>{
   const K='aiShogiTournament21540',H='aiShogiTournamentDialogue21547',t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(x=>setTimeout(x,ms));
   if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('start');await delay(200);
