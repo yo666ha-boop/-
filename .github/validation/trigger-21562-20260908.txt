@@ -1,0 +1,2 @@
+validation-only trigger for 21562 wait-state fix
+NEVER MERGE
