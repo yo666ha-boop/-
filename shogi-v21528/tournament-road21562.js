@@ -51,6 +51,7 @@
     render();return true;
   }
   let tries=0;const t=setInterval(()=>{if(install()||++tries>80)clearInterval(t)},100);
+  setInterval(render,250);
   window.addEventListener('resize',render,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
 })();
