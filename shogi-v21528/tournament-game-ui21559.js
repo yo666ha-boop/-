@@ -186,10 +186,14 @@
   'use strict';
   if(window.__AI_SHOGI_TOURNAMENT_ROAD_LOADER_21562)return;
   const here=document.currentScript?.src||'';
-  if(!/tournament-game-ui21559\.js(?:[?#]|$)/.test(here))return;
+  let src='';
+  if(/tournament-game-ui21559\.js(?:[?#]|$)/.test(here)){
+    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562');
+  }else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname)){
+    src=new URL('tournament-road21562.js?v=21562',location.href).href;
+  }else return;
   window.__AI_SHOGI_TOURNAMENT_ROAD_LOADER_21562=true;
   if(window.__AI_SHOGI_TOURNAMENT_ROAD_21562)return;
-  const src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562');
   if(!src||[...document.scripts].some(s=>s.src===src))return;
   const tag=document.createElement('script');tag.src=src;tag.async=false;tag.dataset.tournamentRoad='21562';
   document.head.appendChild(tag);
