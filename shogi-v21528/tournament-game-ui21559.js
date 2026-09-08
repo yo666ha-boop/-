@@ -17,8 +17,11 @@
   const clean=s=>String(s||'').replace(/[👑🏆]/gu,'').trim();
   const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const api=()=>window.AI_SHOGI_TOURNAMENT;
-  const active=()=>{try{return api()?.state?.()?.active||null}catch(e){return null}};
+  const store=()=>{try{return api()?.state?.()||null}catch(e){return null}};
+  const active=()=>store()?.active||null;
   const cups=()=>{try{return api()?.cups?.()||[]}catch(e){return[]}};
+  const navReload=()=>{try{return performance.getEntriesByType('navigation')?.[0]?.type==='reload'}catch(e){return false}};
+  const attemptCount=a=>{const h=store()?.history;return a?.cupId&&Array.isArray(h)?h.filter(x=>x?.cupId===a.cupId).length:0};
   const cupFor=a=>cups().find(c=>c.id===a?.cupId)||null;
   const characters=()=>{try{return window.AIShogiIOS?.characters?.()||[]}catch(e){return[]}};
   const playerRating=()=>{try{return Number(window.AIShogiIOS?.stats?.()?.rating)||1500}catch(e){return 1500}};
@@ -89,7 +92,8 @@
     removeOld();
     const hero=document.createElement('section');hero.className='tourGameHero21559';hero.dataset.gameUi='21559';
     const progress=progressMetric(a),phase=stateLabel(a);
-    hero.innerHTML='<div><div class="tourGameCup21559">🏆 '+esc(cup.name)+'</div><div class="tourGameSub21559"><span class="tourGameChip21559 now">'+esc(phase)+'</span><span class="tourGameChip21559">16人・4勝優勝</span><span class="tourGameChip21559">優勝後ボス戦</span></div></div><div class="tourGameWins21559"><div class="tourGameWinsNum21559">'+esc(progress.value)+'</div><div class="tourGameWinsLabel21559">'+esc(progress.label)+'</div></div>';
+    const attempts=Math.max(1,attemptCount(a)),resume=navReload();
+    hero.innerHTML='<div><div class="tourGameCup21559">🏆 '+esc(cup.name)+'</div><div class="tourGameSub21559"><span class="tourGameChip21559 now">'+esc(phase)+'</span><span class="tourGameChip21559">16人・4勝優勝</span><span class="tourGameChip21559">優勝後ボス戦</span><span class="tourGameChip21559" data-tour-attempt="1">この杯 '+attempts+'回目</span>'+(resume?'<span class="tourGameChip21559 now" data-tour-resume="1">↻ 再開中</span>':'')+'</div></div><div class="tourGameWins21559"><div class="tourGameWinsNum21559">'+esc(progress.value)+'</div><div class="tourGameWinsLabel21559">'+esc(progress.label)+'</div></div>';
     const title=root.querySelector('.tourActiveTitle');if(title)title.insertAdjacentElement('afterend',hero);else root.prepend(hero);
 
     const opponent=matchupOpponent(a,cup),oppSrc=portrait(opponent),oppRating=opponent===cup.boss?cup.bossRating:ratingOf(opponent),bossMatch=opponent===cup.boss&&(a.bossChallenge?.status||'locked')!=='locked';
@@ -125,7 +129,7 @@
   let tries=0;const timer=setInterval(()=>{if(boot()||++tries>120)clearInterval(timer)},120);
   window.addEventListener('resize',request,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(request,120),{passive:true});window.addEventListener('ai-shogi-local-save',request);
 
-  window.AI_SHOGI_TOURNAMENT_GAME_UI={version:'21559a',render:decorate,audit:()=>{const a=active(),panel=document.getElementById('tournament21540Panel'),hero=panel?.querySelector('.tourGameHero21559'),match=panel?.querySelector('.tourMatchup21559'),oppImg=match?.querySelector('.tourMatchSide21559.opponent img'),oppSrc=oppImg?.currentSrc||oppImg?.src||'',vault=panel?.querySelector('.tourBossVault21559'),bracket=panel?.querySelector('.tourBracket'),rounds=panel?[...panel.querySelectorAll('.tourBracketRound')]:[],stamps=panel?.querySelectorAll('.tourWinStamp21559')?.length||0,now=panel?.querySelectorAll('.tourGameNow21559')?.length||0;return{ok:!!hero&&!!vault,version:'21559a',cupId:a?.cupId||null,hero:!!hero,matchupCard:!!match,matchupOpponent:match?.dataset.opponent||'',matchupBoss:match?.dataset.boss==='1',matchupPortrait:!!oppImg,matchupPortraitCatalogMatch:portraitInRoster(oppSrc),matchupPlayerRating:playerRating(),matchupOpponentRating:Number((match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||'').match(/R(\d+)/)?.[1])||null,matchupOverflow:match?Math.max(0,match.scrollWidth-match.clientWidth):0,bossVault:!!vault,bossOutsideBracket:vault?.dataset.outsideBracket==='1'&&!bracket?.contains(vault),bossInBracket:!!(a&&cupFor(a)&&a.bracket?.rounds?.flat?.().includes(cupFor(a).boss)),roundPlates:rounds.length,currentMarkers:now,winnerStamps:stamps,progressValue:hero?.querySelector('.tourGameWinsNum21559')?.textContent||'',progressLabel:hero?.querySelector('.tourGameWinsLabel21559')?.textContent||'',connectors:panel?.querySelectorAll('.tourBracketLines path')?.length||0,roster:document.querySelectorAll('#chars .ch').length,sideOverflow:document.querySelector('.side')?Math.max(0,document.querySelector('.side').scrollWidth-document.querySelector('.side').clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}}};
+  window.AI_SHOGI_TOURNAMENT_GAME_UI={version:'21559a',render:decorate,audit:()=>{const a=active(),panel=document.getElementById('tournament21540Panel'),hero=panel?.querySelector('.tourGameHero21559'),match=panel?.querySelector('.tourMatchup21559'),oppImg=match?.querySelector('.tourMatchSide21559.opponent img'),oppSrc=oppImg?.currentSrc||oppImg?.src||'',vault=panel?.querySelector('.tourBossVault21559'),bracket=panel?.querySelector('.tourBracket'),rounds=panel?[...panel.querySelectorAll('.tourBracketRound')]:[],stamps=panel?.querySelectorAll('.tourWinStamp21559')?.length||0,now=panel?.querySelectorAll('.tourGameNow21559')?.length||0;return{ok:!!hero&&!!vault,version:'21559a',cupId:a?.cupId||null,hero:!!hero,matchupCard:!!match,matchupOpponent:match?.dataset.opponent||'',matchupBoss:match?.dataset.boss==='1',matchupPortrait:!!oppImg,matchupPortraitCatalogMatch:portraitInRoster(oppSrc),matchupPlayerRating:playerRating(),matchupOpponentRating:Number((match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||'').match(/R(\d+)/)?.[1])||null,matchupOverflow:match?Math.max(0,match.scrollWidth-match.clientWidth):0,bossVault:!!vault,bossOutsideBracket:vault?.dataset.outsideBracket==='1'&&!bracket?.contains(vault),bossInBracket:!!(a&&cupFor(a)&&a.bracket?.rounds?.flat?.().includes(cupFor(a).boss)),roundPlates:rounds.length,currentMarkers:now,winnerStamps:stamps,progressValue:hero?.querySelector('.tourGameWinsNum21559')?.textContent||'',progressLabel:hero?.querySelector('.tourGameWinsLabel21559')?.textContent||'',attemptCount:Number(hero?.querySelector('[data-tour-attempt]')?.textContent?.match(/(\d+)回目/)?.[1])||0,resumeChip:!!hero?.querySelector('[data-tour-resume]'),connectors:panel?.querySelectorAll('.tourBracketLines path')?.length||0,roster:document.querySelectorAll('#chars .ch').length,sideOverflow:document.querySelector('.side')?Math.max(0,document.querySelector('.side').scrollWidth-document.querySelector('.side').clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}}};
 })();
 
 /* 21561: 勝ち上がり直後、次のAI戦が未決着でもVSカードを消さない表示補助。
@@ -198,3 +202,5 @@
   const tag=document.createElement('script');tag.src=src;tag.async=false;tag.dataset.tournamentRoad='21562';
   document.head.appendChild(tag);
 })();
+
+/* 21563: 大会再開/同杯挑戦回数の表示補助。大会ロジック・保存形式は変更しない。 */
