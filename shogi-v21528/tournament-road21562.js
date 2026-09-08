@@ -41,7 +41,7 @@
       el.className='tourRoadStage21562'+(i===4?' boss':'')+(i<p.done?' done':'')+(i===p.current?' current':'')+(i===p.current&&p.failed?' failed':'');
       road.appendChild(el);
     });
-    hero.appendChild(road);return true;
+    hero.insertAdjacentElement('afterend',road);return true;
   }
   function install(){
     const base=window.AI_SHOGI_TOURNAMENT_GAME_UI;if(!base||base.__road21562)return false;
