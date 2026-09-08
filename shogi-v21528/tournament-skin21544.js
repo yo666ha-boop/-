@@ -112,10 +112,49 @@
     document.head.appendChild(s);
   }
 
+  function ensureRoadStyle21562(){
+    if(document.getElementById('tournamentRoad21562Style'))return;
+    const s=document.createElement('style');s.id='tournamentRoad21562Style';s.textContent=
+      '#tournament21540Panel .tourRoad21562{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:6px 0 8px}'+
+      '#tournament21540Panel .tourRoadStage21562{position:relative;display:grid;place-items:center;min-height:24px;border:1px solid #5d543d;border-radius:999px;background:#111914;color:#a9a188;font-size:10px;font-weight:1000;letter-spacing:.04em}'+
+      '#tournament21540Panel .tourRoadStage21562:not(:last-child):after{content:"";position:absolute;left:100%;top:50%;width:5px;border-top:1px solid #716442}'+
+      '#tournament21540Panel .tourRoadStage21562.done{border-color:#6eab66;background:#102414;color:#c8efbd}'+
+      '#tournament21540Panel .tourRoadStage21562.done:before{content:"✓ ";color:#9fe492}'+
+      '#tournament21540Panel .tourRoadStage21562.current{border-color:#e2bb55;background:#30250f;color:#ffe596;box-shadow:0 0 10px #dcae3d33}'+
+      '#tournament21540Panel .tourRoadStage21562.current.failed{border-color:#a5574d;background:#2a1412;color:#f0a49a;box-shadow:none}'+
+      '#tournament21540Panel .tourRoadStage21562.boss{border-style:dashed}'+
+      '#tournament21540Panel.tourFireFit .tourRoad21562{gap:2px;margin:3px 0 4px}#tournament21540Panel.tourFireFit .tourRoadStage21562{min-height:18px;font-size:8px}';
+    document.head.appendChild(s);
+  }
+  function roadPhase21562(a){
+    const b=a?.bossChallenge?.status||'locked';
+    if(b==='won')return{done:5,current:-1,failed:false};
+    if(b==='lost')return{done:4,current:4,failed:true};
+    if(['pending','active','draw'].includes(b)||a?.status==='champion')return{done:4,current:4,failed:false};
+    const r=Math.max(0,Math.min(3,Number(a?.round)||0));
+    return{done:r,current:r,failed:a?.status==='lost'};
+  }
+  function renderRoad21562(panel){
+    let a=null;try{a=window.AI_SHOGI_TOURNAMENT?.state?.()?.active||null}catch(e){}
+    const host=panel?.querySelector('.tourActiveTitle');let road=panel?.querySelector('.tourRoad21562');
+    if(!a||!host){road?.remove();return false}
+    ensureRoadStyle21562();
+    if(!road){
+      road=document.createElement('div');road.className='tourRoad21562';road.setAttribute('aria-label','大会進行');
+      for(const label of ['1R','QF','SF','F','EX']){const x=document.createElement('span');x.textContent=label;road.appendChild(x)}
+      host.insertAdjacentElement('afterend',road);
+    }
+    const p=roadPhase21562(a),xs=[...road.children];
+    xs.forEach((x,i)=>{const cls='tourRoadStage21562'+(i===4?' boss':'')+(i<p.done?' done':'')+(i===p.current?' current':'')+(i===p.current&&p.failed?' failed':'');if(x.className!==cls)x.className=cls});
+    window.__AI_SHOGI_TOURNAMENT_ROAD_21562=true;
+    return xs.length===5;
+  }
+
   function decorate(){
     ensureStyle();
     const panel=document.getElementById('tournament21540Panel');
     if(!panel)return false;
+    renderRoad21562(panel);
     panel.classList.add('tourSkin21544');
     [...panel.querySelectorAll('.tourCup')].forEach((cup,i)=>{
       for(let n=0;n<8;n++)cup.classList.toggle('tourTier'+n,n===i);

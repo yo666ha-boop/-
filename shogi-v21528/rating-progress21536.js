@@ -121,12 +121,6 @@
                 const dialogue=document.createElement('script');
                 dialogue.src=new URL('./tournament-dialogue21547.js?v=21547d',scriptURL).href;
                 dialogue.async=false;
-                dialogue.addEventListener('load',()=>{
-                  const game=document.createElement('script');
-                  game.src=new URL('./tournament-game-ui21559.js?v=21561',scriptURL).href;
-                  game.async=false;
-                  document.head.appendChild(game);
-                },{once:true});
                 document.head.appendChild(dialogue);
               },{once:true});
               document.head.appendChild(bank);
