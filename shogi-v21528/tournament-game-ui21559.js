@@ -120,7 +120,14 @@
 
   let busy=false,raf=0;
   function request(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(busy)return;busy=true;try{decorate()}finally{busy=false}})}
-  const observer=new MutationObserver(ms=>{if(busy)return;if(ms.every(m=>m.target?.closest?.('.tourGameHero21559,.tourMatchup21559,.tourBossVault21559,.tourWinStamp21559')))return;request()});
+  const OWN21559='.tourGameHero21559,.tourMatchup21559,.tourBossVault21559,.tourWinStamp21559';
+  const ownMutation21559=m=>{
+    if(m.target?.closest?.(OWN21559))return true;
+    if(m.type!=='childList')return false;
+    const nodes=[...(m.addedNodes||[]),...(m.removedNodes||[])].filter(n=>n?.nodeType===1);
+    return nodes.length>0&&nodes.every(n=>n.matches?.(OWN21559)||n.closest?.(OWN21559));
+  };
+  const observer=new MutationObserver(ms=>{if(busy)return;if(ms.length&&ms.every(ownMutation21559))return;request()});
   function boot(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer.disconnect();observer.observe(panel,{childList:true,subtree:true,attributes:true});decorate();return true}
   let tries=0;const timer=setInterval(()=>{if(boot()||++tries>120)clearInterval(timer)},120);
   window.addEventListener('resize',request,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(request,120),{passive:true});window.addEventListener('ai-shogi-local-save',request);
