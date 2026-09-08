@@ -7,7 +7,7 @@ try{
   const url='http://127.0.0.1:8000/shogi-v21528/?road21562='+Date.now();
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.__AI_SHOGI_TOURNAMENT_ROAD_21562,{timeout:60000});
-  await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('start failed');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
+  await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();t.start('shinji');if(!t.state()?.active)throw new Error('start state missing');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
   await page.waitForFunction(()=>document.querySelectorAll('#tournament21540Panel .tourRoadStage21562').length===5,{timeout:10000});
 
   const setState=async (patch,expect)=>{
