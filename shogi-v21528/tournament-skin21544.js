@@ -148,7 +148,7 @@
     }
     const p=roadPhase21562(a),xs=[...road.children];
     xs.forEach((x,i)=>{const cls='tourRoadStage21562'+(i===4?' boss':'')+(i<p.done?' done':'')+(i===p.current?' current':'')+(i===p.current&&p.failed?' failed':'');if(x.className!==cls)x.className=cls});
-    window.__AI_SHOGI_TOURNAMENT_ROAD_21562=true;
+    window.__AI_SHOGI_TOURNAMENT_SKIN_ROAD_21562=true;
     return xs.length===5;
   }
 
