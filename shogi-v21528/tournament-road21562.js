@@ -50,7 +50,7 @@
     base.audit=()=>{render();const out=oldAudit(),stages=[...document.querySelectorAll('#tournament21540Panel .tourRoadStage21562')];return{...out,road21562:stages.length===5,roadDone21562:stages.filter(x=>x.classList.contains('done')).length,roadCurrent21562:stages.findIndex(x=>x.classList.contains('current')),roadFailed21562:stages.some(x=>x.classList.contains('failed'))}};
     render();return true;
   }
-  let tries=0;const t=setInterval(()=>{if(install()||++tries>80)clearInterval(t)},100);
+  let installed=false,tries=0;const t=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(t);else if(++tries>80)clearInterval(t)},100);
   window.addEventListener('ai-shogi-local-save',render);
   window.addEventListener('resize',render,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
