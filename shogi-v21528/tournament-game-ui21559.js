@@ -15,12 +15,13 @@
   const PLAYER='__PLAYER__';
   const ROUND_NAMES=['1回戦','準々決勝','準決勝','決勝','優勝'];
   const clean=s=>String(s||'').replace(/[👑🏆]/gu,'').trim();
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]));
   const api=()=>window.AI_SHOGI_TOURNAMENT;
   const store=()=>{try{return api()?.state?.()||null}catch(e){return null}};
   const active=()=>store()?.active||null;
   const cups=()=>{try{return api()?.cups?.()||[]}catch(e){return[]}};
   const navReload=()=>{try{return performance.getEntriesByType('navigation')?.[0]?.type==='reload'}catch(e){return false}};
+  const restoredStartedAt=navReload()?(Number(active()?.startedAt)||0):0;
   const attemptCount=a=>{const h=store()?.history;return a?.cupId&&Array.isArray(h)?h.filter(x=>x?.cupId===a.cupId).length:0};
   const cupFor=a=>cups().find(c=>c.id===a?.cupId)||null;
   const characters=()=>{try{return window.AIShogiIOS?.characters?.()||[]}catch(e){return[]}};
@@ -92,7 +93,7 @@
     removeOld();
     const hero=document.createElement('section');hero.className='tourGameHero21559';hero.dataset.gameUi='21559';
     const progress=progressMetric(a),phase=stateLabel(a);
-    const attempts=Math.max(1,attemptCount(a)),resume=navReload();
+    const attempts=Math.max(1,attemptCount(a)),resume=restoredStartedAt>0&&Number(a?.startedAt)===restoredStartedAt;
     hero.innerHTML='<div><div class="tourGameCup21559">🏆 '+esc(cup.name)+'</div><div class="tourGameSub21559"><span class="tourGameChip21559 now">'+esc(phase)+'</span><span class="tourGameChip21559">16人・4勝優勝</span><span class="tourGameChip21559">優勝後ボス戦</span><span class="tourGameChip21559" data-tour-attempt="1">この杯 '+attempts+'回目</span>'+(resume?'<span class="tourGameChip21559 now" data-tour-resume="1">↻ 再開中</span>':'')+'</div></div><div class="tourGameWins21559"><div class="tourGameWinsNum21559">'+esc(progress.value)+'</div><div class="tourGameWinsLabel21559">'+esc(progress.label)+'</div></div>';
     const title=root.querySelector('.tourActiveTitle');if(title)title.insertAdjacentElement('afterend',hero);else root.prepend(hero);
 
