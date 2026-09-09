@@ -15,7 +15,7 @@
   const PLAYER='__PLAYER__';
   const ROUND_NAMES=['1回戦','準々決勝','準決勝','決勝','優勝'];
   const clean=s=>String(s||'').replace(/[👑🏆]/gu,'').trim();
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const api=()=>window.AI_SHOGI_TOURNAMENT;
   const store=()=>{try{return api()?.state?.()||null}catch(e){return null}};
   const active=()=>store()?.active||null;
