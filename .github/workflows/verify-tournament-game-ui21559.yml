@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'shogi-v21528/tournament-game-ui21559.js'
+      - 'shogi-v21528/tournament-road21562.js'
+      - 'shogi-v21528/tournament-history21567.js'
       - 'shogi-v21528/tournament21541.js'
       - 'shogi-v21528/tournament-field21545.js'
       - 'shogi-v21528/tournament-boss21546.js'
@@ -13,6 +15,7 @@ on:
       - 'preview/tournament-16/index21543.html'
       - '.github/scripts/verify-tournament-game-ui21559.mjs'
       - '.github/scripts/verify-tournament-same-cup-attempt21564.mjs'
+      - '.github/scripts/verify-tournament-history21567.mjs'
       - '.github/workflows/verify-tournament-game-ui21559.yml'
   workflow_dispatch:
 
@@ -31,8 +34,11 @@ jobs:
       - name: Syntax check game UI
         run: |
           node --check shogi-v21528/tournament-game-ui21559.js
+          node --check shogi-v21528/tournament-road21562.js
+          node --check shogi-v21528/tournament-history21567.js
           node --check .github/scripts/verify-tournament-game-ui21559.mjs
           node --check .github/scripts/verify-tournament-same-cup-attempt21564.mjs
+          node --check .github/scripts/verify-tournament-history21567.mjs
       - name: Install Playwright Chromium
         run: |
           npm init -y
@@ -46,3 +52,7 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-same-cup-attempt21564.mjs 2>&1 | tee /tmp/tournament-same-cup-attempt21564.log
+      - name: Verify recent tournament attempt history
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-history21567.mjs 2>&1 | tee /tmp/tournament-history21567.log
