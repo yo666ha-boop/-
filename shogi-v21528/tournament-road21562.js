@@ -55,3 +55,16 @@
   window.addEventListener('resize',render,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
 })();
+
+/* 21567 companion loader: load the display-only recent-attempt history after the road tracker. */
+(function loadTournamentAttemptHistory21567(){
+  'use strict';
+  if(window.__AI_SHOGI_TOURNAMENT_HISTORY_LOADER_21567)return;
+  const here=document.currentScript?.src||'';let src='';
+  if(/tournament-road21562\.js(?:[?#]|$)/.test(here))src=here.replace(/tournament-road21562\.js(?:[?#].*)?$/,'tournament-history21567.js?v=21567');
+  else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname))src=new URL('tournament-history21567.js?v=21567',location.href).href;
+  else return;
+  window.__AI_SHOGI_TOURNAMENT_HISTORY_LOADER_21567=true;
+  if(window.__AI_SHOGI_TOURNAMENT_HISTORY_21567||!src||[...document.scripts].some(s=>s.src===src))return;
+  const tag=document.createElement('script');tag.src=src;tag.async=false;tag.dataset.tournamentHistory='21567';document.head.appendChild(tag);
+})();
