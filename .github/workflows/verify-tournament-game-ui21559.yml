@@ -43,6 +43,7 @@ jobs:
         run: |
           npm init -y
           npm install playwright@1.55.0
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
           npx playwright install --with-deps chromium
       - name: Verify game-style tournament UI and invariants
         run: |
