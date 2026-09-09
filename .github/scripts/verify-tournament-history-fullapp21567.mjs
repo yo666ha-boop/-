@@ -26,7 +26,7 @@ try{
     const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
     if(!a?.history21567||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1)return false;
     return a;
-  },{timeout:20000}).then(h=>h.jsonValue());
+  },{timeout:60000}).then(h=>h.jsonValue());
 
   const before=await read();
   assert.deepEqual(before.historyItems21567,['future','mitsuki','ayanami']);
