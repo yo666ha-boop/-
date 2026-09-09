@@ -28,6 +28,7 @@ jobs:
           node --check .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
           node --check .github/scripts/verify-tournament-narrow-text21558.mjs
           node --check .github/scripts/verify-tournament-road21562.mjs
+          node --check .github/scripts/verify-tournament-history-fullapp21567.mjs
       - name: Install Playwright Firefox
         run: |
           npm init -y
@@ -55,6 +56,10 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-road21562.mjs 2>&1 | tee /tmp/tournament-road21562.log
+      - name: Verify recent tournament attempt history in fullapp
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-history-fullapp21567.mjs 2>&1 | tee /tmp/tournament-history-fullapp21567.log
       - name: Verify all 8 boss terminal dialogue states in fullapp
         run: |
           set -o pipefail
