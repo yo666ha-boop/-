@@ -24,26 +24,27 @@ try{
   const errors=[];page.on('pageerror',e=>errors.push(String(e?.message||e)));page.on('dialog',d=>d.accept());
   await page.goto('http://127.0.0.1:43164/',{waitUntil:'load'});
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI?.version==='21559a',{timeout:15000});
-  await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('shinji');document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.().attemptCount===1,{timeout:10000});
-  const first=await page.evaluate(()=>({audit:window.AI_SHOGI_TOURNAMENT_GAME_UI.audit(),history:window.AI_SHOGI_TOURNAMENT.state().history.filter(x=>x?.cupId==='shinji').length}));
-  assert.equal(first.audit.attemptCount,1);assert.equal(first.history,1);assert.equal(first.audit.connectors,30);assert.equal(first.audit.docOverflow,0);
 
   await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('shinji');document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.().attemptCount===2,{timeout:10000});
-  const second=await page.evaluate(()=>({audit:window.AI_SHOGI_TOURNAMENT_GAME_UI.audit(),history:window.AI_SHOGI_TOURNAMENT.state().history.filter(x=>x?.cupId==='shinji').length}));
+  const firstHandle=await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();const h=window.AI_SHOGI_TOURNAMENT?.state?.()?.history?.filter(x=>x?.cupId==='shinji').length??-1;return a?.attemptCount===1&&h===1&&a?.connectors===30&&a?.roster===26&&a?.docOverflow===0?{audit:a,history:h}:false},{timeout:10000});
+  const first=await firstHandle.jsonValue();
+  assert.equal(first.audit.attemptCount,1);assert.equal(first.history,1);assert.equal(first.audit.connectors,30);assert.equal(first.audit.roster,26);assert.equal(first.audit.docOverflow,0);
+
+  await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('shinji');document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
+  const secondHandle=await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();const h=window.AI_SHOGI_TOURNAMENT?.state?.()?.history?.filter(x=>x?.cupId==='shinji').length??-1;return a?.attemptCount===2&&h===2&&a?.matchupCard===true&&a?.bossInBracket===false&&a?.connectors===30&&a?.roster===26&&a?.docOverflow===0?{audit:a,history:h}:false},{timeout:10000});
+  const second=await secondHandle.jsonValue();
   assert.equal(second.audit.attemptCount,2);assert.equal(second.history,2);assert.equal(second.audit.matchupCard,true);assert.equal(second.audit.bossInBracket,false);assert.equal(second.audit.connectors,30);assert.equal(second.audit.roster,26);assert.equal(second.audit.docOverflow,0);
 
   await page.reload({waitUntil:'load'});
-  await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();return window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.cupId==='shinji'&&a?.attemptCount===2&&a?.resumeChip===true&&a?.matchupCard===true&&a?.docOverflow===0},{timeout:15000});
-  const reloadState=await page.evaluate(()=>({audit:window.AI_SHOGI_TOURNAMENT_GAME_UI.audit(),history:window.AI_SHOGI_TOURNAMENT.state().history.filter(x=>x?.cupId==='shinji').length,activeCup:window.AI_SHOGI_TOURNAMENT.state().active?.cupId}));
+  const reloadHandle=await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();const s=window.AI_SHOGI_TOURNAMENT?.state?.();const h=s?.history?.filter(x=>x?.cupId==='shinji').length??-1;return s?.active?.cupId==='shinji'&&a?.attemptCount===2&&h===2&&a?.resumeChip===true&&a?.matchupCard===true&&a?.bossInBracket===false&&a?.docOverflow===0?{audit:a,history:h,activeCup:s.active.cupId}:false},{timeout:15000});
+  const reloadState=await reloadHandle.jsonValue();
   assert.equal(reloadState.activeCup,'shinji');assert.equal(reloadState.audit.attemptCount,2);assert.equal(reloadState.history,2);assert.equal(reloadState.audit.resumeChip,true);assert.equal(reloadState.audit.matchupCard,true);assert.equal(reloadState.audit.bossInBracket,false);assert.equal(reloadState.audit.docOverflow,0);
 
   await page.evaluate(()=>{document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
-  await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();return a?.attemptCount===2&&a?.resumeChip===true&&a?.matchupCard===true&&a?.connectors===30&&a?.roster===26&&a?.docOverflow===0},{timeout:10000});
-  const reloaded=await page.evaluate(()=>({audit:window.AI_SHOGI_TOURNAMENT_GAME_UI.audit(),history:window.AI_SHOGI_TOURNAMENT.state().history.filter(x=>x?.cupId==='shinji').length,activeCup:window.AI_SHOGI_TOURNAMENT.state().active?.cupId}));
+  const renderedHandle=await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();const s=window.AI_SHOGI_TOURNAMENT?.state?.();const h=s?.history?.filter(x=>x?.cupId==='shinji').length??-1;return s?.active?.cupId==='shinji'&&a?.attemptCount===2&&h===2&&a?.resumeChip===true&&a?.matchupCard===true&&a?.bossInBracket===false&&a?.connectors===30&&a?.roster===26&&a?.docOverflow===0?{audit:a,history:h,activeCup:s.active.cupId}:false},{timeout:10000});
+  const reloaded=await renderedHandle.jsonValue();
   assert.equal(reloaded.activeCup,'shinji');assert.equal(reloaded.audit.attemptCount,2);assert.equal(reloaded.history,2);assert.equal(reloaded.audit.resumeChip,true);assert.equal(reloaded.audit.matchupCard,true);assert.equal(reloaded.audit.bossInBracket,false);assert.equal(reloaded.audit.connectors,30);assert.equal(reloaded.audit.roster,26);assert.equal(reloaded.audit.docOverflow,0);assert.deepEqual(errors,[]);
 
-  console.log('PASS_TOURNAMENT21564_SAME_CUP_ATTEMPT_INCREMENT '+JSON.stringify({first:{attemptCount:first.audit.attemptCount,history:first.history},second:{attemptCount:second.audit.attemptCount,history:second.history,connectors:second.audit.connectors,roster:second.audit.roster,overflow:second.audit.docOverflow},pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21564_SAME_CUP_ATTEMPT_INCREMENT '+JSON.stringify({first:{attemptCount:first.audit.attemptCount,history:first.history,connectors:first.audit.connectors,roster:first.audit.roster},second:{attemptCount:second.audit.attemptCount,history:second.history,connectors:second.audit.connectors,roster:second.audit.roster,overflow:second.audit.docOverflow},pageErrors:errors}));
   console.log('PASS_TOURNAMENT21565_SECOND_ATTEMPT_RELOAD_PERSIST '+JSON.stringify({reloadState:{cupId:reloadState.activeCup,attemptCount:reloadState.audit.attemptCount,history:reloadState.history,resumeChip:reloadState.audit.resumeChip,matchupCard:reloadState.audit.matchupCard,overflow:reloadState.audit.docOverflow},rendered:{connectors:reloaded.audit.connectors,roster:reloaded.audit.roster,overflow:reloaded.audit.docOverflow},pageErrors:errors}));
 }finally{await browser.close();await new Promise(r=>server.close(r))}
