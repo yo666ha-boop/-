@@ -12,6 +12,7 @@ on:
       - 'shogi-v21528/tournament-skin21544.js'
       - 'preview/tournament-16/index21543.html'
       - '.github/scripts/verify-tournament-game-ui21559.mjs'
+      - '.github/scripts/verify-tournament-same-cup-attempt21564.mjs'
       - '.github/workflows/verify-tournament-game-ui21559.yml'
   workflow_dispatch:
 
@@ -31,6 +32,7 @@ jobs:
         run: |
           node --check shogi-v21528/tournament-game-ui21559.js
           node --check .github/scripts/verify-tournament-game-ui21559.mjs
+          node --check .github/scripts/verify-tournament-same-cup-attempt21564.mjs
       - name: Install Playwright Chromium
         run: |
           npm init -y
@@ -40,3 +42,7 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-game-ui21559.mjs 2>&1 | tee /tmp/tournament-game-ui21559.log
+      - name: Verify same-cup attempt counter increments
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-same-cup-attempt21564.mjs 2>&1 | tee /tmp/tournament-same-cup-attempt21564.log
