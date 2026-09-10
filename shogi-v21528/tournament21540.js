@@ -126,6 +126,7 @@
 #tournament21540Btn .tourDot{display:inline-block;width:7px;height:7px;border-radius:999px;background:currentColor;margin-left:5px;vertical-align:1px}
 #tournament21540Panel{margin:10px 0 12px;border:1px solid #8b6c2f;border-radius:14px;background:#091411;padding:10px;color:#f1dfa6;display:none}
 #tournament21540Panel.on{display:block}
+#tournament21540Panel button{min-height:44px;box-sizing:border-box;touch-action:manipulation}
 .tourHead{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}.tourHead strong{font-size:15px}.tourHead .miniBtn{white-space:nowrap}
 .tourLead{font-size:12px;line-height:1.5;color:#cfc39e;margin-bottom:8px}.tourRecommended{font-weight:900;color:#ffe49a}
 .tourActive{border:1px solid #846526;border-radius:11px;padding:9px;margin:8px 0;background:#0e1b17}.tourActiveTitle{font-weight:900;margin-bottom:4px}.tourCurrentMatch{font-size:12px;font-weight:900;margin:7px 0}.tourCurrentMatch .bossMark{color:#ffe174}
