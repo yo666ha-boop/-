@@ -31,12 +31,16 @@ try{
   const repeatText=await page.locator('.tourAttemptHistory21567').innerText();assert.match(repeatText,/3回目/);assert.match(repeatText,/2回目/);
   const repeatLabels=await page.locator('.tourAttemptHistoryItem21567').evaluateAll(nodes=>nodes.map(x=>x.getAttribute('aria-label')||''));assert.deepEqual(repeatLabels,['しんじ杯 3回目 進行中','あやなみ杯 1回目','しんじ杯 2回目']);
 
+  const narrow=await page.evaluate(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI.audit(),px=s=>parseFloat(getComputedStyle(document.querySelector(s)).fontSize)||0,item=document.querySelector('.tourAttemptHistoryItem21567');return{...a,viewport:document.documentElement.clientWidth,headFont:px('.tourAttemptHistoryHead21567'),countFont:px('.tourAttemptHistoryCount21567'),cupFont:px('.tourAttemptHistoryCup21567'),ordinalFont:px('.tourAttemptHistoryOrdinal21568'),metaFont:px('.tourAttemptHistoryMeta21567'),itemHeight:item?.getBoundingClientRect().height||0}});
+  assert.equal(narrow.viewport,280);assert.ok(narrow.headFont>=7);assert.ok(narrow.countFont>=6);assert.ok(narrow.cupFont>=7);assert.ok(narrow.ordinalFont>=6);assert.ok(narrow.metaFont>=6);assert.ok(narrow.itemHeight>0);assert.equal(narrow.historyOverflow21567,0);assert.equal(narrow.docOverflow,0);assert.equal(narrow.connectors,30);assert.equal(narrow.roster,26);assert.equal(narrow.bossInBracket,false);
+
   await page.setViewportSize({width:320,height:700});
   await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.remove('tourFireFit');window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
   const normal=windowResult(await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_GAME_UI.audit()));
   assert.equal(normal.historyOverflow21567,0);assert.equal(normal.docOverflow,0);assert.equal(errors.length,0);
   console.log('PASS_TOURNAMENT21567_RECENT_ATTEMPT_HISTORY '+JSON.stringify({first:{source:first.historySourceCount21567,items:first.historyItems21567,current:first.historyCurrent21567,overflow:first.historyOverflow21567},recent:{source:many.historySourceCount21567,items:many.historyItems21567,current:many.historyCurrent21567,overflow:many.historyOverflow21567},normal:{overflow:normal.historyOverflow21567,docOverflow:normal.docOverflow},connectors:many.connectors,roster:many.roster,bossInBracket:many.bossInBracket,pageErrors:errors}));
   console.log('PASS_TOURNAMENT21568_HISTORY_ATTEMPT_ORDINAL '+JSON.stringify({items:repeat.historyItems21567,ordinals:repeat.historyAttemptOrdinals21568,current:repeat.historyCurrent21567,overflow:repeat.historyOverflow21567,docOverflow:repeat.docOverflow,connectors:repeat.connectors,roster:repeat.roster,bossInBracket:repeat.bossInBracket,pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21569_HISTORY_NARROW_READABILITY '+JSON.stringify({viewport:narrow.viewport,fonts:{head:narrow.headFont,count:narrow.countFont,cup:narrow.cupFont,ordinal:narrow.ordinalFont,meta:narrow.metaFont},itemHeight:narrow.itemHeight,overflow:narrow.historyOverflow21567,docOverflow:narrow.docOverflow,connectors:narrow.connectors,roster:narrow.roster,bossInBracket:narrow.bossInBracket,pageErrors:errors}));
 }finally{await browser.close()}
 
 function windowResult(v){return v}
