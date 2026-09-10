@@ -1,4 +1,4 @@
-/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 narrow game-card readability
+/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability
  * Display-only. Reads existing tournament history; does not mutate tournament, AI, rating, bracket, or persistence format.
  */
 (function installTournamentAttemptHistory21567(){
@@ -37,6 +37,7 @@
 #tournament21540Panel .tourAttemptHistoryState21567{margin-left:auto;color:#aaa083;overflow:hidden;text-overflow:ellipsis}.tourAttemptHistoryItem21567.current .tourAttemptHistoryState21567{color:#f1ca6a}
 #tournament21540Panel.tourFireFit .tourAttemptHistory21567{margin:1px 0 3px;padding:3px 4px;border-radius:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryHead21567{font-size:7px;margin-bottom:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCount21567{font-size:6px}#tournament21540Panel.tourFireFit .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryItem21567{padding:3px 3px;border-radius:5px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCup21567{font-size:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryOrdinal21568{font-size:6px;padding:0 2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryMeta21567{font-size:6px;gap:2px;margin-top:1px}
 #tournament21540Panel.tourFireFit .tourMatchName21559{font-size:8px}#tournament21540Panel.tourFireFit .tourMatchMeta21559{font-size:7px}#tournament21540Panel.tourFireFit .tourMatchVs21559 small{font-size:6px}#tournament21540Panel.tourFireFit .tourBossHint21559,#tournament21540Panel.tourFireFit .tourBossLock21559{font-size:8px}
+#tournament21540Panel.tourFireFit .tourRoadStage21562{font-size:7px}
 @media(max-width:320px){#tournament21540Panel .tourAttemptHistory21567{padding-left:4px;padding-right:4px}#tournament21540Panel .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel .tourAttemptHistoryItem21567{padding-left:3px;padding-right:3px}}
 `;
     document.head.appendChild(s);
