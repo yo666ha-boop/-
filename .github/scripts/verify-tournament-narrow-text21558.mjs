@@ -26,6 +26,10 @@ try{
         #tourDialogue21547 .tourDialogueStatus,#tourOpponentVoice21549 .tourDialogueStatus{font-size:${10*k}px!important}
         #tourDialogue21547 .tourDialogueRole,#tourOpponentVoice21549 .tourDialogueRole{font-size:${9*k}px!important}
       `;
+      const t=window.AI_SHOGI_TOURNAMENT;
+      const panel=document.getElementById('tournament21540Panel');
+      panel?.classList.add('on');
+      try{t?.render?.()}catch(e){}
       const d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
       try{d?.render?.()}catch(e){}
     },scale);
@@ -40,7 +44,10 @@ try{
       const p=panel?.getBoundingClientRect?.()||{};
       const hb=host?.querySelector('.tourDialogueBubble');
       const ob=opp?.querySelector('.tourDialogueBubble');
-      const buttons=[...document.querySelectorAll('#tournament21540Panel button')].filter(x=>getComputedStyle(x).display!=='none');
+      const buttons=[...document.querySelectorAll('#tournament21540Panel button')].filter(x=>{
+        const cs=getComputedStyle(x),r=x.getBoundingClientRect();
+        return cs.display!=='none'&&cs.visibility!=='hidden'&&r.width>0&&r.height>0;
+      });
       const minButtonHeight=buttons.length?Math.min(...buttons.map(x=>x.getBoundingClientRect().height)):0;
       return {
         width:innerWidth,
@@ -52,6 +59,7 @@ try{
         sideOverflow:side?Math.max(0,side.scrollWidth-side.clientWidth):0,
         docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),
         bodyOverflow:Math.max(0,document.body.scrollWidth-document.body.clientWidth),
+        buttonCount:buttons.length,
         minButtonHeight:Math.round(minButtonHeight||0),
         hostBubbleFont:hb?Number.parseFloat(getComputedStyle(hb).fontSize)||0:0,
         oppBubbleFont:ob?Number.parseFloat(getComputedStyle(ob).fontSize)||0:0,
@@ -77,7 +85,9 @@ try{
     if(!row.hostVisible||!row.oppVisible||!row.hostText||!row.oppText)f.push('dialogue visibility');
     if(row.sideOverflow!==0||row.docOverflow!==0||row.bodyOverflow!==0)f.push('overflow '+JSON.stringify(row));
     if(row.hostWidth>width||row.oppWidth>width||row.panelWidth>width)f.push('width '+JSON.stringify(row));
-    if(row.minButtonHeight&&row.minButtonHeight<44)f.push('tap target '+JSON.stringify(row));
+    if(!row.panelWidth)f.push('panel not open '+JSON.stringify(row));
+    if(!row.buttonCount)f.push('no visible tournament buttons '+JSON.stringify(row));
+    if(row.minButtonHeight<44)f.push('tap target '+JSON.stringify(row));
     const expected=12*(scale/100);
     if(Math.abs(row.hostBubbleFont-expected)>.6||Math.abs(row.oppBubbleFont-expected)>.6)f.push('text scale not applied '+JSON.stringify(row));
     if(f.length)throw new Error(width+'px '+scale+'% '+f.join(' | '));
@@ -91,6 +101,7 @@ try{
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());
   console.log('PASS_TOURNAMENT21558_NARROW_TEXT_SCALE '+JSON.stringify({checks,pageErrors:errors,stressApplied:true}));
+  console.log('PASS_TOURNAMENT21572_NARROW_ACTION_TAP_TARGETS '+JSON.stringify({checks:checks.map(({width,scale,panelWidth,buttonCount,minButtonHeight,docOverflow,bodyOverflow})=>({width,scale,panelWidth,buttonCount,minButtonHeight,docOverflow,bodyOverflow})),pageErrors:errors}));
 }finally{
   await browser.close();
 }
