@@ -81,6 +81,7 @@ try{
   const checks=[];
   for(const [width,scale] of [[320,100],[320,150],[280,100],[280,150]]){
     const row=await sample(width,scale);
+    console.log('TRACE_TOURNAMENT21558_NARROW_TEXT_SAMPLE '+JSON.stringify({width,scale,...row}));
     const f=[];
     if(!row.hostVisible||!row.oppVisible||!row.hostText||!row.oppText)f.push('dialogue visibility');
     if(row.sideOverflow!==0||row.docOverflow!==0||row.bodyOverflow!==0)f.push('overflow '+JSON.stringify(row));
