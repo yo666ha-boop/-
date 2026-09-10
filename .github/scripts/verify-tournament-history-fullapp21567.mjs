@@ -24,15 +24,16 @@ try{
 
   const read=()=>page.waitForFunction(()=>{
     const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
-    if(!a?.history21567||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||a.connectors!==30||a.roster!==26||a.bossInBracket!==false)return false;
-    return a;
+    const history=document.querySelector('#tournament21540Panel .tourAttemptHistory21567');
+    if(!a?.history21567||!history||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||a.connectors!==30||a.roster!==26||a.bossInBracket!==false)return false;
+    return {...a,historyText21567:history.innerText};
   },{timeout:60000}).then(h=>h.jsonValue());
 
   const before=await read();
   assert.deepEqual(before.historyItems21567,['future','mitsuki','ayanami']);
   assert.equal(before.historyOverflow21567,0);assert.equal(before.sideOverflow,0);assert.equal(before.docOverflow,0);
   assert.equal(before.connectors,30);assert.equal(before.roster,26);assert.equal(before.bossInBracket,false);
-  const textBefore=await page.locator('#tournament21540Panel .tourAttemptHistory21567').innerText();
+  const textBefore=before.historyText21567;
   assert.match(textBefore,/最近の挑戦/);assert.match(textBefore,/履歴 4件/);assert.match(textBefore,/未来みつき杯/);assert.match(textBefore,/みつき杯/);assert.match(textBefore,/あやなみ杯/);assert.doesNotMatch(textBefore,/しんじ杯/);assert.match(textBefore,/進行中/);assert.doesNotMatch(textBefore,/勝利|敗北/);
 
   await page.reload({waitUntil:'domcontentloaded',timeout:60000});
@@ -42,7 +43,7 @@ try{
   assert.deepEqual(reloaded.historyItems21567,['future','mitsuki','ayanami']);
   assert.equal(reloaded.historyOverflow21567,0);assert.equal(reloaded.sideOverflow,0);assert.equal(reloaded.docOverflow,0);
   assert.equal(reloaded.connectors,30);assert.equal(reloaded.roster,26);assert.equal(reloaded.bossInBracket,false);
-  const textReloaded=await page.locator('#tournament21540Panel .tourAttemptHistory21567').innerText();
+  const textReloaded=reloaded.historyText21567;
   assert.match(textReloaded,/履歴 4件/);assert.match(textReloaded,/未来みつき杯/);assert.match(textReloaded,/進行中/);
   assert.equal(errors.length,0);
 
