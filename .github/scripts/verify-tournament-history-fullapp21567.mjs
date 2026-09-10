@@ -23,6 +23,7 @@ try{
   });
 
   const read=()=>page.waitForFunction(()=>{
+    window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.();
     const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
     const history=document.querySelector('#tournament21540Panel .tourAttemptHistory21567');
     if(!a?.history21567||!history||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||a.connectors!==30||a.roster!==26||a.bossInBracket!==false)return false;
