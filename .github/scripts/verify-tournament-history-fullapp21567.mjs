@@ -24,7 +24,7 @@ try{
 
   const read=()=>page.waitForFunction(()=>{
     const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
-    if(!a?.history21567||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1)return false;
+    if(!a?.history21567||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||a.connectors!==30||a.roster!==26||a.bossInBracket!==false)return false;
     return a;
   },{timeout:60000}).then(h=>h.jsonValue());
 
