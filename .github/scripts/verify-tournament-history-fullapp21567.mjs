@@ -8,7 +8,7 @@ try{
   page.on('dialog',async d=>d.accept());
   const url='http://127.0.0.1:8000/shogi-v21528/?historyFullapp21567='+Date.now();
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567,{timeout:60000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567,null,{timeout:60000});
 
   await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -27,7 +27,7 @@ try{
     const history=document.querySelector('#tournament21540Panel .tourAttemptHistory21567');
     if(!a?.history21567||!history||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||a.connectors!==30||a.roster!==26||a.bossInBracket!==false)return false;
     return {...a,historyText21567:history.innerText};
-  },{timeout:60000}).then(h=>h.jsonValue());
+  },null,{timeout:60000}).then(h=>h.jsonValue());
 
   const before=await read();
   assert.deepEqual(before.historyItems21567,['future','mitsuki','ayanami']);
@@ -37,7 +37,7 @@ try{
   assert.match(textBefore,/最近の挑戦/);assert.match(textBefore,/履歴 4件/);assert.match(textBefore,/未来みつき杯/);assert.match(textBefore,/みつき杯/);assert.match(textBefore,/あやなみ杯/);assert.doesNotMatch(textBefore,/しんじ杯/);assert.match(textBefore,/進行中/);assert.doesNotMatch(textBefore,/勝利|敗北/);
 
   await page.reload({waitUntil:'domcontentloaded',timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567&&window.AI_SHOGI_TOURNAMENT_GAME_UI,{timeout:60000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567&&window.AI_SHOGI_TOURNAMENT_GAME_UI,null,{timeout:60000});
   await page.evaluate(()=>{document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
   const reloaded=await read();
   assert.deepEqual(reloaded.historyItems21567,['future','mitsuki','ayanami']);
