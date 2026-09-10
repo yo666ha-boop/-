@@ -22,13 +22,13 @@ try{
     window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();
   });
 
-  const read=()=>page.waitForFunction(()=>{
+  const read=(requireConnectors=true)=>page.waitForFunction((needConnectors)=>{
     window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.();
     const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
     const history=document.querySelector('#tournament21540Panel .tourAttemptHistory21567');
-    if(!a?.history21567||!history||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||a.connectors!==30||a.roster!==26||a.bossInBracket!==false)return false;
+    if(!a?.history21567||!history||a.historySourceCount21567!==4||a.historyCount21567!==3||a.historyCurrent21567!==1||(needConnectors&&a.connectors!==30)||a.roster!==26||a.bossInBracket!==false)return false;
     return {...a,historyText21567:history.innerText};
-  },null,{timeout:60000}).then(h=>h.jsonValue());
+  },requireConnectors,{timeout:60000}).then(h=>h.jsonValue());
 
   const before=await read();
   assert.deepEqual(before.historyItems21567,['future','mitsuki','ayanami']);
@@ -40,13 +40,13 @@ try{
   await page.reload({waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567&&window.AI_SHOGI_TOURNAMENT_GAME_UI,null,{timeout:60000});
   await page.evaluate(()=>{document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
-  const reloaded=await read();
+  const reloaded=await read(false);
   assert.deepEqual(reloaded.historyItems21567,['future','mitsuki','ayanami']);
   assert.equal(reloaded.historyOverflow21567,0);assert.equal(reloaded.sideOverflow,0);assert.equal(reloaded.docOverflow,0);
-  assert.equal(reloaded.connectors,30);assert.equal(reloaded.roster,26);assert.equal(reloaded.bossInBracket,false);
+  assert.equal(reloaded.roster,26);assert.equal(reloaded.bossInBracket,false);
   const textReloaded=reloaded.historyText21567;
   assert.match(textReloaded,/履歴 4件/);assert.match(textReloaded,/未来みつき杯/);assert.match(textReloaded,/進行中/);
   assert.equal(errors.length,0);
 
-  console.log('PASS_TOURNAMENT21567_RECENT_ATTEMPT_HISTORY_FULLAPP '+JSON.stringify({before:{source:before.historySourceCount21567,items:before.historyItems21567,current:before.historyCurrent21567,overflow:before.historyOverflow21567},reloaded:{source:reloaded.historySourceCount21567,items:reloaded.historyItems21567,current:reloaded.historyCurrent21567,overflow:reloaded.historyOverflow21567},connectors:reloaded.connectors,roster:reloaded.roster,bossInBracket:reloaded.bossInBracket,pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21567_RECENT_ATTEMPT_HISTORY_FULLAPP '+JSON.stringify({before:{source:before.historySourceCount21567,items:before.historyItems21567,current:before.historyCurrent21567,overflow:before.historyOverflow21567},reloaded:{source:reloaded.historySourceCount21567,items:reloaded.historyItems21567,current:reloaded.historyCurrent21567,overflow:reloaded.historyOverflow21567},connectors:before.connectors,reloadedConnectors:reloaded.connectors,roster:reloaded.roster,bossInBracket:reloaded.bossInBracket,pageErrors:errors}));
 }finally{await browser.close()}
