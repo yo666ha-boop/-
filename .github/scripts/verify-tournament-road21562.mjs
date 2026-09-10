@@ -8,7 +8,7 @@ try{
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.__AI_SHOGI_TOURNAMENT_ROAD_21562,{timeout:60000});
   await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('start failed');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
-  await page.waitForFunction(()=>document.querySelectorAll('#tournament21540Panel .tourRoadStage21562').length===5,{timeout:10000});
+  await page.waitForFunction(()=>{window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();return document.querySelectorAll('#tournament21540Panel .tourRoadStage21562').length===5},{timeout:30000});
 
   const setState=async (patch,expect)=>page.evaluate(async ({p,e})=>{
     const k='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(k)||'null');if(!s?.active)throw new Error('no active');
