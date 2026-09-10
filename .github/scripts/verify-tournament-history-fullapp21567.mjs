@@ -40,10 +40,10 @@ try{
   await page.reload({waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567&&window.AI_SHOGI_TOURNAMENT_GAME_UI,null,{timeout:60000});
   await page.evaluate(()=>{document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
-  const reloaded=await read(false);
+  const reloaded=await read(true);
   assert.deepEqual(reloaded.historyItems21567,['future','mitsuki','ayanami']);
   assert.equal(reloaded.historyOverflow21567,0);assert.equal(reloaded.sideOverflow,0);assert.equal(reloaded.docOverflow,0);
-  assert.equal(reloaded.roster,26);assert.equal(reloaded.bossInBracket,false);
+  assert.equal(reloaded.connectors,30);assert.equal(reloaded.roster,26);assert.equal(reloaded.bossInBracket,false);
   const textReloaded=reloaded.historyText21567;
   assert.match(textReloaded,/履歴 4件/);assert.match(textReloaded,/未来みつき杯/);assert.match(textReloaded,/進行中/);
   assert.equal(errors.length,0);
