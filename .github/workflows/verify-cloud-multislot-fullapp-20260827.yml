@@ -71,6 +71,21 @@ jobs:
       - name: Show server log on failure
         if: failure()
         run: cat /tmp/shogi-server.log || true
+      - name: Upload Firefox fullapp diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-fullapp-diagnostics
+          if-no-files-found: warn
+          path: |
+            /tmp/tournament-narrow-text21558.log
+            /tmp/tournament-dialogue-fullapp.log
+            /tmp/tournament-road21562.log
+            /tmp/tournament-history-fullapp21567.log
+            /tmp/tournament-all-boss-terminal.log
+            /tmp/firefox-fullapp.log
+            /tmp/top5.log
+            /tmp/shogi-server.log
 
   webkit-sound-engine:
     runs-on: ubuntu-22.04
