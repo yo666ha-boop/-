@@ -1,0 +1,32 @@
+name: apply tournament roster policy 21582
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-roster-policy21582.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply boss-under randomized field policy
+        run: node .github/scripts/apply-tournament-roster-policy21582.mjs
+      - name: Verify migration markers
+        run: |
+          grep -q "id:'mama'.*boss:'まま'.*bossRating:2500" shogi-v21528/tournament21540.js
+          grep -q "id:'onimama'.*boss:'おにまま'.*bossRating:2600" shogi-v21528/tournament21540.js
+          grep -q "Number(ch.rating)<cup.bossRating" shogi-v21528/tournament21540.js
+          grep -q "slice(0,15)" shogi-v21528/tournament21540.js
+          ! grep -q "id:'shinji'.*name:'しんじ杯'" shogi-v21528/tournament21540.js
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament21540.js preview/tournament-16/index21542b.html
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: randomize boss-under tournament fields 21582"
+          git push origin HEAD:feature/tournament-cups-20260902
