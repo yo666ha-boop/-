@@ -17,6 +17,7 @@ on:
       - '.github/scripts/verify-tournament-same-cup-attempt21564.mjs'
       - '.github/scripts/verify-tournament-history21567.mjs'
       - '.github/scripts/verify-tournament-visible-microtext21572.mjs'
+      - '.github/scripts/verify-tournament-history-hierarchy21573.mjs'
       - '.github/workflows/verify-tournament-game-ui21559.yml'
   workflow_dispatch:
 
@@ -41,6 +42,7 @@ jobs:
           node --check .github/scripts/verify-tournament-same-cup-attempt21564.mjs
           node --check .github/scripts/verify-tournament-history21567.mjs
           node --check .github/scripts/verify-tournament-visible-microtext21572.mjs
+          node --check .github/scripts/verify-tournament-history-hierarchy21573.mjs
       - name: Install Playwright Chromium
         run: |
           npm init -y
@@ -63,3 +65,7 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-visible-microtext21572.mjs 2>&1 | tee /tmp/tournament-visible-microtext21572.log
+      - name: Verify 280px tournament history hierarchy
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-history-hierarchy21573.mjs 2>&1 | tee /tmp/tournament-history-hierarchy21573.log
