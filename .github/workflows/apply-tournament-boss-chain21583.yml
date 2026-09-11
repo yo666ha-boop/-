@@ -1,0 +1,35 @@
+name: apply tournament boss chain 21583
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-boss-chain21583.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply separate boss chain
+        run: node .github/scripts/apply-tournament-boss-chain21583.mjs
+      - name: Verify boss chain invariants
+        run: |
+          grep -q "souther:{id:'souther'" shogi-v21528/tournament-boss21546.js
+          grep -q "mama:{id:'mama'" shogi-v21528/tournament-boss21546.js
+          grep -q "onimama:{id:'onimama'" shogi-v21528/tournament-boss21546.js
+          ! grep -q "shinji:{id:'shinji'" shogi-v21528/tournament-boss21546.js
+          grep -q "boss-under violation" shogi-v21528/tournament-boss21546.js
+          grep -q "status:'locked'" shogi-v21528/tournament-boss21546.js
+          grep -q "a.status='boss_pending'" shogi-v21528/tournament-boss21546.js
+          grep -q "a.status='boss_active'" shogi-v21528/tournament-boss21546.js
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament-boss21546.js
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: connect 10-cup separate boss chain 21583"
+          git push origin HEAD:feature/tournament-cups-20260902
