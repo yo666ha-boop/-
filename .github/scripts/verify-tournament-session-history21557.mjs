@@ -10,23 +10,35 @@ try{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:30000});
   };
+  const transientNavigation=e=>String(e?.stack||e?.message||e||'').includes('Execution context was destroyed');
   const startAndRead=async cupId=>{
-    await page.evaluate(async cupId=>{
-      const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
-      if(t.state()?.active)t.exit();
-      if(!t.start(cupId))throw new Error('start failed '+cupId);
-      window.AI_SHOGI_TOURNAMENT_DIALOGUE?.render?.();
-    },cupId);
-    return await page.evaluate(()=>({
-      cupId:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.cupId||'',
-      startedAt:Number(window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.startedAt)||0,
-      context:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().context||'',
-      lineId:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().lineId||'',
-      speaker:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().speaker||'',
-      role:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().role||'',
-      portrait:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().portrait===true,
-      history:JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')
-    }));
+    for(let attempt=1;attempt<=3;attempt++){
+      try{
+        await boot();
+        await page.evaluate(async cupId=>{
+          const t=window.AI_SHOGI_TOURNAMENT;
+          const active=t.state()?.active;
+          if(active?.cupId!==cupId){
+            if(active)t.exit();
+            if(!t.start(cupId))throw new Error('start failed '+cupId);
+          }
+          window.AI_SHOGI_TOURNAMENT_DIALOGUE?.render?.();
+        },cupId);
+        return await page.evaluate(()=>({
+          cupId:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.cupId||'',
+          startedAt:Number(window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.startedAt)||0,
+          context:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().context||'',
+          lineId:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().lineId||'',
+          speaker:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().speaker||'',
+          role:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().role||'',
+          portrait:window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit?.().portrait===true,
+          history:JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')
+        }));
+      }catch(error){
+        if(!transientNavigation(error)||attempt===3)throw error;
+        await page.waitForLoadState('domcontentloaded',{timeout:60000}).catch(()=>{});
+      }
+    }
   };
 
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?sessionHistory='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
