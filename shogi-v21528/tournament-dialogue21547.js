@@ -29,7 +29,7 @@
   function readSession(key){const h=readHistory();return h.sessions?.[key]&&typeof h.sessions[key]==='object'?h.sessions[key]:null}
   const chars=()=>{try{return window.AIShogiIOS?.characters?.()||[]}catch(e){return[]}};
   const gameState=()=>{try{return window.AIShogiIOS?.state?.()||null}catch(e){return null}};
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
   let lastSignature='',lastPick=null,lastOpponent='',opponentSince=0,lastTournamentKey='',cupSince=0,observer=null;
 
