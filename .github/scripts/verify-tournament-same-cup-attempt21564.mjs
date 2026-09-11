@@ -23,7 +23,7 @@ try{
   const page=await browser.newPage({viewport:{width:1280,height:800}});
   const errors=[];page.on('pageerror',e=>errors.push(String(e?.message||e)));page.on('dialog',d=>d.accept());
   await page.goto('http://127.0.0.1:43164/',{waitUntil:'load'});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI?.version==='21559a',{timeout:15000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AI_SHOGI_TOURNAMENT_GAME_UI?.version==='21559a',{timeout:15000});
 
   await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT.start('shinji');document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT.render();window.AI_SHOGI_TOURNAMENT_GAME_UI.render()});
   const firstHandle=await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();const h=window.AI_SHOGI_TOURNAMENT?.state?.()?.history?.filter(x=>x?.cupId==='shinji').length??-1;return a?.attemptCount===1&&h===1&&a?.connectors===30&&a?.roster===26&&a?.docOverflow===0?{audit:a,history:h}:false},{timeout:10000});
