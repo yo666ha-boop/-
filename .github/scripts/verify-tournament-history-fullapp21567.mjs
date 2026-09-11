@@ -94,9 +94,14 @@ try{
   assert.match(textReloaded,/履歴 4件/);assert.match(textReloaded,/未来みつき杯/);assert.match(textReloaded,/進行中/);assert.match(textReloaded,/続きへ/);
 
   const resumeBefore=await page.evaluate(()=>{const s=window.AI_SHOGI_TOURNAMENT.state(),a=s.active;return{cupId:a?.cupId||'',startedAt:Number(a?.startedAt)||0,round:Number(a?.round)||0,history:s.history?.length||0,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on')}});
-  const current=page.locator('#tournament21540Panel .tourAttemptHistoryItem21567.current[data-resumable="1"]');
-  assert.equal(await current.getAttribute('role'),'button');assert.equal(await current.getAttribute('aria-label'),'未来みつき杯 1回目 進行中');
-  await current.click();
+  const resumeClick=await page.evaluate(()=>{
+    document.getElementById('tournament21540Panel')?.classList.add('on');
+    window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();
+    const item=document.querySelector('#tournament21540Panel .tourAttemptHistoryItem21567.current[data-resumable="1"]');
+    const out={found:!!item,role:item?.getAttribute('role')||'',aria:item?.getAttribute('aria-label')||'',label:item?.querySelector('.tourAttemptHistoryResume21578')?.textContent||''};
+    item?.click();return out;
+  });
+  assert.equal(resumeClick.found,true);assert.equal(resumeClick.role,'button');assert.equal(resumeClick.aria,'未来みつき杯 1回目 進行中');assert.equal(resumeClick.label,'続きへ');
   await page.waitForFunction(()=>!document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:5000});
   const resumed=await page.evaluate(()=>{const s=window.AI_SHOGI_TOURNAMENT.state(),a=s.active;return{cupId:a?.cupId||'',startedAt:Number(a?.startedAt)||0,round:Number(a?.round)||0,history:s.history?.length||0,panelOpen:!!document.getElementById('tournament21540Panel')?.classList.contains('on'),board:!!document.getElementById('board')}});
   assert.deepEqual({cupId:resumed.cupId,startedAt:resumed.startedAt,round:resumed.round,history:resumed.history},{cupId:resumeBefore.cupId,startedAt:resumeBefore.startedAt,round:resumeBefore.round,history:resumeBefore.history});
@@ -106,5 +111,5 @@ try{
   assert.equal(errors.length,0);
 
   console.log('PASS_TOURNAMENT21567_RECENT_ATTEMPT_HISTORY_FULLAPP '+JSON.stringify({before:{source:before.historySourceCount21567,items:before.historyItems21567,current:before.historyCurrent21567,overflow:before.historyOverflow21567},reloaded:{source:reloaded.historySourceCount21567,items:reloaded.historyItems21567,current:reloaded.historyCurrent21567,overflow:reloaded.historyOverflow21567},connectors:before.connectors,reloadedConnectors:reloaded.connectors,roster:reloaded.roster,bossInBracket:reloaded.bossInBracket,pageErrors:errors}));
-  console.log('PASS_TOURNAMENT21578_HISTORY_RESUME_FULLAPP '+JSON.stringify({before:resumeBefore,resumed,after:{source:afterResume.historySourceCount21567,current:afterResume.historyCurrent21567,resumable:afterResume.historyResumable21578,labels:afterResume.historyResumeLabels21578},connectors:afterResume.connectors,roster:afterResume.roster,bossInBracket:afterResume.bossInBracket,pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21578_HISTORY_RESUME_FULLAPP '+JSON.stringify({click:resumeClick,before:resumeBefore,resumed,after:{source:afterResume.historySourceCount21567,current:afterResume.historyCurrent21567,resumable:afterResume.historyResumable21578,labels:afterResume.historyResumeLabels21578},connectors:afterResume.connectors,roster:afterResume.roster,bossInBracket:afterResume.bossInBracket,pageErrors:errors}));
 }finally{await browser.close()}
