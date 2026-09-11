@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '.github/workflows/apply-tournament-roster-policy21582.yml'
+      - '.github/scripts/apply-tournament-roster-policy21582.mjs'
 permissions:
   contents: write
 jobs:
@@ -17,6 +18,7 @@ jobs:
         run: node .github/scripts/apply-tournament-roster-policy21582.mjs
       - name: Verify migration markers
         run: |
+          grep -q "id:'kenshiro'.*boss:'ケンシロウ'.*bossRating:2100" shogi-v21528/tournament21540.js
           grep -q "id:'mama'.*boss:'まま'.*bossRating:2500" shogi-v21528/tournament21540.js
           grep -q "id:'onimama'.*boss:'おにまま'.*bossRating:2600" shogi-v21528/tournament21540.js
           grep -q "Number(ch.rating)<cup.bossRating" shogi-v21528/tournament21540.js
