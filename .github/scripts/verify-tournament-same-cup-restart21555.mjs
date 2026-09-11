@@ -8,7 +8,7 @@ try{
   page.on('dialog',async d=>d.accept());
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?sameCupRestart='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:30000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:30000});
 
   const result=await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -28,12 +28,12 @@ try{
     };
     if(t.state()?.active)t.exit();
     localStorage.removeItem('aiShogiTournamentDialogue21547');
-    if(!t.start('shinji'))throw new Error('first start failed');
+    if(!t.start('kenshiro'))throw new Error('first start failed');
     await delay(220);
     const first=snap('first');
     t.exit();await delay(40);
     await delay(20);
-    if(!t.start('shinji'))throw new Error('second start failed');
+    if(!t.start('kenshiro'))throw new Error('second start failed');
     await delay(220);
     const second=snap('second');
     t.exit();
@@ -42,8 +42,8 @@ try{
 
   const f=[];
   for(const x of [result.first,result.second]){
-    if(x.cupId!=='shinji'||x.context!=='intro')f.push(x.label+': context '+JSON.stringify(x));
-    if(x.speaker!=='しんじ'||x.role!=='大会主・トーナメント外'||!x.lineId||!x.text||!x.portrait)f.push(x.label+': dialogue '+JSON.stringify(x));
+    if(x.cupId!=='kenshiro'||x.context!=='intro')f.push(x.label+': context '+JSON.stringify(x));
+    if(x.speaker!=='ケンシロウ'||x.role!=='大会主・トーナメント外'||!x.lineId||!x.text||!x.portrait)f.push(x.label+': dialogue '+JSON.stringify(x));
     if(!x.docked||x.parent!=='side'||x.h<1||x.h>115||x.sideOverflow!==0||x.docOverflow!==0)f.push(x.label+': layout '+JSON.stringify(x));
   }
   if(!(result.second.startedAt>result.first.startedAt))f.push('startedAt did not advance '+JSON.stringify(result));
