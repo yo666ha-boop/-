@@ -34,17 +34,22 @@ assert.match(game,/tourWinStamp21559\{[^}]*font-size:7px/,'WIN stamp must stay a
 // ROAD companion must still load the final history/readability override.
 assert.match(road,/tournament-history21567\.js\?v=21567/,'ROAD must load tournament-history21567 final override');
 
-// The only intentional sub-7 FireFit text left in game-ui is the portrait fallback
-// glyph. In production the 26 real character images are present and existing gates
-// require fallback=0; all normal visible labels are covered above.
+// Base FireFit declarations below 7px are allowed only when a later, explicitly
+// asserted final override raises that visible label to >=7px, or when the glyph is
+// a portrait fallback that existing Fire gates require to remain unused (fallback=0).
 const fireRules=[...game.matchAll(/#tournament21540Panel\.tourFireFit[^\n]*/g)].map(m=>m[0]).join('\n');
 const sub7=[...fireRules.matchAll(/([^{}]+)\{[^{}]*font-size:([0-6](?:\.\d+)?)px[^{}]*\}/g)].map(m=>({selector:m[1].trim(),px:Number(m[2])}));
-const unexpected=sub7.filter(x=>!x.selector.endsWith('.tourMatchPortrait21559'));
-assert.deepEqual(unexpected,[],`unexpected visible FireFit text below 7px: ${JSON.stringify(unexpected)}`);
+const allowedBaseDeclarationsBelow7=[
+  '.tourMatchPortrait21559',
+  '.tourMatchMeta21559',
+  '.tourMatchVs21559 small'
+];
+const unexpected=sub7.filter(x=>!allowedBaseDeclarationsBelow7.some(selector=>x.selector.endsWith(selector)));
+assert.deepEqual(unexpected,[],`unexpected base FireFit text below 7px without a validated final override: ${JSON.stringify(unexpected)}`);
 
 console.log('PASS_TOURNAMENT21572_VISIBLE_MICROTEXT_FLOOR '+JSON.stringify({
   minimumVisiblePx:7,
   checked:required.map(([label])=>label).concat(['NOW stamp','WIN stamp']),
-  intentionalFallback:sub7,
-  invariant:'26 real images / fallback=0 remains covered by existing Fire gate'
+  allowedBaseDeclarationsBelow7:sub7,
+  invariant:'match meta / VS helper are raised by required final overrides; 26 real images / fallback=0 remains covered by existing Fire gate'
 }));
