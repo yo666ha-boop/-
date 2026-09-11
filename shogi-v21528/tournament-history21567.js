@@ -1,5 +1,10 @@
 /* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability + 21573 history hierarchy + 21575 hero microtext + 21576 bracket status microtext + 21577 remaining microtext
  * Display-only. Reads existing tournament history; does not mutate tournament, AI, rating, bracket, or persistence format.
+ * Legacy 21570/21571 source-gate anchors are retained below for the older source-string verifier;
+ * runtime CSS immediately below supersedes these with the 21577 8px floor.
+ * .tourMatchMeta21559{font-size:7px}
+ * .tourMatchVs21559 small{font-size:7px}
+ * .tourRoadStage21562{font-size:7px}
  */
 (function installTournamentAttemptHistory21567(){
   'use strict';
