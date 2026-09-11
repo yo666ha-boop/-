@@ -5,6 +5,7 @@
   const sha=m?.[1]||'feature/tournament-cups-20260902';
   const root=`https://raw.githubusercontent.com/yo666ha-boop/-/${sha}/`;
   const baseURL=root+'preview/tournament-16/index21542b.html';
+  const cupsURL=root+'preview/tournament-16/cups-preview21589.js';
   const fieldURL=root+'preview/tournament-16/field-preview21545.js';
   const patchURL=root+'preview/tournament-16/bracket-preview21543.js';
   const bossURL=root+'preview/tournament-16/boss-preview21546.js';
@@ -18,9 +19,9 @@
   const bootMarker='renderCups();hydrate();\n'+closeScript+'</body></html>';
   const safeScript=s=>s.replace(new RegExp('<\\/script','gi'),'<\\/script');
   try{
-    const [baseRes,fieldRes,patchRes,bossRes,skinRes,bankRes,dialogueRes,gameUIRes]=await Promise.all([fetch(baseURL,{cache:'no-store'}),fetch(fieldURL,{cache:'no-store'}),fetch(patchURL,{cache:'no-store'}),fetch(bossURL,{cache:'no-store'}),fetch(skinURL,{cache:'no-store'}),fetch(bankURL,{cache:'no-store'}),fetch(dialogueURL,{cache:'no-store'}),fetch(gameUIURL,{cache:'no-store'})]);
-    if(!baseRes.ok)throw Error('preview source '+baseRes.status);if(!fieldRes.ok)throw Error('field rule '+fieldRes.status);if(!patchRes.ok)throw Error('bracket patch '+patchRes.status);if(!bossRes.ok)throw Error('boss patch '+bossRes.status);if(!skinRes.ok)throw Error('visual skin '+skinRes.status);if(!bankRes.ok)throw Error('dialogue bank '+bankRes.status);if(!dialogueRes.ok)throw Error('dialogue preview '+dialogueRes.status);if(!gameUIRes.ok)throw Error('game ui '+gameUIRes.status);
-    let html=await baseRes.text(),field=safeScript(await fieldRes.text()),patch=safeScript(await patchRes.text()),boss=safeScript(await bossRes.text()),skin=await skinRes.text(),bank=safeScript(await bankRes.text()),dialogue=safeScript(await dialogueRes.text()),gameUI=safeScript(await gameUIRes.text());
+    const [baseRes,cupsRes,fieldRes,patchRes,bossRes,skinRes,bankRes,dialogueRes,gameUIRes]=await Promise.all([fetch(baseURL,{cache:'no-store'}),fetch(cupsURL,{cache:'no-store'}),fetch(fieldURL,{cache:'no-store'}),fetch(patchURL,{cache:'no-store'}),fetch(bossURL,{cache:'no-store'}),fetch(skinURL,{cache:'no-store'}),fetch(bankURL,{cache:'no-store'}),fetch(dialogueURL,{cache:'no-store'}),fetch(gameUIURL,{cache:'no-store'})]);
+    if(!baseRes.ok)throw Error('preview source '+baseRes.status);if(!cupsRes.ok)throw Error('cup sync '+cupsRes.status);if(!fieldRes.ok)throw Error('field rule '+fieldRes.status);if(!patchRes.ok)throw Error('bracket patch '+patchRes.status);if(!bossRes.ok)throw Error('boss patch '+bossRes.status);if(!skinRes.ok)throw Error('visual skin '+skinRes.status);if(!bankRes.ok)throw Error('dialogue bank '+bankRes.status);if(!dialogueRes.ok)throw Error('dialogue preview '+dialogueRes.status);if(!gameUIRes.ok)throw Error('game ui '+gameUIRes.status);
+    let html=await baseRes.text(),cupsPatch=safeScript(await cupsRes.text()),field=safeScript(await fieldRes.text()),patch=safeScript(await patchRes.text()),boss=safeScript(await bossRes.text()),skin=await skinRes.text(),bank=safeScript(await bankRes.text()),dialogue=safeScript(await dialogueRes.text()),gameUI=safeScript(await gameUIRes.text());
     if(!html.includes(oldHydrate))throw Error('21542b hydrate signature mismatch');
     if(!html.includes(bootMarker))throw Error('21542b boot signature mismatch');
     html=html.replace(oldHydrate,newHydrate)
@@ -29,7 +30,7 @@
       .replace('16人・画像完全＋Fireフィット確認版','16人トーナメント → 優勝後ボス戦＋ゲーム演出')
       .replace('Fire相当の横長画面では5列を最初から画面内に収めます。勝者は開始時には決まっていません。','Fire相当の横長画面では5列を画面内に収めます。杯ボスは16人トーナメントには参加せず、大会主として画像付きの状況セリフを話します。まず4勝してトーナメント優勝、そのあとに杯ボスへ挑戦します。AI同士の勝者は開始時には決まらず、各対戦の勝者だけが次の枠へ進みます。')
       .replaceAll('決勝ボス','優勝後ボス');
-    html=html.replace(bootMarker,bank+'\n'+field+'\n'+patch+'\n'+boss+'\n'+dialogue+'\n'+gameUI+'\nrenderCups();hydrate();\n'+closeScript+'</body></html>');
+    html=html.replace(bootMarker,bank+'\n'+cupsPatch+'\n'+field+'\n'+patch+'\n'+boss+'\n'+dialogue+'\n'+gameUI+'\nrenderCups();hydrate();\n'+closeScript+'</body></html>');
     document.open();document.write(html);document.close();
   }catch(e){document.getElementById('boot').textContent='確認ページの準備に失敗しました: '+String(e);throw e}
 })();
