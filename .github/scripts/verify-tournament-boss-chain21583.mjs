@@ -5,7 +5,10 @@ try{
   const errors=[]; page.on('pageerror',e=>errors.push(String(e?.message||e))); page.on('dialog',d=>d.accept());
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?boss21583='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AI_SHOGI_TOURNAMENT_BOSS?.version==='21583',{timeout:30000});
+  await page.waitForTimeout(3000);
+  const bootstrap=await page.evaluate(()=>({characters:document.querySelectorAll('#chars .ch').length,tournament:!!window.AI_SHOGI_TOURNAMENT,cups:window.AI_SHOGI_TOURNAMENT?.cups?.().map(c=>c.id)||[],bossVersion:window.AI_SHOGI_TOURNAMENT_BOSS?.version||null,bossFlag:window.AI_SHOGI_TOURNAMENT?.__boss21546a||false,webAudit:window.AI_SHOGI_WEB_AUDIT||null}));
+  console.log('TOURNAMENT21583_BOOTSTRAP',JSON.stringify(bootstrap));
+  if(bootstrap.cups.length!==10||bootstrap.bossVersion!=='21583')throw Error('21583 bootstrap mismatch '+JSON.stringify(bootstrap));
   const report=await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT, delay=ms=>new Promise(r=>setTimeout(r,ms));
     const expected=[['kenshiro','ケンシロウ',2100],['souther','サウザー',2180],['raoh','ラオウ',2250],['kaworu','カヲル',2400],['mama','まま',2500],['onimama','おにまま',2600],['akiou','あき王',2700],['micchan','みっちゃん',2850],['mitsuki','みつき',3000],['future','未来からやってきたみつき',3400]];
@@ -20,7 +23,6 @@ try{
       fields.push({id:cup.id,boss:cup.boss,bossRating:cup.bossRating,n:r0.length,ai:ai.length,bossIn:r0.includes(cup.boss),player:r0.indexOf('__PLAYER__'),maxAI:Math.max(...ai.map(rating)),under:ai.every(n=>Number(rating(n))<cup.bossRating)});
       t.exit(); await delay(30);
     }
-    // Different starts must not be permanently fixed to one bracket ordering.
     const orders=[];
     for(let i=0;i<3;i++){t.start('future');await delay(4);orders.push(t.state().active.bracket.rounds[0].join('|'));t.exit();await delay(4)}
     const result=async kind=>{const b=document.getElementById('resultBanner');b.className='resultBanner';void b.offsetWidth;b.className='resultBanner on result-'+kind;b.textContent=kind;await delay(130)};
