@@ -13,10 +13,12 @@
   window.__AI_SHOGI_TOURNAMENT_FIELD_21545B=true;
 
   const CUPS={
-    shinji:{id:'shinji',boss:'しんじ',bossRating:1550},
-    ayanami:{id:'ayanami',boss:'あやなみ',bossRating:1800},
     kenshiro:{id:'kenshiro',boss:'ケンシロウ',bossRating:2100},
+    souther:{id:'souther',boss:'サウザー',bossRating:2180},
+    raoh:{id:'raoh',boss:'ラオウ',bossRating:2250},
     kaworu:{id:'kaworu',boss:'カヲル',bossRating:2400},
+    mama:{id:'mama',boss:'まま',bossRating:2500},
+    onimama:{id:'onimama',boss:'おにまま',bossRating:2600},
     akiou:{id:'akiou',boss:'あき王',bossRating:2700},
     micchan:{id:'micchan',boss:'みっちゃん',bossRating:2850},
     mitsuki:{id:'mitsuki',boss:'みつき',bossRating:3000},
