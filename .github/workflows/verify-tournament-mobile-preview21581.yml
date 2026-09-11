@@ -84,7 +84,7 @@ jobs:
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Verify public jsDelivr URL in WebKit
+      - name: Verify public raw.githack URL in WebKit
         env:
           HOME: /root
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -92,13 +92,25 @@ jobs:
           node <<'NODE'
           const { webkit } = require('playwright');
           (async()=>{
-            const url=`https://cdn.jsdelivr.net/gh/yo666ha-boop/-@${process.env.HEAD_SHA}/preview/tournament-16/index21581-mobile.html`;
+            const url=`https://rawcdn.githack.com/yo666ha-boop/-/${process.env.HEAD_SHA}/preview/tournament-16/index21581-mobile.html`;
             const browser=await webkit.launch({headless:true});
-            const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});
+            const first=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});
+            const entry=await first.newPage();
+            const entryResponse=await entry.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
+            const entryAudit=await entry.evaluate(()=>({title:document.title,text:document.body.innerText.trim().slice(0,500)}));
+            if(!entryResponse||entryResponse.status()!==200) throw new Error('PUBLIC entry http '+(entryResponse&&entryResponse.status()));
+            if(!entryAudit.text) throw new Error('PUBLIC entry blank');
+            console.log('TRACE_TOURNAMENT21581_PUBLIC_ENTRY',JSON.stringify({url,status:entryResponse.status(),...entryAudit}));
+            await first.close();
+
+            const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});
+            await context.addCookies([{name:'__Http-phish',value:'1',domain:'rawcdn.githack.com',path:'/',secure:true,sameSite:'Lax'}]);
+            const page=await context.newPage();
             const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
             const response=await page.goto(url,{waitUntil:'networkidle',timeout:45000});
-            const audit=await page.evaluate(()=>({title:document.title,text:document.body.innerText.trim(),cups:document.querySelectorAll('.cup').length,boot:document.querySelector('#boot')?.textContent||'',overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}));
-            if(!response||response.status()!==200) throw new Error('PUBLIC http '+(response&&response.status()));
+            const audit=await page.evaluate(()=>({title:document.title,text:document.body.innerText.trim(),cups:document.querySelectorAll('.cup').length,boot:document.querySelector('#boot')?.textContent||'',overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),contentType:document.contentType}));
+            if(!response||response.status()!==200) throw new Error('PUBLIC app http '+(response&&response.status()));
+            if(audit.contentType!=='text/html') throw new Error('PUBLIC contentType '+audit.contentType);
             if(!audit.text.includes('みつき将棋・大会モード')||audit.cups!==8||!audit.boot.includes('画面描画OK')) throw new Error('PUBLIC blank/render mismatch '+JSON.stringify(audit));
             if(audit.overflow!==0) throw new Error('PUBLIC overflow '+audit.overflow);
             if(errors.length) throw new Error('PUBLIC pageErrors '+JSON.stringify(errors));
@@ -106,7 +118,7 @@ jobs:
             await page.waitForTimeout(100);
             const started=await page.evaluate(()=>({stage:document.querySelector('#stage')?.classList.contains('on'),road:document.querySelectorAll('#road span').length,rounds:document.querySelectorAll('#bracket > div').length,firstRound:document.querySelectorAll('#bracket > div:first-child .slot').length,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}));
             if(!started.stage||started.road!==5||started.rounds!==5||started.firstRound!==16||started.overflow!==0) throw new Error('PUBLIC interaction mismatch '+JSON.stringify(started));
-            console.log('PASS_TOURNAMENT21581_PUBLIC_JSDELIVR_WEBKIT',JSON.stringify({url,status:response.status(),...audit,...started,pageErrors:errors}));
+            console.log('PASS_TOURNAMENT21581_PUBLIC_RAWGITHACK_WEBKIT',JSON.stringify({url,status:response.status(),...audit,...started,pageErrors:errors}));
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
