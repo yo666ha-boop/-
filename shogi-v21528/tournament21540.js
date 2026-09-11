@@ -13,7 +13,11 @@
   const ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const BRACKET_LABELS=[...ROUNDS,'優勝'];
   const CUPS=[
-    {id:'mama',name:'まま杯',boss:'まま',bossRating:2500,min:0,max:2549,label:'中上級'},
+    {id:'kenshiro',name:'ケンシロウ杯',boss:'ケンシロウ',bossRating:2100,min:0,max:2149,label:'中級'},
+    {id:'souther',name:'サウザー杯',boss:'サウザー',bossRating:2180,min:2150,max:2219,label:'中上級'},
+    {id:'raoh',name:'ラオウ杯',boss:'ラオウ',bossRating:2250,min:2220,max:2349,label:'上級'},
+    {id:'kaworu',name:'カヲル杯',boss:'カヲル',bossRating:2400,min:2350,max:2449,label:'上級+'},
+    {id:'mama',name:'まま杯',boss:'まま',bossRating:2500,min:2450,max:2549,label:'中上級'},
     {id:'onimama',name:'おにまま杯',boss:'おにまま',bossRating:2600,min:2550,max:2649,label:'上級'},
     {id:'akiou',name:'あき王杯',boss:'あき王',bossRating:2700,min:2650,max:2799,label:'超上級'},
     {id:'micchan',name:'みっちゃん杯',boss:'みっちゃん',bossRating:2850,min:2800,max:2949,label:'最上級'},
