@@ -6,14 +6,14 @@ try{
   const pageErrors=[];page.on('pageerror',e=>pageErrors.push(String(e?.message||e)));page.on('dialog',async d=>d.accept());
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?orientationLong='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:20000});
   // coi-serviceworker may trigger one final navigation immediately after the first
   // DOM/API-ready signal. Let that navigation settle, then re-assert the live APIs
   // before entering the long page.evaluate block so CI does not race a destroyed context.
   await page.waitForTimeout(1500);
   await page.waitForLoadState('domcontentloaded',{timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:20000});
   const setup=await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(r=>setTimeout(r,ms));
     if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('start failed');await delay(3500);d.render();await delay(250);
