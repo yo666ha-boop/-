@@ -9,7 +9,7 @@ try{
 
   const boot=async()=>{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:30000});
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:30000});
   };
   const sample=async(width,scale)=>{
     await page.setViewportSize({width,height:844});
@@ -86,7 +86,7 @@ try{
   await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
     if(t.state()?.active)t.exit();
-    if(!t.start('shinji'))throw new Error('start failed');
+    if(!t.start('kenshiro'))throw new Error('start failed');
     await delay(3500);
   });
 
