@@ -9,16 +9,19 @@ on:
       - 'shogi-v21528/tournament-ui21542.js'
       - 'shogi-v21528/tournament-ui21543.js'
       - 'shogi-v21528/rating-progress21536.js'
+      - 'shogi-v21528/tournament-dialogue-bank21547.js'
       - 'preview/tournament-16/index.html'
       - 'preview/tournament-16/index21542.html'
       - 'preview/tournament-16/index21542b.html'
       - 'preview/tournament-16/index21542c.html'
       - 'preview/tournament-16/index21543.html'
+      - 'preview/tournament-16/cups-preview21589.js'
       - 'preview/tournament-16/field-preview21545.js'
       - 'preview/tournament-16/bracket-preview21543.js'
       - 'preview/tournament-16/boss-preview21546.js'
+      - 'preview/tournament-16/dialogue-preview21547.js'
       - 'preview/tournament-16/visual-polish21544.css'
-      - '.github/scripts/verify-tournament-preview-url-20260904.mjs'
+      - '.github/scripts/verify-tournament-preview-ten-cups21589.mjs'
       - '.github/workflows/verify-tournament-preview-url-20260904.yml'
   workflow_dispatch:
 
@@ -36,11 +39,12 @@ jobs:
         run: |
           node --check shogi-v21528/tournament-boss21546.js
           node --check shogi-v21528/tournament-ui21543.js
+          node --check preview/tournament-16/cups-preview21589.js
           node --check preview/tournament-16/field-preview21545.js
           node --check preview/tournament-16/bracket-preview21543.js
           node --check preview/tournament-16/boss-preview21546.js
-          node --check .github/scripts/verify-tournament-preview-url-20260904.mjs
-      - name: Verify immutable preview URL
+          node --check .github/scripts/verify-tournament-preview-ten-cups21589.mjs
+      - name: Verify immutable ten-cup preview URL
         env:
           PREVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: node .github/scripts/verify-tournament-preview-url-20260904.mjs
+        run: node .github/scripts/verify-tournament-preview-ten-cups21589.mjs
