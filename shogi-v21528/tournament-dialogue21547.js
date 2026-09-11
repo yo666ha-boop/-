@@ -13,8 +13,8 @@
   const HISTORY_KEY='aiShogiTournamentDialogue21547';
   const PLAYER='__PLAYER__';
   const ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
-  const CUP_BOSS={shinji:'しんじ',ayanami:'あやなみ',kenshiro:'ケンシロウ',kaworu:'カヲル',akiou:'あき王',micchan:'みっちゃん',mitsuki:'みつき',future:'未来からやってきたみつき'};
-  const CUP_NAME={shinji:'しんじ杯',ayanami:'あやなみ杯',kenshiro:'ケンシロウ杯',kaworu:'カヲル杯',akiou:'あき王杯',micchan:'みっちゃん杯',mitsuki:'みつき杯',future:'未来みつき杯'};
+  const CUP_BOSS={kenshiro:'ケンシロウ',souther:'サウザー',raoh:'ラオウ',kaworu:'カヲル',mama:'まま',onimama:'おにまま',akiou:'あき王',micchan:'みっちゃん',mitsuki:'みつき',future:'未来からやってきたみつき'};
+  const CUP_NAME={kenshiro:'ケンシロウ杯',souther:'サウザー杯',raoh:'ラオウ杯',kaworu:'カヲル杯',mama:'まま杯',onimama:'おにまま杯',akiou:'あき王杯',micchan:'みっちゃん杯',mitsuki:'みつき杯',future:'未来みつき杯'};
   const MATERIAL_VAL={P:100,L:280,N:300,S:420,G:500,B:700,R:850,K:20000,'+P':500,'+L':500,'+N':500,'+S':500,'+B':900,'+R':1050};
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
