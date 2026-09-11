@@ -37,6 +37,8 @@ jobs:
       - name: Verify all eight boss portraits and voice separation
         run: node .github/scripts/verify-tournament-all-boss-dialogue21547.mjs
       - name: Verify 21580 dialogue release accessibility at 280px / 150% text
+        env:
+          HOME: /root
         run: |
           python3 -m http.server 8000 >/tmp/tournament-dialogue21580-http.log 2>&1 &
           SERVER_PID=$!
