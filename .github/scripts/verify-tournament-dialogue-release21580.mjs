@@ -9,7 +9,7 @@ try{
   page.on('dialog',async d=>{await d.accept()});
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?dialogueRelease21580='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:20000});
   await page.addStyleTag({content:'html{font-size:150%!important;-webkit-text-size-adjust:150%!important}body{-webkit-text-size-adjust:150%!important}'});
 
   const result=await page.evaluate(async()=>{
