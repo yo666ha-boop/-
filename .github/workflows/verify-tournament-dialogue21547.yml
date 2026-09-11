@@ -34,7 +34,7 @@ jobs:
           node --check .github/scripts/verify-tournament-dialogue-release21580.mjs
       - name: Verify portrait dialogue, situation changes, anti-repeat, and mobile fit
         run: node .github/scripts/verify-tournament-dialogue21547.mjs
-      - name: Verify all eight boss portraits and voice separation
+      - name: Verify all ten cup-boss portraits and twelve voice profiles
         run: node .github/scripts/verify-tournament-all-boss-dialogue21547.mjs
       - name: Verify 21580 dialogue release accessibility at 280px / 150% text
         env:
