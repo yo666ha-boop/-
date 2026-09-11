@@ -47,17 +47,21 @@ try{
   await boot();
 
   await page.evaluate(async()=>{
-    const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
+    const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms)),ids=['shinji','ayanami','mitsuki','future'];
     localStorage.removeItem('aiShogiTournament21540');t.render?.();await delay(80);
-    for(const id of ['shinji','ayanami','mitsuki','future']){
+    for(let i=0;i<ids.length;i++){
+      const id=ids[i];
       if(t.state()?.active)t.exit();await delay(40);
       if(!t.start(id))throw new Error('start failed '+id);
+      for(let n=0;n<40&&(t.state()?.history?.length||0)<i+1;n++)await delay(25);
+      if((t.state()?.history?.length||0)!==i+1)throw new Error('history persist lag '+id+' '+(t.state()?.history?.length||0)+'/'+(i+1));
       t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();await delay(120);
     }
     document.getElementById('tournament21540Panel')?.classList.add('on');
     window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();
     window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.();
   });
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.state?.()?.history?.length===4,null,{timeout:10000});
 
   const read=async(requireConnectors=true)=>{
     for(let attempt=1;attempt<=5;attempt++){
