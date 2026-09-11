@@ -1,4 +1,4 @@
-name: Verify tournament mobile preview 21581
+name: Verify tournament mobile preview 21584
 
 on:
   pull_request:
@@ -23,12 +23,12 @@ jobs:
           npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
       - name: Start static server
         run: |
-          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/tournament21581-server.log 2>&1 &
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/tournament21584-server.log 2>&1 &
           for i in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8765/preview/tournament-16/index21581-mobile.html >/dev/null && exit 0
+            curl -fsS http://127.0.0.1:8765/preview/tournament-16/index21584-mobile.html >/dev/null && exit 0
             sleep 1
           done
-          cat /tmp/tournament21581-server.log
+          cat /tmp/tournament21584-server.log
           exit 1
       - name: Verify iPhone Safari-like rendering
         env:
@@ -37,52 +37,25 @@ jobs:
           node <<'NODE'
           const { webkit } = require('playwright');
           async function audit(page, url, marker){
-            const pageErrors=[];
-            page.on('pageerror',e=>pageErrors.push(String(e)));
+            const pageErrors=[]; page.on('pageerror',e=>pageErrors.push(String(e)));
             const response=await page.goto(url,{waitUntil:'networkidle',timeout:45000});
-            const initial=await page.evaluate(()=>({
-              title:document.title,
-              text:document.body.innerText.trim(),
-              cups:document.querySelectorAll('.cup').length,
-              overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
-              hasDocumentWrite:[...document.scripts].some(s=>s.textContent.includes('document.write')),
-              boot:document.querySelector('#boot')?.textContent||''
-            }));
+            const initial=await page.evaluate(()=>({title:document.title,text:document.body.innerText.trim(),cups:document.querySelectorAll('.cup').length,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),hasDocumentWrite:[...document.scripts].some(s=>s.textContent.includes('document.write')),boot:document.querySelector('#boot')?.textContent||''}));
             if(!response||response.status()!==200) throw new Error(marker+' http '+(response&&response.status()));
-            if(!initial.text.includes('みつき将棋・大会モード')) throw new Error(marker+' blank or missing tournament title');
-            if(initial.cups!==8) throw new Error(marker+' cup count '+initial.cups);
-            if(initial.overflow!==0) throw new Error(marker+' mobile page overflow '+initial.overflow);
-            if(initial.hasDocumentWrite) throw new Error(marker+' document.write remains');
-            if(!initial.boot.includes('画面描画OK')) throw new Error(marker+' boot marker missing: '+initial.boot);
-            await page.locator('[data-cup="shinji"]').click();
-            await page.waitForTimeout(100);
-            const started=await page.evaluate(()=>({
-              stage:document.querySelector('#stage')?.classList.contains('on'),
-              road:document.querySelectorAll('#road span').length,
-              rounds:document.querySelectorAll('#bracket > div').length,
-              firstRound:document.querySelectorAll('#bracket > div:first-child .slot').length,
-              text:document.body.innerText,
-              live:document.querySelector('.dialogue')?.getAttribute('aria-live'),
-              atomic:document.querySelector('.dialogue')?.getAttribute('aria-atomic'),
-              overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)
-            }));
-            if(!started.stage) throw new Error(marker+' stage did not open');
-            if(started.road!==5) throw new Error(marker+' road count '+started.road);
-            if(started.rounds!==5) throw new Error(marker+' round columns '+started.rounds);
-            if(started.firstRound!==16) throw new Error(marker+' first round slots '+started.firstRound);
-            if(!started.text.includes('優勝後ボス')) throw new Error(marker+' post-champion boss wording missing');
-            if(started.live!=='polite'||started.atomic!=='true') throw new Error(marker+' dialogue aria live contract');
-            if(started.overflow!==0) throw new Error(marker+' started mobile page overflow '+started.overflow);
-            if(pageErrors.length) throw new Error(marker+' pageErrors '+JSON.stringify(pageErrors));
-            return {status:response.status(),cups:initial.cups,road:started.road,rounds:started.rounds,firstRound:started.firstRound,overflow:started.overflow,pageErrors};
+            if(!initial.text.includes('みつき将棋・大会モード')||initial.cups!==10||!initial.boot.includes('画面描画OK')) throw new Error(marker+' initial mismatch '+JSON.stringify(initial));
+            if(initial.overflow!==0||initial.hasDocumentWrite) throw new Error(marker+' initial safety '+JSON.stringify(initial));
+            await page.locator('[data-cup="kenshiro"]').click(); await page.waitForTimeout(100);
+            const started=await page.evaluate(()=>{
+              const cup=window.CUPS?.find?.(c=>c.id==='kenshiro')||null;
+              const names=[...document.querySelectorAll('#bracket > div:first-child .slot .name')].map(x=>x.textContent).filter(x=>x&&x!=='あなた'&&x!=='—');
+              const ratings=names.map(n=>window.CH?.find?.(c=>c.name===n)?.r||0);
+              return {stage:document.querySelector('#stage')?.classList.contains('on'),road:document.querySelectorAll('#road span').length,rounds:document.querySelectorAll('#bracket > div').length,firstRound:document.querySelectorAll('#bracket > div:first-child .slot').length,text:document.body.innerText,live:document.querySelector('.dialogue')?.getAttribute('aria-live'),atomic:document.querySelector('.dialogue')?.getAttribute('aria-atomic'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),maxAiRating:Math.max(...ratings),bossRating:cup?.bossR||2100,bossInBracket:names.includes('ケンシロウ')};
+            });
+            if(!started.stage||started.road!==5||started.rounds!==5||started.firstRound!==16) throw new Error(marker+' structure '+JSON.stringify(started));
+            if(started.maxAiRating>=started.bossRating||started.bossInBracket) throw new Error(marker+' boss-under '+JSON.stringify(started));
+            if(!started.text.includes('優勝後ボス')||started.live!=='polite'||started.atomic!=='true'||started.overflow!==0||pageErrors.length) throw new Error(marker+' UX '+JSON.stringify({started,pageErrors}));
+            return {status:response.status(),cups:initial.cups,road:started.road,rounds:started.rounds,firstRound:started.firstRound,maxAiRating:started.maxAiRating,bossRating:started.bossRating,bossInBracket:started.bossInBracket,overflow:started.overflow,pageErrors};
           }
-          (async()=>{
-            const browser = await webkit.launch({headless:true});
-            const page = await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});
-            const result=await audit(page,'http://127.0.0.1:8765/preview/tournament-16/index21581-mobile.html','LOCAL');
-            console.log('PASS_TOURNAMENT21581_IPHONE_WEBKIT',JSON.stringify(result));
-            await browser.close();
-          })().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const browser=await webkit.launch({headless:true});const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});const result=await audit(page,'http://127.0.0.1:8765/preview/tournament-16/index21584-mobile.html','LOCAL');console.log('PASS_TOURNAMENT21584_10CUP_IPHONE_WEBKIT',JSON.stringify(result));await browser.close()})().catch(e=>{console.error(e);process.exit(1)});
           NODE
       - name: Verify public raw.githack URL in WebKit
         env:
@@ -92,33 +65,16 @@ jobs:
           node <<'NODE'
           const { webkit } = require('playwright');
           (async()=>{
-            const url=`https://rawcdn.githack.com/yo666ha-boop/-/${process.env.HEAD_SHA}/preview/tournament-16/index21581-mobile.html`;
+            const url=`https://rawcdn.githack.com/yo666ha-boop/-/${process.env.HEAD_SHA}/preview/tournament-16/index21584-mobile.html`;
             const browser=await webkit.launch({headless:true});
-            const first=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});
-            const entry=await first.newPage();
-            const entryResponse=await entry.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
-            const entryAudit=await entry.evaluate(()=>({title:document.title,text:document.body.innerText.trim().slice(0,500)}));
-            if(!entryResponse||entryResponse.status()!==200) throw new Error('PUBLIC entry http '+(entryResponse&&entryResponse.status()));
-            if(!entryAudit.text) throw new Error('PUBLIC entry blank');
-            console.log('TRACE_TOURNAMENT21581_PUBLIC_ENTRY',JSON.stringify({url,status:entryResponse.status(),...entryAudit}));
-            await first.close();
-
-            const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});
-            await context.addCookies([{name:'__Http-phish',value:'1',domain:'rawcdn.githack.com',path:'/',secure:true,sameSite:'Lax'}]);
-            const page=await context.newPage();
-            const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
-            const response=await page.goto(url,{waitUntil:'networkidle',timeout:45000});
-            const audit=await page.evaluate(()=>({title:document.title,text:document.body.innerText.trim(),cups:document.querySelectorAll('.cup').length,boot:document.querySelector('#boot')?.textContent||'',overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),contentType:document.contentType}));
-            if(!response||response.status()!==200) throw new Error('PUBLIC app http '+(response&&response.status()));
-            if(audit.contentType!=='text/html') throw new Error('PUBLIC contentType '+audit.contentType);
-            if(!audit.text.includes('みつき将棋・大会モード')||audit.cups!==8||!audit.boot.includes('画面描画OK')) throw new Error('PUBLIC blank/render mismatch '+JSON.stringify(audit));
-            if(audit.overflow!==0) throw new Error('PUBLIC overflow '+audit.overflow);
-            if(errors.length) throw new Error('PUBLIC pageErrors '+JSON.stringify(errors));
-            await page.locator('[data-cup="shinji"]').click();
-            await page.waitForTimeout(100);
-            const started=await page.evaluate(()=>({stage:document.querySelector('#stage')?.classList.contains('on'),road:document.querySelectorAll('#road span').length,rounds:document.querySelectorAll('#bracket > div').length,firstRound:document.querySelectorAll('#bracket > div:first-child .slot').length,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}));
-            if(!started.stage||started.road!==5||started.rounds!==5||started.firstRound!==16||started.overflow!==0) throw new Error('PUBLIC interaction mismatch '+JSON.stringify(started));
-            console.log('PASS_TOURNAMENT21581_PUBLIC_RAWGITHACK_WEBKIT',JSON.stringify({url,status:response.status(),...audit,...started,pageErrors:errors}));
-            await browser.close();
+            const first=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true}); const entry=await first.newPage(); const entryResponse=await entry.goto(url,{waitUntil:'domcontentloaded',timeout:45000}); const entryAudit=await entry.evaluate(()=>({title:document.title,text:document.body.innerText.trim().slice(0,500)}));
+            if(!entryResponse||entryResponse.status()!==200||!entryAudit.text) throw new Error('PUBLIC entry mismatch '+JSON.stringify(entryAudit));
+            console.log('TRACE_TOURNAMENT21584_PUBLIC_ENTRY',JSON.stringify({url,status:entryResponse.status(),...entryAudit})); await first.close();
+            const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true}); await context.addCookies([{name:'__Http-phish',value:'1',domain:'rawcdn.githack.com',path:'/',secure:true,sameSite:'Lax'}]); const page=await context.newPage(); const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+            const response=await page.goto(url,{waitUntil:'networkidle',timeout:45000}); const audit=await page.evaluate(()=>({title:document.title,text:document.body.innerText.trim(),cups:document.querySelectorAll('.cup').length,boot:document.querySelector('#boot')?.textContent||'',overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),contentType:document.contentType}));
+            if(!response||response.status()!==200||audit.contentType!=='text/html'||audit.cups!==10||!audit.boot.includes('画面描画OK')||audit.overflow!==0||errors.length) throw new Error('PUBLIC app mismatch '+JSON.stringify({audit,errors}));
+            await page.locator('[data-cup="kenshiro"]').click();await page.waitForTimeout(100);const started=await page.evaluate(()=>{const names=[...document.querySelectorAll('#bracket > div:first-child .slot .name')].map(x=>x.textContent).filter(x=>x&&x!=='あなた'&&x!=='—');const ratings=names.map(n=>window.CH?.find?.(c=>c.name===n)?.r||0);return{stage:document.querySelector('#stage')?.classList.contains('on'),road:document.querySelectorAll('#road span').length,rounds:document.querySelectorAll('#bracket > div').length,firstRound:document.querySelectorAll('#bracket > div:first-child .slot').length,maxAiRating:Math.max(...ratings),bossInBracket:names.includes('ケンシロウ'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}});
+            if(!started.stage||started.road!==5||started.rounds!==5||started.firstRound!==16||started.maxAiRating>=2100||started.bossInBracket||started.overflow!==0) throw new Error('PUBLIC interaction mismatch '+JSON.stringify(started));
+            console.log('PASS_TOURNAMENT21584_10CUP_PUBLIC_RAWGITHACK_WEBKIT',JSON.stringify({url,status:response.status(),cups:audit.cups,...started,pageErrors:errors}));await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
