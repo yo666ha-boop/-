@@ -29,7 +29,7 @@
   function readSession(key){const h=readHistory();return h.sessions?.[key]&&typeof h.sessions[key]==='object'?h.sessions[key]:null}
   const chars=()=>{try{return window.AIShogiIOS?.characters?.()||[]}catch(e){return[]}};
   const gameState=()=>{try{return window.AIShogiIOS?.state?.()||null}catch(e){return null}};
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]));
 
   let lastSignature='',lastPick=null,lastOpponent='',opponentSince=0,lastTournamentKey='',cupSince=0,observer=null;
 
@@ -128,7 +128,7 @@
   }
   function ensureBox(root){
     let box=document.getElementById('tourDialogue21547');if(box&&box.isConnected)return box;
-    box=document.createElement('section');box.id='tourDialogue21547';box.className='tourDialogue21547';box.setAttribute('aria-live','polite');box.setAttribute('aria-label','大会キャラクターのセリフ');
+    box=document.createElement('section');box.id='tourDialogue21547';box.className='tourDialogue21547';box.setAttribute('role','status');box.setAttribute('aria-live','polite');box.setAttribute('aria-atomic','true');box.setAttribute('aria-label','大会キャラクターのセリフ');
     const anchor=root.querySelector('.tourCurrentMatch')||root.querySelector('.tourActiveTitle');if(anchor)anchor.insertAdjacentElement('afterend',box);else root.prepend(box);return box;
   }
   function syncRoundBattleDock(d=derive(),root=document.querySelector('#tournament21540Panel .tourActive')){
@@ -165,7 +165,7 @@
     const d=derive(),root=document.querySelector('#tournament21540Panel .tourActive');let box=document.getElementById('tourOpponentVoice21549');
     const bossState=d?.a?.bossChallenge?.status||'locked';
     if(!d||!root||!d.opp||d.opp===PLAYER||bossState!=='locked'||d.a.pending||!['active','draw'].includes(d.a.status)){box?.remove();return false}
-    if(!box){box=document.createElement('section');box.id='tourOpponentVoice21549';box.className='tourDialogue21547';const host=document.getElementById('tourDialogue21547');host?.parentElement===root?host.insertAdjacentElement('afterend',box):root.prepend(box)}
+    if(!box){box=document.createElement('section');box.id='tourOpponentVoice21549';box.className='tourDialogue21547';box.setAttribute('role','status');box.setAttribute('aria-live','polite');box.setAttribute('aria-atomic','true');box.setAttribute('aria-label','大会の対戦相手のセリフ');const host=document.getElementById('tourDialogue21547');host?.parentElement===root?host.insertAdjacentElement('afterend',box):root.prepend(box)}
     const src=portrait(d.opp),speech=(document.getElementById('charSpeech')?.textContent||'').trim()||'いい勝負にしよう。',round=String(Number(d.a.round)||0),oldImg=box.querySelector('img'),oldBubble=(box.querySelector('.tourDialogueBubble')?.textContent||'').trim();
     if(box.dataset.speaker===d.opp&&box.dataset.role==='対戦相手・トーナメント参加者'&&box.dataset.round===round&&oldBubble===speech&&(!src||oldImg?.src===src))return true;
     box.dataset.speaker=d.opp;box.dataset.role='対戦相手・トーナメント参加者';box.dataset.round=round;
@@ -175,7 +175,7 @@
 
   function audit(){
     const d=derive(),b=bank()?.audit?.()||{},box=document.getElementById('tourDialogue21547'),img=box?.querySelector('img'),panel=document.getElementById('tournament21540Panel');
-    const ob=document.getElementById('tourOpponentVoice21549'),oi=ob?.querySelector('img');return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,opponentSpeaker:ob?.dataset.speaker||null,opponentRole:ob?.dataset.role||null,opponentPortrait:!!oi?.src,opponentText:ob?.querySelector('.tourDialogueBubble')?.textContent||'',roundBattleDocked:box?.classList.contains('tourRoundBattleDock21550')===true&&ob?.classList.contains('tourRoundBattleDock21550')===true,roundBattleDockCards:[box,ob].filter(x=>x?.classList.contains('tourRoundBattleDock21550')).length,roundBattleDockParent:box?.parentElement?.classList?.contains('side')?'side':(box?.parentElement?.classList?.contains('tourActive')?'panel':'other'),overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
+    const ob=document.getElementById('tourOpponentVoice21549'),oi=ob?.querySelector('img');return{ok:!!b.ok&&(!d||!!box),version:'21547d',bank:b,active:!!d,context:d?.context||null,cupId:d?.cupId||null,speaker:d?.boss||null,role:box?.dataset.role||null,portrait:!!img?.src,lineId:box?.dataset.lineId||null,label:box?.querySelector('.tourDialogueStatus')?.textContent||'',text:box?.querySelector('.tourDialogueBubble')?.textContent||'',scoreSource:box?.dataset.scoreSource||null,ariaLive:box?.getAttribute('aria-live')||null,ariaAtomic:box?.getAttribute('aria-atomic')||null,ariaRole:box?.getAttribute('role')||null,opponentSpeaker:ob?.dataset.speaker||null,opponentRole:ob?.dataset.role||null,opponentPortrait:!!oi?.src,opponentText:ob?.querySelector('.tourDialogueBubble')?.textContent||'',opponentAriaLive:ob?.getAttribute('aria-live')||null,opponentAriaAtomic:ob?.getAttribute('aria-atomic')||null,opponentAriaRole:ob?.getAttribute('role')||null,opponentAriaLabel:ob?.getAttribute('aria-label')||null,roundBattleDocked:box?.classList.contains('tourRoundBattleDock21550')===true&&ob?.classList.contains('tourRoundBattleDock21550')===true,roundBattleDockCards:[box,ob].filter(x=>x?.classList.contains('tourRoundBattleDock21550')).length,roundBattleDockParent:box?.parentElement?.classList?.contains('side')?'side':(box?.parentElement?.classList?.contains('tourActive')?'panel':'other'),overflow:panel?Math.max(0,panel.scrollWidth-panel.clientWidth):0,historyKey:HISTORY_KEY};
   }
 
   window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547d',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
