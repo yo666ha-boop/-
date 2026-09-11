@@ -1,4 +1,4 @@
-/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability + 21573 history hierarchy + 21575 hero microtext
+/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability + 21573 history hierarchy + 21575 hero microtext + 21576 bracket status microtext
  * Display-only. Reads existing tournament history; does not mutate tournament, AI, rating, bracket, or persistence format.
  */
 (function installTournamentAttemptHistory21567(){
@@ -39,6 +39,7 @@
 #tournament21540Panel.tourFireFit .tourGameChip21559,#tournament21540Panel.tourFireFit .tourGameWinsLabel21559{font-size:8px}
 #tournament21540Panel.tourFireFit .tourMatchName21559{font-size:8px}#tournament21540Panel.tourFireFit .tourMatchMeta21559{font-size:7px}#tournament21540Panel.tourFireFit .tourMatchVs21559 small{font-size:7px}#tournament21540Panel.tourFireFit .tourBossHint21559,#tournament21540Panel.tourFireFit .tourBossLock21559{font-size:8px}
 #tournament21540Panel.tourFireFit .tourRoadStage21562{font-size:7px}
+#tournament21540Panel.tourFireFit .tourBracketSlot.tourGameNow21559:after,#tournament21540Panel.tourFireFit .tourWinStamp21559{font-size:8px}
 @media(max-width:320px){#tournament21540Panel .tourAttemptHistory21567{padding-left:4px;padding-right:4px}#tournament21540Panel .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel .tourAttemptHistoryItem21567{padding-left:3px;padding-right:3px}}
 `;
     document.head.appendChild(s);
