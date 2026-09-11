@@ -6,14 +6,14 @@ try{
   const errors=[]; page.on('pageerror',e=>errors.push(String(e?.message||e))); page.on('dialog',async d=>d.accept());
   const url='http://127.0.0.1:8000/shogi-v21528/?road21562='+Date.now();
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.__AI_SHOGI_TOURNAMENT_ROAD_21562,{timeout:60000});
-  await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('start failed');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.__AI_SHOGI_TOURNAMENT_ROAD_21562,{timeout:60000});
+  await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('start failed');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
   await page.waitForFunction(()=>{window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();return document.querySelectorAll('#tournament21540Panel .tourRoadStage21562').length===5},{timeout:30000});
 
   const setState=async (patch,expect)=>page.evaluate(async ({p,e})=>{
     const k='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(k)||'null');if(!s?.active)throw new Error('no active');
     Object.assign(s.active,p.active||{});s.active.bossChallenge={...(s.active.bossChallenge||{}),...(p.bossChallenge||{})};localStorage.setItem(k,JSON.stringify(s));
-    const snap=()=>{const xs=[...document.querySelectorAll('#tournament21540Panel .tourRoadStage21562')];return {labels:xs.map(x=>x.textContent.trim()),done:xs.filter(x=>x.classList.contains('done')).length,current:xs.findIndex(x=>x.classList.contains('current')),failed:xs.some(x=>x.classList.contains('failed')),bossInBracket:[...document.querySelectorAll('.tourBracketSlot')].some(x=>/しんじ/.test(x.textContent||'')),roster:document.querySelectorAll('#chars .ch').length,connectors:document.querySelectorAll('#tournament21540Panel .tourBracketLines path').length,overflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}};
+    const snap=()=>{const xs=[...document.querySelectorAll('#tournament21540Panel .tourRoadStage21562')],t=window.AI_SHOGI_TOURNAMENT,a=t?.state?.()?.active,boss=t?.cups?.().find(c=>c.id===a?.cupId)?.boss||'';return {labels:xs.map(x=>x.textContent.trim()),done:xs.filter(x=>x.classList.contains('done')).length,current:xs.findIndex(x=>x.classList.contains('current')),failed:xs.some(x=>x.classList.contains('failed')),bossInBracket:!!boss&&[...document.querySelectorAll('.tourBracketSlot')].some(x=>(x.textContent||'').includes(boss)),boss,roster:document.querySelectorAll('#chars .ch').length,connectors:document.querySelectorAll('#tournament21540Panel .tourBracketLines path').length,overflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}};
     const deadline=Date.now()+10000;
     while(Date.now()<deadline){window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();await new Promise(r=>setTimeout(r,50));const row=snap();if(JSON.stringify(row.labels)===JSON.stringify(['1R','QF','SF','F','EX'])&&row.done===e.done&&row.current===e.current&&row.failed===e.failed)return row;}
     return snap();
