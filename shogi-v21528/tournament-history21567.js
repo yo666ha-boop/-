@@ -1,4 +1,4 @@
-/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability + 21573 history hierarchy + 21575 hero microtext + 21576 bracket status microtext + 21577 remaining microtext
+/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability + 21573 history hierarchy + 21575 hero microtext + 21576 bracket status microtext + 21577 remaining microtext + 21578 resume affordance
  * Display-only. Reads existing tournament history; does not mutate tournament, AI, rating, bracket, or persistence format.
  * Legacy 21570/21571 source-gate anchors are retained below for the older source-string verifier;
  * runtime CSS immediately below supersedes these with the 21577 8px floor.
@@ -24,6 +24,18 @@
   };
   const timeLabel=ts=>{const d=new Date(Number(ts)||0);if(!Number.isFinite(d.getTime())||d.getTime()<=0)return'';const p=n=>String(n).padStart(2,'0');return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes())};
   const span=(className,text)=>{const el=document.createElement('span');el.className=className;el.textContent=String(text??'');return el};
+  const resumeSelector=a=>{
+    if(!a||a.status==='champion'||a.status==='lost')return'';
+    if(a.status==='draw')return'[data-tour-replay]';
+    if(a.pending==='next')return'[data-tour-next]';
+    return'[data-tour-current]';
+  };
+  const resumeLabel=a=>a?.status==='draw'?'指し直しへ':a?.pending==='next'?'次の対局へ':'続きへ';
+  function resumeCurrent(item){
+    const a=active(),selector=resumeSelector(a);if(!selector||item?.dataset?.current!=='1')return false;
+    const target=document.querySelector('#tournament21540Panel .tourActions '+selector);if(!target)return false;
+    target.click();return true;
+  }
 
   function ensureStyle(){
     if(document.getElementById('tournamentAttemptHistory21567Style'))return;
@@ -34,12 +46,15 @@
 #tournament21540Panel .tourAttemptHistoryList21567{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;min-width:0}
 #tournament21540Panel .tourAttemptHistoryItem21567{min-width:0;padding:4px 5px;border:1px solid #283b34;border-radius:7px;background:#0a1713;overflow:hidden}
 #tournament21540Panel .tourAttemptHistoryItem21567.current{border-color:#a98232;background:#19180f;box-shadow:inset 0 0 0 1px rgba(225,177,62,.08)}
+#tournament21540Panel .tourAttemptHistoryItem21567.current[data-resumable="1"]{cursor:pointer}
+#tournament21540Panel .tourAttemptHistoryItem21567.current[data-resumable="1"]:focus-visible{outline:2px solid #f1ca6a;outline-offset:2px}
 #tournament21540Panel .tourAttemptHistoryTitle21568{display:flex;align-items:center;gap:3px;min-width:0}
 #tournament21540Panel .tourAttemptHistoryCup21567{display:block;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e7dfc1;font-size:8px;font-weight:900}
 #tournament21540Panel .tourAttemptHistoryOrdinal21568{flex:0 0 auto;padding:0 3px;border:1px solid #4b5b4b;border-radius:999px;color:#b8ad89;font-size:7px;font-weight:900;line-height:1.35;white-space:nowrap}
 #tournament21540Panel .tourAttemptHistoryItem21567.current .tourAttemptHistoryOrdinal21568{border-color:#a98232;color:#f1ca6a}
 #tournament21540Panel .tourAttemptHistoryMeta21567{display:flex;gap:4px;align-items:center;min-width:0;margin-top:2px;color:#938b72;font-size:7px;font-weight:700;white-space:nowrap;overflow:hidden}
 #tournament21540Panel .tourAttemptHistoryState21567{margin-left:auto;color:#aaa083;overflow:hidden;text-overflow:ellipsis}.tourAttemptHistoryItem21567.current .tourAttemptHistoryState21567{color:#f1ca6a}
+#tournament21540Panel .tourAttemptHistoryResume21578{flex:0 0 auto;color:#ffe49a;font-size:8px;font-weight:900}
 #tournament21540Panel.tourFireFit .tourAttemptHistory21567{margin:1px 0 3px;padding:3px 4px;border-radius:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryHead21567{font-size:8px;margin-bottom:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCount21567{font-size:8px}#tournament21540Panel.tourFireFit .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryItem21567{padding:3px 3px;border-radius:5px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCup21567{font-size:8px}#tournament21540Panel.tourFireFit .tourAttemptHistoryOrdinal21568{font-size:8px;padding:0 2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryMeta21567{font-size:8px;gap:2px;margin-top:1px}
 #tournament21540Panel.tourFireFit .tourGameChip21559,#tournament21540Panel.tourFireFit .tourGameWinsLabel21559{font-size:8px}
 #tournament21540Panel.tourFireFit .tourMatchName21559{font-size:8px}#tournament21540Panel.tourFireFit .tourMatchMeta21559{font-size:8px}#tournament21540Panel.tourFireFit .tourMatchVs21559 small{font-size:8px}#tournament21540Panel.tourFireFit .tourBossHint21559,#tournament21540Panel.tourFireFit .tourBossLock21559{font-size:8px}
@@ -55,14 +70,15 @@
     const a=active(),panel=document.getElementById('tournament21540Panel'),root=panel?.querySelector('.tourActive');
     panel?.querySelectorAll('.tourAttemptHistory21567').forEach(x=>x.remove());
     const rows=recent();if(!a||!root||!rows.length)return false;
-    const box=document.createElement('section');box.className='tourAttemptHistory21567';box.dataset.historyUi='21567';box.dataset.historyOrdinalUi='21568';box.dataset.historyHierarchyUi='21573';box.setAttribute('aria-label','最近の大会挑戦');
+    const box=document.createElement('section');box.className='tourAttemptHistory21567';box.dataset.historyUi='21567';box.dataset.historyOrdinalUi='21568';box.dataset.historyHierarchyUi='21573';box.dataset.historyResumeUi='21578';box.setAttribute('aria-label','最近の大会挑戦');
     const head=document.createElement('div');head.className='tourAttemptHistoryHead21567';head.append(span('', '最近の挑戦'),span('tourAttemptHistoryCount21567','履歴 '+history().length+'件'));box.appendChild(head);
     const list=document.createElement('div');list.className='tourAttemptHistoryList21567';
     rows.forEach(row=>{
-      const current=row?.cupId===a.cupId&&Number(row?.startedAt)>0&&Number(row.startedAt)===Number(a.startedAt),rating=Number(row?.rating),when=timeLabel(row?.startedAt),ordinal=attemptOrdinal(row),name=cupName(row?.cupId);
-      const item=document.createElement('div');item.className='tourAttemptHistoryItem21567'+(current?' current':'');item.dataset.cupId=String(row?.cupId||'');item.dataset.current=current?'1':'0';item.dataset.attemptOrdinal=String(ordinal);item.setAttribute('aria-label',name+' '+ordinal+'回目'+(current?' 進行中':''));
+      const current=row?.cupId===a.cupId&&Number(row?.startedAt)>0&&Number(row.startedAt)===Number(a.startedAt),resumable=current&&!!resumeSelector(a),rating=Number(row?.rating),when=timeLabel(row?.startedAt),ordinal=attemptOrdinal(row),name=cupName(row?.cupId);
+      const item=document.createElement('div');item.className='tourAttemptHistoryItem21567'+(current?' current':'');item.dataset.cupId=String(row?.cupId||'');item.dataset.current=current?'1':'0';item.dataset.resumable=resumable?'1':'0';item.dataset.attemptOrdinal=String(ordinal);item.setAttribute('aria-label',name+' '+ordinal+'回目'+(current?' 進行中':'')+(resumable?' '+resumeLabel(a):''));
+      if(resumable){item.setAttribute('role','button');item.tabIndex=0;item.addEventListener('click',()=>resumeCurrent(item));item.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();resumeCurrent(item)}})}
       const title=document.createElement('span');title.className='tourAttemptHistoryTitle21568';title.appendChild(span('tourAttemptHistoryCup21567',name));title.appendChild(span('tourAttemptHistoryOrdinal21568',ordinal+'回目'));item.appendChild(title);
-      const meta=document.createElement('span');meta.className='tourAttemptHistoryMeta21567';meta.appendChild(span('', 'R'+(Number.isFinite(rating)?rating:'—')));if(when)meta.appendChild(span('',when));meta.appendChild(span('tourAttemptHistoryState21567',current?'進行中':'挑戦'));item.appendChild(meta);list.appendChild(item);
+      const meta=document.createElement('span');meta.className='tourAttemptHistoryMeta21567';meta.appendChild(span('', 'R'+(Number.isFinite(rating)?rating:'—')));if(when)meta.appendChild(span('',when));meta.appendChild(span('tourAttemptHistoryState21567',current?'進行中':'挑戦'));if(resumable)meta.appendChild(span('tourAttemptHistoryResume21578',resumeLabel(a)));item.appendChild(meta);list.appendChild(item);
     });
     box.appendChild(list);
     const road=root.querySelector('.tourRoad21562'),hero=root.querySelector('.tourGameHero21559'),anchor=road||hero;if(anchor)anchor.insertAdjacentElement('afterend',box);else root.prepend(box);return true;
@@ -72,7 +88,7 @@
     const base=window.AI_SHOGI_TOURNAMENT_GAME_UI;if(!base||base.__history21567)return false;
     base.__history21567=true;const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
     base.render=()=>{const out=oldRender();render();return out};
-    base.audit=()=>{render();const out=oldAudit(),box=document.querySelector('#tournament21540Panel .tourAttemptHistory21567'),items=box?[...box.querySelectorAll('.tourAttemptHistoryItem21567')]:[];return{...out,history21567:!!box,historyOrdinalUi21568:box?.dataset.historyOrdinalUi==='21568',historyHierarchyUi21573:box?.dataset.historyHierarchyUi==='21573',historyCount21567:items.length,historySourceCount21567:history().length,historyCurrent21567:items.filter(x=>x.dataset.current==='1').length,historyItems21567:items.map(x=>x.dataset.cupId||''),historyAttemptOrdinals21568:items.map(x=>Number(x.dataset.attemptOrdinal)||0),historyOverflow21567:box?Math.max(0,box.scrollWidth-box.clientWidth):0}};
+    base.audit=()=>{render();const out=oldAudit(),box=document.querySelector('#tournament21540Panel .tourAttemptHistory21567'),items=box?[...box.querySelectorAll('.tourAttemptHistoryItem21567')]:[];return{...out,history21567:!!box,historyOrdinalUi21568:box?.dataset.historyOrdinalUi==='21568',historyHierarchyUi21573:box?.dataset.historyHierarchyUi==='21573',historyResumeUi21578:box?.dataset.historyResumeUi==='21578',historyCount21567:items.length,historySourceCount21567:history().length,historyCurrent21567:items.filter(x=>x.dataset.current==='1').length,historyResumable21578:items.filter(x=>x.dataset.resumable==='1').length,historyResumeLabels21578:items.filter(x=>x.dataset.resumable==='1').map(x=>x.querySelector('.tourAttemptHistoryResume21578')?.textContent||''),historyItems21567:items.map(x=>x.dataset.cupId||''),historyAttemptOrdinals21568:items.map(x=>Number(x.dataset.attemptOrdinal)||0),historyOverflow21567:box?Math.max(0,box.scrollWidth-box.clientWidth):0}};
     render();return true;
   }
   let installed=false,tries=0;const timer=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(timer);else if(++tries>100)clearInterval(timer)},100);
