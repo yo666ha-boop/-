@@ -9,9 +9,40 @@ try{
   const url='http://127.0.0.1:8000/shogi-v21528/?historyFullapp21567='+Date.now();
   const boot=async()=>{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567,null,{timeout:60000});
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.cups?.().length===8&&window.AI_SHOGI_TOURNAMENT_GAME_UI&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh&&window.__AI_SHOGI_TOURNAMENT_HISTORY_21567,null,{timeout:60000});
   };
-  const transientNavigation=e=>String(e?.stack||e?.message||e||'').includes('Execution context was destroyed');
+  const transientNavigation=e=>{
+    const text=String(e?.stack||e?.message||e||'');
+    return text.includes('Execution context was destroyed')||text.includes('Navigation interrupted by another one')||text.includes('NS_BINDING_ABORTED');
+  };
+  const restorePanel=async()=>{
+    await boot();
+    await page.evaluate(()=>{
+      document.getElementById('tournament21540Panel')?.classList.add('on');
+      window.AI_SHOGI_TOURNAMENT?.render?.();
+      window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();
+      window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.();
+    });
+  };
+  const reloadAndRestore=async()=>{
+    let lastError;
+    for(let attempt=1;attempt<=4;attempt++){
+      try{
+        await page.reload({waitUntil:'domcontentloaded',timeout:60000});
+        await restorePanel();
+        return;
+      }catch(error){
+        lastError=error;
+        if(!transientNavigation(error)||attempt===4)throw error;
+        await page.waitForLoadState('domcontentloaded',{timeout:60000}).catch(()=>{});
+        try{await restorePanel();return}catch(resyncError){
+          lastError=resyncError;
+          if(!transientNavigation(resyncError)&&attempt===4)throw resyncError;
+        }
+      }
+    }
+    throw lastError;
+  };
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
   await boot();
 
@@ -25,12 +56,13 @@ try{
     }
     document.getElementById('tournament21540Panel')?.classList.add('on');
     window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();
+    window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.();
   });
 
   const read=async(requireConnectors=true)=>{
-    for(let attempt=1;attempt<=3;attempt++){
+    for(let attempt=1;attempt<=5;attempt++){
       try{
-        await boot();
+        await restorePanel();
         return await page.waitForFunction((needConnectors)=>{
           window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.();
           const a=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
@@ -39,7 +71,7 @@ try{
           return {...a,historyText21567:history.innerText};
         },requireConnectors,{timeout:60000}).then(h=>h.jsonValue());
       }catch(error){
-        if(!transientNavigation(error)||attempt===3)throw error;
+        if(!transientNavigation(error)||attempt===5)throw error;
         await page.waitForLoadState('domcontentloaded',{timeout:60000}).catch(()=>{});
       }
     }
@@ -52,9 +84,7 @@ try{
   const textBefore=before.historyText21567;
   assert.match(textBefore,/最近の挑戦/);assert.match(textBefore,/履歴 4件/);assert.match(textBefore,/未来みつき杯/);assert.match(textBefore,/みつき杯/);assert.match(textBefore,/あやなみ杯/);assert.doesNotMatch(textBefore,/しんじ杯/);assert.match(textBefore,/進行中/);assert.doesNotMatch(textBefore,/勝利|敗北/);
 
-  await page.reload({waitUntil:'domcontentloaded',timeout:60000});
-  await boot();
-  await page.evaluate(()=>{document.getElementById('tournament21540Panel')?.classList.add('on');window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
+  await reloadAndRestore();
   const reloaded=await read(true);
   assert.deepEqual(reloaded.historyItems21567,['future','mitsuki','ayanami']);
   assert.equal(reloaded.historyOverflow21567,0);assert.equal(reloaded.sideOverflow,0);assert.equal(reloaded.docOverflow,0);
