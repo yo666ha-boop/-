@@ -21,13 +21,16 @@ try{
     if(panel&&!panel.classList.contains('on'))document.getElementById('tournament21540Btn')?.click();
     await delay(100);d.render();await delay(160);
     const box=document.getElementById('tourDialogue21547'),img=box?.querySelector('.tourDialoguePortrait img'),bubble=box?.querySelector('.tourDialogueBubble'),name=box?.querySelector('.tourDialogueName'),status=box?.querySelector('.tourDialogueStatus'),role=box?.querySelector('.tourDialogueRole');
+    const opponent=document.getElementById('tourOpponentVoice21549'),opponentImg=opponent?.querySelector('.tourDialoguePortrait img'),opponentBubble=opponent?.querySelector('.tourDialogueBubble');
     const roster=window.AIShogiIOS?.characters?.()||[],future=roster.find(x=>x?.name==='未来からやってきたみつき');
     const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()==='未来からやってきたみつき');
-    const real=card?.querySelector('img'),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
+    const opponentCard=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===opponent?.dataset.speaker);
+    const real=card?.querySelector('img'),opponentReal=opponentCard?.querySelector('img'),rect=box?.getBoundingClientRect?.()||{width:0,height:0},opponentRect=opponent?.getBoundingClientRect?.()||{width:0,height:0};
     const px=e=>e?(parseFloat(getComputedStyle(e).fontSize)||0):0;
     const overflow=e=>e?Math.max(0,e.scrollWidth-e.clientWidth):0;
-    const active=t.state()?.active||{};
-    const out={started,roster:roster.length,futureRating:Number(future?.rating)||0,bossInBracket:(active?.bracket?.rounds?.[0]||[]).includes('未来からやってきたみつき'),context:d.audit?.().context||null,speaker:d.audit?.().speaker||null,roleText:box?.dataset.role||null,text:(bubble?.textContent||'').trim(),name:(name?.textContent||'').trim(),status:(status?.textContent||'').trim(),role:(role?.textContent||'').trim(),portraitSrc:img?.currentSrc||img?.src||'',realSrc:real?.currentSrc||real?.src||'',imageComplete:!!img?.complete,imageWidth:Number(img?.naturalWidth)||0,imageHeight:Number(img?.naturalHeight)||0,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,boxWidth:Math.round(rect.width),boxHeight:Math.round(rect.height),fonts:{bubble:px(bubble),name:px(name),status:px(status),role:px(role)},overflow:{box:overflow(box),bubble:overflow(bubble),panel:overflow(panel),doc:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),body:Math.max(0,document.body.scrollWidth-document.body.clientWidth)},connectors:window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.()?.connectors??window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.()?.connectors??null};
+    const active=t.state()?.active||{},audit=d.audit?.()||{};
+    const attrs=e=>({role:e?.getAttribute('role')||null,ariaLive:e?.getAttribute('aria-live')||null,ariaAtomic:e?.getAttribute('aria-atomic')||null,ariaLabel:e?.getAttribute('aria-label')||null});
+    const out={started,roster:roster.length,futureRating:Number(future?.rating)||0,bossInBracket:(active?.bracket?.rounds?.[0]||[]).includes('未来からやってきたみつき'),context:audit.context||null,speaker:audit.speaker||null,roleText:box?.dataset.role||null,text:(bubble?.textContent||'').trim(),name:(name?.textContent||'').trim(),status:(status?.textContent||'').trim(),role:(role?.textContent||'').trim(),portraitSrc:img?.currentSrc||img?.src||'',realSrc:real?.currentSrc||real?.src||'',imageComplete:!!img?.complete,imageWidth:Number(img?.naturalWidth)||0,imageHeight:Number(img?.naturalHeight)||0,visible:!!box&&getComputedStyle(box).display!=='none'&&rect.width>0&&rect.height>0,boxWidth:Math.round(rect.width),boxHeight:Math.round(rect.height),fonts:{bubble:px(bubble),name:px(name),status:px(status),role:px(role)},overflow:{box:overflow(box),bubble:overflow(bubble),opponent:overflow(opponent),opponentBubble:overflow(opponentBubble),panel:overflow(panel),doc:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),body:Math.max(0,document.body.scrollWidth-document.body.clientWidth)},connectors:window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.()?.connectors??window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.()?.connectors??null,hostA11y:attrs(box),opponent:{speaker:opponent?.dataset.speaker||null,roleText:opponent?.dataset.role||null,text:(opponentBubble?.textContent||'').trim(),portraitSrc:opponentImg?.currentSrc||opponentImg?.src||'',realSrc:opponentReal?.currentSrc||opponentReal?.src||'',imageComplete:!!opponentImg?.complete,imageWidth:Number(opponentImg?.naturalWidth)||0,imageHeight:Number(opponentImg?.naturalHeight)||0,visible:!!opponent&&getComputedStyle(opponent).display!=='none'&&opponentRect.width>0&&opponentRect.height>0,a11y:attrs(opponent)},auditA11y:{host:{role:audit.ariaRole||null,ariaLive:audit.ariaLive||null,ariaAtomic:audit.ariaAtomic||null},opponent:{role:audit.opponentAriaRole||null,ariaLive:audit.opponentAriaLive||null,ariaAtomic:audit.opponentAriaAtomic||null,ariaLabel:audit.opponentAriaLabel||null}}};
     return out;
   });
 
@@ -45,7 +48,19 @@ try{
   for(const [k,v] of Object.entries(result.fonts))assert.ok(v>=8,`${k} text below 8px floor: ${v}`);
   for(const [k,v] of Object.entries(result.overflow))assert.equal(v,0,`${k} horizontal overflow: ${v}`);
   if(result.connectors!=null)assert.equal(result.connectors,30);
+
+  assert.deepEqual(result.hostA11y,{role:'status',ariaLive:'polite',ariaAtomic:'true',ariaLabel:'大会キャラクターのセリフ'});
+  assert.ok(result.opponent.speaker,'opponent dialogue speaker must exist');
+  assert.equal(result.opponent.roleText,'対戦相手・トーナメント参加者');
+  assert.ok(result.opponent.text,'opponent dialogue copy must be present');
+  assert.equal(result.opponent.portraitSrc,result.opponent.realSrc,'opponent dialogue must reuse its existing character portrait');
+  assert.ok(result.opponent.imageComplete&&result.opponent.imageWidth>0&&result.opponent.imageHeight>0,'opponent portrait must load');
+  assert.equal(result.opponent.visible,true);
+  assert.deepEqual(result.opponent.a11y,{role:'status',ariaLive:'polite',ariaAtomic:'true',ariaLabel:'大会の対戦相手のセリフ'});
+  assert.deepEqual(result.auditA11y.host,{role:'status',ariaLive:'polite',ariaAtomic:'true'});
+  assert.deepEqual(result.auditA11y.opponent,{role:'status',ariaLive:'polite',ariaAtomic:'true',ariaLabel:'大会の対戦相手のセリフ'});
   assert.deepEqual(errors,[]);
+  console.log('PASS_TOURNAMENT21580_DIALOGUE_LIVE_REGIONS');
   console.log('PASS_TOURNAMENT21580_DIALOGUE_RELEASE_ACCEPTANCE '+JSON.stringify({...result,pageErrors:errors}));
 }finally{
   await browser.close();
