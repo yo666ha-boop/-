@@ -15,9 +15,9 @@ await new Promise(r=>server.listen(43147,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true});
 try{
   const page=await browser.newPage({viewport:{width:1280,height:800}});await page.goto('http://127.0.0.1:43147/',{waitUntil:'load'});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK?.audit?.().ok&&window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit);
+  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK?.audit?.().bosses===12&&window.AI_SHOGI_TOURNAMENT_DIALOGUE?.audit);
   const bankAudit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK.audit());
-  assert.equal(bankAudit.bosses,8);assert.equal(bankAudit.contexts,19);assert.ok(bankAudit.minVariants>=25);assert.ok(bankAudit.totalContextVariants>=3800);
+  assert.equal(bankAudit.bosses,12);assert.equal(bankAudit.contexts,19);assert.ok(bankAudit.minVariants>=25);assert.ok(bankAudit.totalContextVariants>=5700);
   const anti=await page.evaluate(()=>{const b=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK,h=[];const ids=[];for(let i=0;i<6;i++){const p=b.pick('akiou','qf',{cup:'あき王杯',boss:'あき王'},h,0);ids.push(p.id);h.push(p.id)}return ids});
   assert.equal(new Set(anti).size,6,'anti-repeat must avoid the previous five exact lines');
   await page.waitForTimeout(3500);
@@ -40,7 +40,7 @@ try{
   audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_disadvantage');assert.equal(audit.scoreSource,'teacher');
   await page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('aiShogiTournament21540'));s.active.status='champion';s.active.bossChallenge.status='won';localStorage.setItem('aiShogiTournament21540',JSON.stringify(s));window.AI_SHOGI_TOURNAMENT_DIALOGUE.render()});
   audit=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.audit());assert.equal(audit.context,'boss_won');assert.equal(audit.label,'杯・完全制覇');
-  const allBossSamples=await page.evaluate(()=>{const b=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;return Object.keys(b.voices).map(id=>({id,p:b.pick(id,'boss_pending',{cup:'杯',boss:b.voices[id].name},[],.2)}))});assert.equal(allBossSamples.length,8);assert.ok(allBossSamples.every(x=>x.p?.text&&x.p.total>=25));
+  const allBossSamples=await page.evaluate(()=>{const b=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;return Object.keys(b.voices).map(id=>({id,p:b.pick(id,'boss_pending',{cup:'杯',boss:b.voices[id].name},[],.2)}))});assert.equal(allBossSamples.length,12);assert.ok(allBossSamples.every(x=>x.p?.text&&x.p.total>=25));
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE.render());const mobile=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,vw:document.documentElement.clientWidth,box:document.getElementById('tourDialogue21547')?.getBoundingClientRect().width||0}));assert.ok(mobile.doc<=mobile.vw+1,JSON.stringify(mobile));assert.ok(mobile.box>0&&mobile.box<=390);
-  console.log('PASS_TOURNAMENT21547D_DIALOGUE '+JSON.stringify({bosses:bankAudit.bosses,contexts:bankAudit.contexts,minVariants:bankAudit.minVariants,totalContextVariants:bankAudit.totalContextVariants,antiRepeatUnique:new Set(anti).size,qfPortrait:true,qfRole:'host-outside-bracket',opponentPortrait:true,opponentRole:'participant',opponentSpeaker:'まま',bossInBracket:false,tournamentChampionDialogue:true,bossPendingDialogue:true,bossMid:true,materialFallbackAdvantage:true,materialFallbackDisadvantage:true,teacherEvalPriority:true,completeClear:true,mobileOverflow:Math.max(0,mobile.doc-mobile.vw)}));
+  console.log('PASS_TOURNAMENT21547D_DIALOGUE '+JSON.stringify({voices:bankAudit.bosses,contexts:bankAudit.contexts,minVariants:bankAudit.minVariants,totalContextVariants:bankAudit.totalContextVariants,antiRepeatUnique:new Set(anti).size,qfPortrait:true,qfRole:'host-outside-bracket',opponentPortrait:true,opponentRole:'participant',opponentSpeaker:'まま',bossInBracket:false,tournamentChampionDialogue:true,bossPendingDialogue:true,bossMid:true,materialFallbackAdvantage:true,materialFallbackDisadvantage:true,teacherEvalPriority:true,completeClear:true,mobileOverflow:Math.max(0,mobile.doc-mobile.vw)}));
 } finally {await browser.close();await new Promise(r=>server.close(r))}
