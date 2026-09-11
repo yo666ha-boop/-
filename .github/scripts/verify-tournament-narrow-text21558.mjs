@@ -30,6 +30,8 @@ try{
       const panel=document.getElementById('tournament21540Panel');
       panel?.classList.add('on');
       try{t?.render?.()}catch(e){}
+      try{window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()}catch(e){}
+      try{window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.refresh?.()}catch(e){}
       const d=window.AI_SHOGI_TOURNAMENT_DIALOGUE;
       try{d?.render?.()}catch(e){}
     },scale);
@@ -49,6 +51,10 @@ try{
         return cs.display!=='none'&&cs.visibility!=='hidden'&&r.width>0&&r.height>0;
       });
       const minButtonHeight=buttons.length?Math.min(...buttons.map(x=>x.getBoundingClientRect().height)):0;
+      const px=s=>{const e=document.querySelector(s);return e?Number.parseFloat(getComputedStyle(e).fontSize)||0:0};
+      const pxAll=s=>[...document.querySelectorAll(s)].map(e=>Number.parseFloat(getComputedStyle(e).fontSize)||0);
+      const overflow=s=>{const e=document.querySelector(s);return e?Math.max(0,e.scrollWidth-e.clientWidth):0};
+      const gameAudit=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.()||{};
       return {
         width:innerWidth,
         hostVisible:!!host&&getComputedStyle(host).display!=='none'&&h.width>0&&h.height>0,
@@ -64,7 +70,13 @@ try{
         hostBubbleFont:hb?Number.parseFloat(getComputedStyle(hb).fontSize)||0:0,
         oppBubbleFont:ob?Number.parseFloat(getComputedStyle(ob).fontSize)||0:0,
         hostText:(hb?.textContent||'').trim(),
-        oppText:(ob?.textContent||'').trim()
+        oppText:(ob?.textContent||'').trim(),
+        accessible21574:{
+          history:{head:px('.tourAttemptHistoryHead21567'),count:px('.tourAttemptHistoryCount21567'),cups:pxAll('.tourAttemptHistoryCup21567'),ordinals:pxAll('.tourAttemptHistoryOrdinal21568'),meta:pxAll('.tourAttemptHistoryMeta21567'),overflow:overflow('.tourAttemptHistory21567')},
+          game:{names:pxAll('.tourMatchName21559'),meta:pxAll('.tourMatchMeta21559'),vsHelpers:pxAll('.tourMatchVs21559 small'),bossHint:px('.tourBossHint21559'),bossLock:px('.tourBossLock21559'),matchupOverflow:overflow('.tourMatchup21559'),bossOverflow:overflow('.tourBossVault21559')},
+          road:{fonts:pxAll('.tourRoadStage21562'),overflow:overflow('.tourRoad21562')},
+          audit:{connectors:gameAudit.connectors,roster:gameAudit.roster,bossInBracket:gameAudit.bossInBracket}
+        }
       };
     });
   };
@@ -91,6 +103,14 @@ try{
     if(row.minButtonHeight<44)f.push('tap target '+JSON.stringify(row));
     const expected=12*(scale/100);
     if(Math.abs(row.hostBubbleFont-expected)>.6||Math.abs(row.oppBubbleFont-expected)>.6)f.push('text scale not applied '+JSON.stringify(row));
+    if(width===280&&scale===150){
+      const a=row.accessible21574,h=a.history,g=a.game,r=a.road;
+      if(h.head<7||h.count<7||!h.cups.length||h.cups.some(x=>x<7)||!h.ordinals.length||h.ordinals.some(x=>x<7)||!h.meta.length||h.meta.some(x=>x<7))f.push('21574 history font floor '+JSON.stringify(h));
+      if(!g.names.length||g.names.some(x=>x<8)||!g.meta.length||g.meta.some(x=>x<7)||!g.vsHelpers.length||g.vsHelpers.some(x=>x<7)||g.bossHint<8||g.bossLock<8)f.push('21574 game font floor '+JSON.stringify(g));
+      if(r.fonts.length!==5||r.fonts.some(x=>x<7))f.push('21574 road font floor '+JSON.stringify(r));
+      if(h.overflow!==0||g.matchupOverflow!==0||g.bossOverflow!==0||r.overflow!==0)f.push('21574 component overflow '+JSON.stringify(a));
+      if(a.audit.connectors!==30||a.audit.roster!==26||a.audit.bossInBracket!==false)f.push('21574 invariant '+JSON.stringify(a.audit));
+    }
     if(f.length)throw new Error(width+'px '+scale+'% '+f.join(' | '));
     checks.push({...row,scale});
   }
@@ -100,9 +120,11 @@ try{
   for(const [width,x] of byWidth){if(!x[100]||!x[150])throw new Error('missing scale pair '+width);if(x[150].hostBubbleFont<=x[100].hostBubbleFont||x[150].oppBubbleFont<=x[100].oppBubbleFont)throw new Error('font did not grow '+width)}
 
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
+  const stress21574=checks.find(x=>x.width===280&&x.scale===150)?.accessible21574;
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());
   console.log('PASS_TOURNAMENT21558_NARROW_TEXT_SCALE '+JSON.stringify({checks,pageErrors:errors,stressApplied:true}));
   console.log('PASS_TOURNAMENT21572_NARROW_ACTION_TAP_TARGETS '+JSON.stringify({checks:checks.map(({width,scale,panelWidth,buttonCount,minButtonHeight,docOverflow,bodyOverflow})=>({width,scale,panelWidth,buttonCount,minButtonHeight,docOverflow,bodyOverflow})),pageErrors:errors}));
+  console.log('PASS_TOURNAMENT21574_FULLAPP_280PX_150_TEXT_STRESS '+JSON.stringify({...stress21574,pageErrors:errors}));
 }finally{
   await browser.close();
 }
