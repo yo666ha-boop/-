@@ -12,7 +12,7 @@ try{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d',{timeout:20000});
     await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK?.version==='21547e',{timeout:20000});
-    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.__boss21546a===true&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:20000});
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.__boss21546a===true&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:20000});
   };
   await waitRuntime();
 
@@ -56,7 +56,7 @@ try{
     const x=await page.evaluate(({label,force})=>{
       const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,dock=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK;
       if(force)d.render();
-      const cup=t.cups().find(c=>c.id==='shinji'),box=document.getElementById('tourDialogue21547'),da=d.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img');
+      const cup=t.cups().find(c=>c.id==='kenshiro'),box=document.getElementById('tourDialogue21547'),da=d.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img');
       const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===cup.boss),ri=card?.querySelector('img');
       const actual=img?.currentSrc||img?.src||'',expected=ri?.currentSrc||ri?.src||'',rect=box?.getBoundingClientRect?.()||{width:0,height:0};
       let h={};try{h=JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')}catch{}
@@ -75,7 +75,7 @@ try{
     await page.waitForFunction(()=>document.documentElement.dataset.tournamentRestore21548==='1',{timeout:10000});
     await page.waitForFunction(({ctx,bossActive,roundActive})=>{
       const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,dock=window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK?.audit?.()||{};
-      const cup=t?.cups?.().find(c=>c.id==='shinji'),box=document.getElementById('tourDialogue21547'),da=d?.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
+      const cup=t?.cups?.().find(c=>c.id==='kenshiro'),box=document.getElementById('tourDialogue21547'),da=d?.audit?.()||{},img=box?.querySelector('.tourDialoguePortrait img'),rect=box?.getBoundingClientRect?.()||{width:0,height:0};
       const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===cup?.boss),ri=card?.querySelector('img');
       const canon=src=>{if(!src)return'';if(src.startsWith('data:'))return src;try{const u=new URL(src,location.href);return u.origin+u.pathname}catch{return String(src).split('?')[0]}};
       const samePortrait=!!ri&&!!img&&canon(img.currentSrc||img.src)===canon(ri.currentSrc||ri.src)&&img.complete&&Number(img.naturalWidth)>0;
@@ -93,7 +93,7 @@ try{
   };
 
   const forceAdvance=async label=>await page.evaluate(label=>{
-    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,cup=t.cups().find(c=>c.id==='shinji');
+    const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,cup=t.cups().find(c=>c.id==='kenshiro');
     d.render();const before=document.getElementById('tourDialogue21547')?.dataset.lineId||null,context=d.audit?.()?.context||null;
     d.render();const after=document.getElementById('tourDialogue21547')?.dataset.lineId||null;let h={};try{h=JSON.parse(localStorage.getItem('aiShogiTournamentDialogue21547')||'{}')}catch{}
     const ids=Array.isArray(h?.byKey?.[cup.id+':'+context])?h.byKey[cup.id+':'+context].slice():[];
@@ -102,7 +102,7 @@ try{
   const waitBoss=async status=>page.waitForFunction(s=>window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.bossChallenge?.status===s,status,{timeout:5000});
 
   const restore={},anti={};
-  await page.evaluate(()=>{localStorage.setItem('aiShogiTournamentDialogue21547',JSON.stringify({byKey:{__reload21547f__:['sentinel-21547f']}}));const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('restore start failed')});
+  await page.evaluate(()=>{localStorage.setItem('aiShogiTournamentDialogue21547',JSON.stringify({byKey:{__reload21547f__:['sentinel-21547f']}}));const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('restore start failed')});
   await page.waitForTimeout(650);restore.introBefore=await snapReload('introBefore',true);restore.introAfter=await stableReload('introAfter');anti.intro=await forceAdvance('intro');
 
   await page.evaluate(async()=>{const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms)),result=async kind=>{const b=document.getElementById('resultBanner');b.className='resultBanner';void b.offsetWidth;b.className='resultBanner on result-'+kind;b.textContent=kind;await delay(100)};for(let r=0;r<4;r++){await result('win');if(r<3){t.next();await delay(70)}}for(let i=0;i<40&&t.state()?.active?.bossChallenge?.status!=='pending';i++)await delay(50);if(t.state()?.active?.bossChallenge?.status!=='pending')throw new Error('pending timeout');const key='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(key));s.active.bossChallenge.tournamentWonAt=Date.now()-5000;localStorage.setItem(key,JSON.stringify(s))});
@@ -113,7 +113,7 @@ try{
   if(!(await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss())))throw new Error('retry failed');await waitBoss('active');await page.waitForTimeout(700);restore.retryBefore=await snapReload('retryBefore',true);restore.retryAfter=await stableReload('retryAfter');anti.retry=await forceAdvance('retry');
 
   const failures=[],expectedBase={start:'boss_start',draw:'boss_draw',retry:'boss_start',lost:'boss_lost',won:'boss_won'};
-  if(report.rows.length!==40)failures.push('rows '+report.rows.length);
+  if(report.rows.length!==50)failures.push('rows '+report.rows.length);
   if(report.initialRestoreAudit?.hadInitialActive!==false||report.initialRestoreAudit?.done!==true)failures.push('fresh restore guard '+JSON.stringify(report.initialRestoreAudit));
   for(const x of report.rows){if(x.context!==expectedBase[x.label])failures.push(`${x.cupId}/${x.label}: context ${x.context}`);if(x.speaker!==x.boss)failures.push(`${x.cupId}/${x.label}: speaker`);if(x.role!=='杯ボス')failures.push(`${x.cupId}/${x.label}: role`);if(!x.text||!x.portraitMatch||!x.imageComplete||x.imageWidth<1||!x.visible)failures.push(`${x.cupId}/${x.label}: portrait/text/visibility`);if(['start','retry'].includes(x.label)&&(!x.dock?.bossActive||!x.dock?.docked||!x.dock?.connected))failures.push(`${x.cupId}/${x.label}: dock`);if(!['start','retry'].includes(x.label)&&x.dock?.docked)failures.push(`${x.cupId}/${x.label}: dock restore`)}
   if(report.activeAfter)failures.push('active remains');
