@@ -31,7 +31,7 @@
 #tournament21540Panel .tourAttemptHistoryItem21567.current{border-color:#a98232;background:#19180f;box-shadow:inset 0 0 0 1px rgba(225,177,62,.08)}
 #tournament21540Panel .tourAttemptHistoryTitle21568{display:flex;align-items:center;gap:3px;min-width:0}
 #tournament21540Panel .tourAttemptHistoryCup21567{display:block;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e7dfc1;font-size:8px;font-weight:900}
-#tournament21540Panel .tourAttemptHistoryOrdinal21568{flex:0 0 auto;padding:0 3px;border:1px solid #4b5b4b;border-radius:999px;color:#b8ad89;font-size:6px;font-weight:900;line-height:1.35;white-space:nowrap}
+#tournament21540Panel .tourAttemptHistoryOrdinal21568{flex:0 0 auto;padding:0 3px;border:1px solid #4b5b4b;border-radius:999px;color:#b8ad89;font-size:7px;font-weight:900;line-height:1.35;white-space:nowrap}
 #tournament21540Panel .tourAttemptHistoryItem21567.current .tourAttemptHistoryOrdinal21568{border-color:#a98232;color:#f1ca6a}
 #tournament21540Panel .tourAttemptHistoryMeta21567{display:flex;gap:4px;align-items:center;min-width:0;margin-top:2px;color:#938b72;font-size:7px;font-weight:700;white-space:nowrap;overflow:hidden}
 #tournament21540Panel .tourAttemptHistoryState21567{margin-left:auto;color:#aaa083;overflow:hidden;text-overflow:ellipsis}.tourAttemptHistoryItem21567.current .tourAttemptHistoryState21567{color:#f1ca6a}
