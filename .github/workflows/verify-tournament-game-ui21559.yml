@@ -18,6 +18,7 @@ on:
       - '.github/scripts/verify-tournament-history21567.mjs'
       - '.github/scripts/verify-tournament-visible-microtext21572.mjs'
       - '.github/scripts/verify-tournament-history-hierarchy21573.mjs'
+      - '.github/scripts/verify-tournament-accessible-text21574.mjs'
       - '.github/workflows/verify-tournament-game-ui21559.yml'
   workflow_dispatch:
 
@@ -43,6 +44,7 @@ jobs:
           node --check .github/scripts/verify-tournament-history21567.mjs
           node --check .github/scripts/verify-tournament-visible-microtext21572.mjs
           node --check .github/scripts/verify-tournament-history-hierarchy21573.mjs
+          node --check .github/scripts/verify-tournament-accessible-text21574.mjs
       - name: Install Playwright Chromium
         run: |
           npm init -y
@@ -69,3 +71,7 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-history-hierarchy21573.mjs 2>&1 | tee /tmp/tournament-history-hierarchy21573.log
+      - name: Verify 280px 150% tournament text stress
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-accessible-text21574.mjs 2>&1 | tee /tmp/tournament-accessible-text21574.log
