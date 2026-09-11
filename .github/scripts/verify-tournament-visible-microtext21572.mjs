@@ -13,19 +13,20 @@ const [history,game,road]=await Promise.all([
 
 // 280px / FireFit visible text floor. These selectors are deliberately checked
 // at the final override layer so base 5-6px declarations cannot silently return.
+// 21573 intentionally raises history hierarchy text to 8px while keeping ordinal at 7px.
 const required=[
-  ['history head',/tourFireFit \.tourAttemptHistoryHead21567\{font-size:7px/],
-  ['history count',/tourFireFit \.tourAttemptHistoryCount21567\{font-size:7px/],
-  ['history cup',/tourFireFit \.tourAttemptHistoryCup21567\{font-size:7px/],
+  ['history head',/tourFireFit \.tourAttemptHistoryHead21567\{font-size:8px/],
+  ['history count',/tourFireFit \.tourAttemptHistoryCount21567\{font-size:8px/],
+  ['history cup',/tourFireFit \.tourAttemptHistoryCup21567\{font-size:8px/],
   ['history ordinal',/tourFireFit \.tourAttemptHistoryOrdinal21568\{font-size:7px/],
-  ['history meta',/tourFireFit \.tourAttemptHistoryMeta21567\{font-size:7px/],
+  ['history meta',/tourFireFit \.tourAttemptHistoryMeta21567\{font-size:8px/],
   ['match name',/tourFireFit \.tourMatchName21559\{font-size:8px/],
   ['match meta',/tourFireFit \.tourMatchMeta21559\{font-size:7px/],
   ['VS helper',/tourFireFit \.tourMatchVs21559 small\{font-size:7px/],
   ['boss helper',/tourFireFit \.tourBossHint21559,#tournament21540Panel\.tourFireFit \.tourBossLock21559\{font-size:8px/],
   ['ROAD stage',/tourFireFit \.tourRoadStage21562\{font-size:7px/]
 ];
-for(const [label,re] of required) assert.match(history,re,`${label} must stay at least 7px in final FireFit override`);
+for(const [label,re] of required) assert.match(history,re,`${label} must stay at its validated >=7px FireFit floor`);
 
 // Bracket status stamps are visible microtext too; keep their existing 7px floor.
 assert.match(game,/tourGameNow21559:after\{[^}]*font-size:7px/,'NOW stamp must stay at least 7px');
@@ -49,6 +50,7 @@ assert.deepEqual(unexpected,[],`unexpected base FireFit text below 7px without a
 
 console.log('PASS_TOURNAMENT21572_VISIBLE_MICROTEXT_FLOOR '+JSON.stringify({
   minimumVisiblePx:7,
+  historyHierarchy21573:{head:8,count:8,cup:8,ordinal:7,meta:8},
   checked:required.map(([label])=>label).concat(['NOW stamp','WIN stamp']),
   allowedBaseDeclarationsBelow7:sub7,
   invariant:'match meta / VS helper are raised by required final overrides; 26 real images / fallback=0 remains covered by existing Fire gate'
