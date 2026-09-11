@@ -10,10 +10,12 @@
   const KEY='aiShogiTournament21540';
   const PLAYER='__PLAYER__';
   const CUPS={
-    shinji:{id:'shinji',name:'しんじ杯',boss:'しんじ',bossRating:1550},
-    ayanami:{id:'ayanami',name:'あやなみ杯',boss:'あやなみ',bossRating:1800},
     kenshiro:{id:'kenshiro',name:'ケンシロウ杯',boss:'ケンシロウ',bossRating:2100},
+    souther:{id:'souther',name:'サウザー杯',boss:'サウザー',bossRating:2180},
+    raoh:{id:'raoh',name:'ラオウ杯',boss:'ラオウ',bossRating:2250},
     kaworu:{id:'kaworu',name:'カヲル杯',boss:'カヲル',bossRating:2400},
+    mama:{id:'mama',name:'まま杯',boss:'まま',bossRating:2500},
+    onimama:{id:'onimama',name:'おにまま杯',boss:'おにまま',bossRating:2600},
     akiou:{id:'akiou',name:'あき王杯',boss:'あき王',bossRating:2700},
     micchan:{id:'micchan',name:'みっちゃん杯',boss:'みっちゃん',bossRating:2850},
     mitsuki:{id:'mitsuki',name:'みつき杯',boss:'みつき',bossRating:3000},
@@ -61,20 +63,18 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
   function rewriteTournament(id,baselineTrophy){
     const t=window.AI_SHOGI_TOURNAMENT,store=read(),a=store?.active,cup=CUPS[id];
     if(!t||!a||!cup)return false;
-    const rule=t.fieldRule?.(id),selected=Array.isArray(rule?.selected)?rule.selected.slice(0,15):[];
-    if(selected.length!==15||selected.includes(cup.boss)){
-      console.error('tournament boss21546 field invalid',id,selected);return false;
+    const r0=a?.bracket?.rounds?.[0]||[];
+    const ai=r0.filter(x=>x&&x!==PLAYER);
+    if(r0.length!==16||ai.length!==15||r0.includes(cup.boss)){
+      console.error('tournament boss21546 field invalid',id,r0);return false;
     }
-    a.round=0;a.playerSlot=0;a.status='active';a.pending=null;a.processedToken=0;a.matchToken=(Number(a.matchToken)||0)+1;
-    a.bracket=a.bracket||{};
-    a.bracket.rounds=[[PLAYER,...selected],Array(8).fill(null),Array(4).fill(null),Array(2).fill(null),Array(1).fill(null)];
-    a.bracket.matches={};a.bracket.results={};
-    a.bossChallenge={version:1,boss:cup.boss,bossRating:cup.bossRating,status:'locked',baselineTrophy:Number(baselineTrophy)||0,attempt:0,processedAttempt:0};
-    a.news=[];addNews(a,cup.name+' 開幕。16人トーナメント優勝後に '+cup.boss+' への挑戦権を獲得できます。','start');
+    const all=chars();
+    const invalid=ai.filter(name=>{const ch=all.find(c=>c?.name===name);return !ch||Number(ch.rating)>=cup.bossRating});
+    if(invalid.length){console.error('tournament boss21546 boss-under violation',id,invalid);return false}
+    a.bossChallenge={version:2,boss:cup.boss,bossRating:cup.bossRating,status:'locked',baselineTrophy:Number(baselineTrophy)||0,attempt:0,processedAttempt:0};
+    a.news=Array.isArray(a.news)?a.news:[];addNews(a,cup.name+' 開幕。16人トーナメント優勝後に '+cup.boss+' への挑戦権を獲得できます。','start');
     if(Array.isArray(store.history)&&store.history[0]&&store.history[0].cupId===id){store.history[0].format='16-player-then-boss';store.history[0].bossSeparate=true}
-    write(store);
-    try{t.render?.()}catch(e){}
-    return true;
+    write(store);renderAndDecorate();return true;
   }
 
   function promoteTournamentChampion(){
@@ -199,7 +199,7 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
   patchAPI();installObservers();
 
   window.AI_SHOGI_TOURNAMENT_BOSS={
-    version:'21546a',challenge:()=>startBoss(false),state:()=>JSON.parse(JSON.stringify(read()?.active?.bossChallenge||null)),
+    version:'21583',challenge:()=>startBoss(false),state:()=>JSON.parse(JSON.stringify(read()?.active?.bossChallenge||null)),
     audit:()=>{const a=read()?.active,cup=cupOf(a),r0=a?.bracket?.rounds?.[0]||[],b=a?.bossChallenge;return{ok:patched,version:'21546a',bossSeparate:true,boss:cup?.boss||null,bossInBracket:!!(cup&&r0.includes(cup.boss)),entrants:r0.length,bossStatus:b?.status||null,tournamentChampion:a?.bracket?.rounds?.[4]?.[0]===PLAYER,trophy:cup?Number(read()?.trophies?.[cup.id]||0):0}}
   };
 })();
