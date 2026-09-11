@@ -12,14 +12,16 @@
   const ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const BRACKET_LABELS=[...ROUNDS,'優勝'];
   const CUPS=[
-    {id:'shinji',name:'しんじ杯',boss:'しんじ',bossRating:1550,min:0,max:1649,label:'入門〜初級'},
-    {id:'ayanami',name:'あやなみ杯',boss:'あやなみ',bossRating:1800,min:1650,max:1899,label:'初中級'},
-    {id:'kenshiro',name:'ケンシロウ杯',boss:'ケンシロウ',bossRating:2100,min:1900,max:2149,label:'中上級'},
-    {id:'kaworu',name:'カヲル杯',boss:'カヲル',bossRating:2400,min:2150,max:2449,label:'上級'},
-    {id:'akiou',name:'あき王杯',boss:'あき王',bossRating:2700,min:2450,max:2749,label:'超上級'},
-    {id:'micchan',name:'みっちゃん杯',boss:'みっちゃん',bossRating:2850,min:2750,max:2899,label:'最上級'},
-    {id:'mitsuki',name:'みつき杯',boss:'みつき',bossRating:3000,min:2900,max:3099,label:'最高峰'},
-    {id:'future',name:'未来みつき杯',boss:'未来からやってきたみつき',bossRating:3400,min:3100,max:9999,label:'究極'}
+    {id:'kenshiro',name:'ケンシロウ杯',boss:'ケンシロウ',bossRating:2100,min:0,max:2149,label:'中級'},
+    {id:'souther',name:'サウザー杯',boss:'サウザー',bossRating:2180,min:2150,max:2219,label:'中上級'},
+    {id:'raoh',name:'ラオウ杯',boss:'ラオウ',bossRating:2250,min:2220,max:2349,label:'上級'},
+    {id:'kaworu',name:'カヲル杯',boss:'カヲル',bossRating:2400,min:2350,max:2449,label:'上級+'},
+    {id:'mama',name:'まま杯',boss:'まま',bossRating:2500,min:2450,max:2549,label:'中上級'},
+    {id:'onimama',name:'おにまま杯',boss:'おにまま',bossRating:2600,min:2550,max:2649,label:'上級'},
+    {id:'akiou',name:'あき王杯',boss:'あき王',bossRating:2700,min:2650,max:2799,label:'超上級'},
+    {id:'micchan',name:'みっちゃん杯',boss:'みっちゃん',bossRating:2850,min:2800,max:2949,label:'最上級'},
+    {id:'mitsuki',name:'みつき杯',boss:'みつき',bossRating:3000,min:2950,max:3199,label:'最高峰'},
+    {id:'future',name:'未来みつき杯',boss:'未来からやってきたみつき',bossRating:3400,min:3200,max:9999,label:'究極'}
   ];
 
   const now=()=>Date.now();
@@ -63,7 +65,7 @@
     const r=Number(rating)||1500;
     return CUPS.find(c=>r>=c.min&&r<=c.max)||CUPS.at(-1);
   }
-  function validCup(c){return !!(c&&charIndex(c.boss)>=0&&chars().filter(x=>x.name!==c.boss).length>=14)}
+  function validCup(c){return !!(c&&charIndex(c.boss)>=0&&chars().filter(x=>x.name!==c.boss&&Number(x.rating)<c.bossRating).length>=15)}
   function phaseText(a){
     if(!a)return'';
     if(a.status==='champion')return'優勝！';
@@ -89,9 +91,10 @@
     return d<=0?Math.abs(d):(Math.abs(d)*4+120);
   }
   function buildEntrants(cup,seed){
-    const available=chars().filter(ch=>ch.name!==cup.boss).slice().sort((a,b)=>fieldScore(a,cup.bossRating)-fieldScore(b,cup.bossRating)||(Number(a.rating)||0)-(Number(b.rating)||0)||String(a.name).localeCompare(String(b.name),'ja'));
-    const chosen=seededShuffle(available.slice(0,14).map(ch=>ch.name),seed+'|field');
-    return[PLAYER,...chosen,cup.boss];
+    const eligible=chars().filter(ch=>ch.name!==cup.boss&&Number(ch.rating)<cup.bossRating);
+    const chosen=seededShuffle(eligible.map(ch=>ch.name),seed+'|field').slice(0,15);
+    if(chosen.length<15)throw Error('boss-under field incomplete '+cup.id+' '+chosen.length);
+    return seededShuffle([PLAYER,...chosen],seed+'|bracket');
   }
   function resultKey(round,match){return round+':'+match}
   function buildBracket(cup,seed){
@@ -108,7 +111,6 @@
     a.news=a.news.slice(0,8);
   }
   function liveWinner(a,b,cup){
-    if(a===cup.boss||b===cup.boss)return cup.boss;
     const ra=Number(ratingOf(a))||1500,rb=Number(ratingOf(b))||1500;
     const p=1/(1+Math.pow(10,(rb-ra)/400));
     let roll;
@@ -292,7 +294,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
       const wins=Number(store.trophies?.[c.id]||0),recommended=c.id===rec.id;
       return'<div class="tourCup '+(recommended?'recommended ':'')+(wins?'won':'')+'"><div class="tourCupName">'+esc(c.name)+(recommended?'<span class="tourTag">おすすめ</span>':'')+(wins?'<span class="tourTrophy">🏆×'+wins+'</span>':'')+'</div><div class="tourCupMeta">'+esc(c.label)+' ／ 優勝後ボス '+esc(c.boss)+' R'+c.bossRating+'<br>16人・4勝で優勝</div><button class="btn '+(recommended?'primary':'')+'" data-tour-start="'+c.id+'">挑戦する</button></div>';
     }).join('');
-    body.innerHTML='<div class="tourLead">あなたは <b>R'+rating+'</b>。現在のおすすめは <span class="tourRecommended">'+esc(rec.name)+'</span>。他のAI同士もあなたと同じ回戦をリアルタイム進行し、勝者は最初から決まっていません。</div>'+renderActive(store)+'<div class="tourGrid">'+cards+'</div>';
+    body.innerHTML='<div class="tourLead">あなたは <b>R'+rating+'</b>。現在のおすすめは <span class="tourRecommended">'+esc(rec.name)+'</span>。出場AI15人は全員ボス未満のRから毎大会ランダム選出・配置。AI同士も同じ回戦をリアルタイム進行し、ボスは優勝後の別5戦目です。</div>'+renderActive(store)+'<div class="tourGrid">'+cards+'</div>';
     body.querySelectorAll('[data-tour-start]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourStart)));
     body.querySelectorAll('[data-tour-retry]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourRetry,true)));
     body.querySelector('[data-tour-next]')?.addEventListener('click',()=>startCurrentMatch());
@@ -308,7 +310,8 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
       if(!confirm('今の対局を中断して '+cup.name+' を始めますか？'))return false;
     }
     const startedAt=now(),rating=Number(currentStats().rating)||1500,seed=cup.id+'-'+startedAt+'-'+rating;
-    store.active={cupId:cup.id,round:0,playerSlot:0,status:'active',pending:null,matchToken:1,processedToken:0,startedAt,ratingAtStart:rating,bracket:buildBracket(cup,seed),news:[]};
+    const bracket=buildBracket(cup,seed),playerSlot=bracket.rounds[0].indexOf(PLAYER);
+    store.active={cupId:cup.id,round:0,playerSlot,status:'active',pending:null,matchToken:1,processedToken:0,startedAt,ratingAtStart:rating,bracket,news:[]};
     addNews(store.active,cup.name+' 開幕。1回戦8試合がスタート','start');
     scheduleRoundAI(store.active,cup,0);
     store.active.lastOpponent=currentOpponent(store.active);
@@ -392,7 +395,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
   window.addEventListener('ai-shogi-profile-stats',()=>setTimeout(render,0));
 
   window.AI_SHOGI_TOURNAMENT={
-    version:'21541a',cups:()=>CUPS.map(c=>({...c})),recommended:()=>({...recommendedCup()}),state:()=>JSON.parse(JSON.stringify(read())),start:startCup,next:startCurrentMatch,exit:exitCup,render,
+    version:'21585',cups:()=>CUPS.map(c=>({...c})),recommended:()=>({...recommendedCup()}),state:()=>JSON.parse(JSON.stringify(read())),start:startCup,next:startCurrentMatch,exit:exitCup,render,
     tick:()=>{const store=read();advanceAIProgress(store);write(store);render();return JSON.parse(JSON.stringify(store.active))},
     settleCurrentRound:()=>{const store=read();if(store.active)settleRoundAI(store,store.active.round);write(store);render();return JSON.parse(JSON.stringify(store.active))},
     audit:()=>{const s=read(),r=Number(currentStats().rating)||1500,rec=recommendedCup(r),a=s.active,cup=cupById(a?.cupId),matches=Object.values(a?.bracket?.matches||{}),portraitNames=[...new Set((a?.bracket?.rounds?.flat?.()||[]).filter(n=>n&&n!==PLAYER))];return{ok:!!window.AIShogiIOS,cups:CUPS.length,rating:r,recommended:rec.id,format:'16-player-live',bracketSize:16,rounds:4,active:a?JSON.parse(JSON.stringify(a)):null,currentOpponent:a?currentOpponent(a):null,bossSeeded:!!(a&&cup&&a.bracket?.rounds?.[0]?.[15]===cup.boss),runningAI:matches.filter(m=>m.status==='running').length,resolvedAI:matches.filter(m=>m.status==='done').length,liveProgress:true,portraits:portraitNames.filter(n=>!!avatarFor(n)).length,newsCount:a?.news?.length||0,charactersReady:CUPS.every(validCup),button:!!document.getElementById('tournament21540Btn'),panel:!!document.getElementById('tournament21540Panel'),bracketUI:!!document.querySelector('.tourBracket')}}
