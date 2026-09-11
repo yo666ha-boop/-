@@ -16,7 +16,7 @@ try{
   await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:20000});
   const setup=await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(r=>setTimeout(r,ms));
-    if(t.state()?.active)t.exit();if(!t.start('shinji'))throw new Error('start failed');await delay(3500);d.render();await delay(250);
+    if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('start failed');await delay(3500);d.render();await delay(250);
     const snap=label=>{const host=document.getElementById('tourDialogue21547'),opp=document.getElementById('tourOpponentVoice21549'),side=document.querySelector('.side'),hr=host?.getBoundingClientRect?.()||{},or=opp?.getBoundingClientRect?.()||{};return{label,iw:innerWidth,ih:innerHeight,hostDocked:host?.classList.contains('tourRoundBattleDock21550')===true,oppDocked:opp?.classList.contains('tourRoundBattleDock21550')===true,hostParent:host?.parentElement?.classList?.contains('side')?'side':'other',oppParent:opp?.parentElement?.classList?.contains('side')?'side':'other',hostHeight:Math.round(hr.height||0),oppHeight:Math.round(or.height||0),sideOverflow:side?Math.max(0,side.scrollWidth-side.clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth),opponentText:(opp?.querySelector('.tourDialogueBubble')?.textContent||'').trim()};};
     const initial=snap('initial'),speech=document.getElementById('charSpeech'),before=speech?.textContent||'',updates=[];
     for(let i=1;i<=3;i++){if(speech)speech.textContent='LONG_SYNC_'+i+'_21551';await delay(750);updates.push(snap('update'+i))}
