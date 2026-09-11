@@ -1,4 +1,4 @@
-/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability
+/* Tournament recent-attempt history v2.15.67 + 21568 ordinal UX + 21570 game-card + 21571 road readability + 21573 history hierarchy
  * Display-only. Reads existing tournament history; does not mutate tournament, AI, rating, bracket, or persistence format.
  */
 (function installTournamentAttemptHistory21567(){
@@ -35,7 +35,7 @@
 #tournament21540Panel .tourAttemptHistoryItem21567.current .tourAttemptHistoryOrdinal21568{border-color:#a98232;color:#f1ca6a}
 #tournament21540Panel .tourAttemptHistoryMeta21567{display:flex;gap:4px;align-items:center;min-width:0;margin-top:2px;color:#938b72;font-size:7px;font-weight:700;white-space:nowrap;overflow:hidden}
 #tournament21540Panel .tourAttemptHistoryState21567{margin-left:auto;color:#aaa083;overflow:hidden;text-overflow:ellipsis}.tourAttemptHistoryItem21567.current .tourAttemptHistoryState21567{color:#f1ca6a}
-#tournament21540Panel.tourFireFit .tourAttemptHistory21567{margin:1px 0 3px;padding:3px 4px;border-radius:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryHead21567{font-size:7px;margin-bottom:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCount21567{font-size:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryItem21567{padding:3px 3px;border-radius:5px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCup21567{font-size:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryOrdinal21568{font-size:7px;padding:0 2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryMeta21567{font-size:7px;gap:2px;margin-top:1px}
+#tournament21540Panel.tourFireFit .tourAttemptHistory21567{margin:1px 0 3px;padding:3px 4px;border-radius:7px}#tournament21540Panel.tourFireFit .tourAttemptHistoryHead21567{font-size:8px;margin-bottom:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCount21567{font-size:8px}#tournament21540Panel.tourFireFit .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryItem21567{padding:3px 3px;border-radius:5px}#tournament21540Panel.tourFireFit .tourAttemptHistoryCup21567{font-size:8px}#tournament21540Panel.tourFireFit .tourAttemptHistoryOrdinal21568{font-size:7px;padding:0 2px}#tournament21540Panel.tourFireFit .tourAttemptHistoryMeta21567{font-size:8px;gap:2px;margin-top:1px}
 #tournament21540Panel.tourFireFit .tourMatchName21559{font-size:8px}#tournament21540Panel.tourFireFit .tourMatchMeta21559{font-size:7px}#tournament21540Panel.tourFireFit .tourMatchVs21559 small{font-size:7px}#tournament21540Panel.tourFireFit .tourBossHint21559,#tournament21540Panel.tourFireFit .tourBossLock21559{font-size:8px}
 #tournament21540Panel.tourFireFit .tourRoadStage21562{font-size:7px}
 @media(max-width:320px){#tournament21540Panel .tourAttemptHistory21567{padding-left:4px;padding-right:4px}#tournament21540Panel .tourAttemptHistoryList21567{gap:2px}#tournament21540Panel .tourAttemptHistoryItem21567{padding-left:3px;padding-right:3px}}
@@ -48,7 +48,7 @@
     const a=active(),panel=document.getElementById('tournament21540Panel'),root=panel?.querySelector('.tourActive');
     panel?.querySelectorAll('.tourAttemptHistory21567').forEach(x=>x.remove());
     const rows=recent();if(!a||!root||!rows.length)return false;
-    const box=document.createElement('section');box.className='tourAttemptHistory21567';box.dataset.historyUi='21567';box.dataset.historyOrdinalUi='21568';box.setAttribute('aria-label','最近の大会挑戦');
+    const box=document.createElement('section');box.className='tourAttemptHistory21567';box.dataset.historyUi='21567';box.dataset.historyOrdinalUi='21568';box.dataset.historyHierarchyUi='21573';box.setAttribute('aria-label','最近の大会挑戦');
     const head=document.createElement('div');head.className='tourAttemptHistoryHead21567';head.append(span('', '最近の挑戦'),span('tourAttemptHistoryCount21567','履歴 '+history().length+'件'));box.appendChild(head);
     const list=document.createElement('div');list.className='tourAttemptHistoryList21567';
     rows.forEach(row=>{
@@ -65,7 +65,7 @@
     const base=window.AI_SHOGI_TOURNAMENT_GAME_UI;if(!base||base.__history21567)return false;
     base.__history21567=true;const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
     base.render=()=>{const out=oldRender();render();return out};
-    base.audit=()=>{render();const out=oldAudit(),box=document.querySelector('#tournament21540Panel .tourAttemptHistory21567'),items=box?[...box.querySelectorAll('.tourAttemptHistoryItem21567')]:[];return{...out,history21567:!!box,historyOrdinalUi21568:box?.dataset.historyOrdinalUi==='21568',historyCount21567:items.length,historySourceCount21567:history().length,historyCurrent21567:items.filter(x=>x.dataset.current==='1').length,historyItems21567:items.map(x=>x.dataset.cupId||''),historyAttemptOrdinals21568:items.map(x=>Number(x.dataset.attemptOrdinal)||0),historyOverflow21567:box?Math.max(0,box.scrollWidth-box.clientWidth):0}};
+    base.audit=()=>{render();const out=oldAudit(),box=document.querySelector('#tournament21540Panel .tourAttemptHistory21567'),items=box?[...box.querySelectorAll('.tourAttemptHistoryItem21567')]:[];return{...out,history21567:!!box,historyOrdinalUi21568:box?.dataset.historyOrdinalUi==='21568',historyHierarchyUi21573:box?.dataset.historyHierarchyUi==='21573',historyCount21567:items.length,historySourceCount21567:history().length,historyCurrent21567:items.filter(x=>x.dataset.current==='1').length,historyItems21567:items.map(x=>x.dataset.cupId||''),historyAttemptOrdinals21568:items.map(x=>Number(x.dataset.attemptOrdinal)||0),historyOverflow21567:box?Math.max(0,box.scrollWidth-box.clientWidth):0}};
     render();return true;
   }
   let installed=false,tries=0;const timer=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(timer);else if(++tries>100)clearInterval(timer)},100);
