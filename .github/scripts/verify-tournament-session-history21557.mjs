@@ -8,7 +8,7 @@ try{
 
   const boot=async()=>{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:30000});
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:30000});
   };
   const transientNavigation=e=>String(e?.stack||e?.message||e||'').includes('Execution context was destroyed');
   const startAndRead=async cupId=>{
@@ -48,7 +48,7 @@ try{
     window.AI_SHOGI_TOURNAMENT?.exit?.();
   });
 
-  const cups=['shinji','ayanami','kenshiro','kaworu','akiou','micchan','mitsuki','future'];
+  const cups=['kenshiro','souther','raoh','kaworu','akiou','micchan','mitsuki','future'];
   const runs=[];
   for(let i=0;i<18;i++){
     const cupId=cups[i%cups.length];
@@ -68,13 +68,13 @@ try{
   if(retainedStarts.has(runs[0].startedAt)||retainedStarts.has(runs[1].startedAt))throw new Error('oldest sessions not evicted');
   for(const r of runs.slice(2))if(!retainedStarts.has(r.startedAt))throw new Error('recent session missing '+JSON.stringify(r));
 
-  const sameCup=await startAndRead('shinji');
-  const previousShinji=[...runs].reverse().find(x=>x.cupId==='shinji');
-  if(previousShinji&&sameCup.lineId===previousShinji.lineId)throw new Error('same-cup anti-repeat failed '+JSON.stringify({previousShinji,sameCup}));
-  const shinjiIntro=finalHistory.byKey?.['shinji:intro']||[];
-  const ayanamiIntro=finalHistory.byKey?.['ayanami:intro']||[];
-  if(!Array.isArray(shinjiIntro)||!Array.isArray(ayanamiIntro)||shinjiIntro.length<1||ayanamiIntro.length<1)throw new Error('per-cup intro history missing');
-  if(shinjiIntro===ayanamiIntro)throw new Error('history object alias');
+  const sameCup=await startAndRead('kenshiro');
+  const previousSameCup=[...runs].reverse().find(x=>x.cupId==='kenshiro');
+  if(previousSameCup&&sameCup.lineId===previousSameCup.lineId)throw new Error('same-cup anti-repeat failed '+JSON.stringify({previousSameCup,sameCup}));
+  const firstIntro=finalHistory.byKey?.['kenshiro:intro']||[];
+  const secondIntro=finalHistory.byKey?.['souther:intro']||[];
+  if(!Array.isArray(firstIntro)||!Array.isArray(secondIntro)||firstIntro.length<1||secondIntro.length<1)throw new Error('per-cup intro history missing');
+  if(firstIntro===secondIntro)throw new Error('history object alias');
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
 
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());
@@ -83,8 +83,8 @@ try{
     retainedSessions:sessionEntries.length,
     evicted:runs.slice(0,2).map(x=>({cupId:x.cupId,startedAt:x.startedAt})),
     newest:runs.slice(-3).map(x=>({cupId:x.cupId,startedAt:x.startedAt,lineId:x.lineId})),
-    sameCupRestart:{previousLineId:previousShinji?.lineId||null,newLineId:sameCup.lineId},
-    perCupHistory:{shinji:shinjiIntro.length,ayanami:ayanamiIntro.length},
+    sameCupRestart:{previousLineId:previousSameCup?.lineId||null,newLineId:sameCup.lineId},
+    perCupHistory:{kenshiro:firstIntro.length,souther:secondIntro.length},
     pageErrors:errors
   }));
 }finally{
