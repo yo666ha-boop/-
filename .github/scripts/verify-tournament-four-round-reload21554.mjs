@@ -9,7 +9,7 @@ try{
 
   const boot=async()=>{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===8,{timeout:30000});
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:30000});
   };
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?roundReload='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
   await boot();
@@ -17,7 +17,7 @@ try{
   await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
     if(t.state()?.active)t.exit();
-    if(!t.start('shinji'))throw new Error('start failed');
+    if(!t.start('kenshiro'))throw new Error('start failed');
     await delay(3500);
   });
 
@@ -85,7 +85,7 @@ try{
 
   await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,delay=ms=>new Promise(r=>setTimeout(r,ms));
-    t.exit();if(!t.start('shinji'))throw new Error('draw start failed');await delay(3500);
+    t.exit();if(!t.start('kenshiro'))throw new Error('draw start failed');await delay(3500);
     const b=document.getElementById('resultBanner');b.className='resultBanner';void b.offsetWidth;b.className='resultBanner on result-draw';b.textContent='draw';await delay(300);
   });
   await page.reload({waitUntil:'domcontentloaded',timeout:60000});
