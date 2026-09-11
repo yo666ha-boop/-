@@ -51,7 +51,7 @@ try{
     const ir=img.getBoundingClientRect();
     return{samples,maxHeight:Math.round(maxHeight),maxBubbleHeight:Math.round(maxBubbleHeight),maxTextLength,worst,maxDocOverflow,maxSideOverflow,portrait:[Math.round(ir.width),Math.round(ir.height)],viewportHeight:innerHeight,fireClass:document.getElementById('tournament21540Panel').classList.contains('tourFireFit')};
   });
-  assert.equal(result.samples,800);
+  assert.equal(result.samples,1200);
   assert.equal(result.fireClass,true);
   assert.equal(result.maxDocOverflow,0);
   assert.equal(result.maxSideOverflow,0);
