@@ -30,7 +30,7 @@ try{
     const row=await setState(patch,expect); const bad=[];
     if(JSON.stringify(row.labels)!==JSON.stringify(['1R','QF','SF','F','EX']))bad.push('labels');
     for(const k of ['done','current','failed'])if(row[k]!==expect[k])bad.push(k+'='+row[k]);
-    if(row.roster!==26||row.bossInBracket||row.overflow!==0)bad.push('invariants '+JSON.stringify(row));
+    if(row.roster!==26||row.connectors!==30||row.bossInBracket||row.overflow!==0)bad.push('invariants '+JSON.stringify(row));
     if(bad.length)throw new Error(name+' '+bad.join(' | ')); cases.push({name,...row});
   }
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
