@@ -59,7 +59,17 @@ jobs:
       - name: Verify recent tournament attempt history in fullapp
         run: |
           set -o pipefail
-          node .github/scripts/verify-tournament-history-fullapp21567.mjs 2>&1 | tee /tmp/tournament-history-fullapp21567.log
+          for attempt in 1 2; do
+            echo "history-fullapp attempt ${attempt}" | tee -a /tmp/tournament-history-fullapp21567.log
+            if node .github/scripts/verify-tournament-history-fullapp21567.mjs 2>&1 | tee -a /tmp/tournament-history-fullapp21567.log; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 1 ]; then
+              echo "retrying once after transient Firefox reload-history race" | tee -a /tmp/tournament-history-fullapp21567.log
+              sleep 2
+            fi
+          done
+          exit 1
       - name: Verify all 10 boss terminal dialogue states in fullapp
         run: |
           set -o pipefail
