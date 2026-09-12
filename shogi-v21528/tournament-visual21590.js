@@ -7,8 +7,8 @@
   if(window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A)return;
   window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A=true;
 
-  const seenAdvance=new Set(),seenRoundIntro=new Set();
-  let observer=null,raf=0,introTimer=0;
+  const seenAdvance=new Set(),seenRoundIntro=new Set(),seenBossIntro=new Set();
+  let observer=null,raf=0,introTimer=0,bossIntroTimer=0;
 
   function ensureStyle(){
     if(document.getElementById('tournamentVisual21590Style'))return;
@@ -35,26 +35,28 @@
 #tournament21540Panel .tourBracketSlot.champion{border-color:#ffe174!important;background:linear-gradient(135deg,#3a3210,#17190d)!important;box-shadow:0 0 0 1px rgba(255,235,140,.32) inset,0 0 22px rgba(255,205,68,.18)}
 #tournament21540Panel .tourBracketSlot.champion .tourAvatar{width:46px;height:46px;flex-basis:46px;border-color:#ffe174;box-shadow:0 0 14px rgba(255,213,76,.23)}
 #tournament21540Panel .tourBracketSlot[data-tour-visual-pair='a']:after{content:'VS';position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);z-index:7;font-size:7px;line-height:14px;width:18px;height:14px;text-align:center;border-radius:999px;background:#111b16;border:1px solid #6f6036;color:#d9c37f;font-weight:900;pointer-events:none}
-#tournament21540Panel .tourVisualBossGate21590{display:grid;grid-template-columns:58px minmax(0,1fr);gap:9px;align-items:center;border:1px solid rgba(210,165,55,.58);border-radius:12px;padding:8px;margin:7px 0;background:linear-gradient(135deg,rgba(45,34,12,.84),rgba(9,22,17,.95));box-shadow:inset 0 0 0 1px rgba(255,232,140,.05)}
+#tournament21540Panel .tourVisualBossGate21590{display:grid;grid-template-columns:58px minmax(0,1fr);gap:9px;align-items:center;border:1px solid rgba(210,165,55,.58);border-radius:12px;padding:8px;margin:7px 0;background:linear-gradient(135deg,rgba(45,34,12,.84),rgba(9,22,17,.95));box-shadow:inset 0 0 0 1px rgba(255,232,140,.05);animation:tour21590BossGate .68s cubic-bezier(.18,.78,.25,1.08) both}
 #tournament21540Panel .tourVisualBossGate21590 .tourAvatar{width:54px;height:54px;flex-basis:54px;border-radius:12px;border-color:#e1b548}
 #tournament21540Panel .tourVisualBossGateTitle21590{font-size:10px;color:#ceb66f;font-weight:900;letter-spacing:.05em}
 #tournament21540Panel .tourVisualBossGateName21590{font-size:13px;color:#ffe38a;font-weight:900;margin-top:2px}
 #tournament21540Panel .tourVisualBossGateNote21590{font-size:9px;color:#b9ad8a;margin-top:2px;line-height:1.35}
-#tournament21540Panel .tourRoundIntro21590{position:absolute;inset:0;z-index:60;display:grid;place-items:center;pointer-events:none;background:radial-gradient(circle at 50% 48%,rgba(24,48,37,.72),rgba(4,11,9,.82));animation:tour21590IntroBackdrop 1.15s ease both}
-#tournament21540Panel .tourRoundIntroCard21590{min-width:min(72%,270px);padding:14px 18px;border:1px solid rgba(235,199,92,.58);border-radius:16px;text-align:center;background:linear-gradient(145deg,rgba(32,45,29,.97),rgba(9,20,16,.98));box-shadow:0 12px 38px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,238,166,.06);animation:tour21590IntroCard 1.15s cubic-bezier(.18,.78,.25,1.08) both}
-#tournament21540Panel .tourRoundIntroKicker21590{font-size:9px;letter-spacing:.16em;color:#bda45f;font-weight:900}
-#tournament21540Panel .tourRoundIntroTitle21590{margin-top:3px;font-size:20px;line-height:1.1;color:#ffe58a;font-weight:950;text-shadow:0 2px 8px #000}
-#tournament21540Panel .tourRoundIntroSub21590{margin-top:5px;font-size:10px;color:#d7d1b8}
+#tournament21540Panel .tourRoundIntro21590,#tournament21540Panel .tourBossIntro21590{position:absolute;inset:0;z-index:60;display:grid;place-items:center;pointer-events:none;background:radial-gradient(circle at 50% 48%,rgba(24,48,37,.72),rgba(4,11,9,.82));animation:tour21590IntroBackdrop 1.15s ease both}
+#tournament21540Panel .tourRoundIntroCard21590,#tournament21540Panel .tourBossIntroCard21590{min-width:min(72%,270px);padding:14px 18px;border:1px solid rgba(235,199,92,.58);border-radius:16px;text-align:center;background:linear-gradient(145deg,rgba(32,45,29,.97),rgba(9,20,16,.98));box-shadow:0 12px 38px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,238,166,.06);animation:tour21590IntroCard 1.15s cubic-bezier(.18,.78,.25,1.08) both}
+#tournament21540Panel .tourBossIntroCard21590{border-color:rgba(255,204,73,.76);background:radial-gradient(circle at 50% 0,rgba(121,74,12,.35),transparent 52%),linear-gradient(145deg,rgba(45,34,14,.98),rgba(9,20,16,.98))}
+#tournament21540Panel .tourRoundIntroKicker21590,#tournament21540Panel .tourBossIntroKicker21590{font-size:9px;letter-spacing:.16em;color:#bda45f;font-weight:900}
+#tournament21540Panel .tourRoundIntroTitle21590,#tournament21540Panel .tourBossIntroTitle21590{margin-top:3px;font-size:20px;line-height:1.1;color:#ffe58a;font-weight:950;text-shadow:0 2px 8px #000}
+#tournament21540Panel .tourRoundIntroSub21590,#tournament21540Panel .tourBossIntroSub21590{margin-top:5px;font-size:10px;color:#d7d1b8}
 @keyframes tour21590Advance{0%{transform:translateX(-8px) scale(.95);opacity:.48;filter:brightness(1.7)}55%{transform:translateX(2px) scale(1.04);opacity:1}100%{transform:none;filter:none}}
 @keyframes tour21590CurrentPulse{0%,100%{box-shadow:0 0 0 1px rgba(101,168,255,.16),0 0 8px rgba(101,168,255,.12)}50%{box-shadow:0 0 0 2px rgba(255,211,89,.26),0 0 18px rgba(255,195,56,.18)}}
 @keyframes tour21590RoundShine{0%,72%,100%{left:-35%}86%{left:115%}}
 @keyframes tour21590IntroBackdrop{0%{opacity:0}18%,72%{opacity:1}100%{opacity:0}}
 @keyframes tour21590IntroCard{0%{opacity:0;transform:scale(.82) translateY(10px)}22%,72%{opacity:1;transform:scale(1) translateY(0)}100%{opacity:0;transform:scale(1.03) translateY(-3px)}}
+@keyframes tour21590BossGate{0%{opacity:0;transform:translateY(8px);filter:brightness(1.6)}100%{opacity:1;transform:none;filter:none}}
 @media(max-width:520px){#tournament21540Panel:not(.tourFireFit) .tourAvatar{width:36px;height:36px;flex-basis:36px}#tournament21540Panel:not(.tourFireFit) .tourBracketSlot.champion .tourAvatar{width:40px;height:40px;flex-basis:40px}}
 #tournament21540Panel.tourFireFit .tourBracketSlot[data-tour-visual-pair='a']:after{display:none}
 #tournament21540Panel.tourFireFit .tourVisualBossGate21590{grid-template-columns:42px minmax(0,1fr);padding:5px;gap:6px;margin:4px 0}#tournament21540Panel.tourFireFit .tourVisualBossGate21590 .tourAvatar{width:40px!important;height:40px!important;flex-basis:40px!important}
-#tournament21540Panel.tourFireFit .tourRoundIntroCard21590{padding:8px 10px;min-width:58%}#tournament21540Panel.tourFireFit .tourRoundIntroTitle21590{font-size:13px}#tournament21540Panel.tourFireFit .tourRoundIntroSub21590{font-size:8px}
-@media(prefers-reduced-motion:reduce){#tournament21540Panel .tourBracketRoundTitle:after,#tournament21540Panel .tourBracketSlot.current,#tournament21540Panel .tourBracketSlot.currentOpp,#tournament21540Panel .tourBracketSlot.tourVisualAdvance21590,#tournament21540Panel .tourRoundIntro21590,#tournament21540Panel .tourRoundIntroCard21590{animation:none!important}#tournament21540Panel .tourBracketSlot,#tournament21540Panel .tourAvatar img{transition:none!important}}
+#tournament21540Panel.tourFireFit .tourRoundIntroCard21590,#tournament21540Panel.tourFireFit .tourBossIntroCard21590{padding:8px 10px;min-width:58%}#tournament21540Panel.tourFireFit .tourRoundIntroTitle21590,#tournament21540Panel.tourFireFit .tourBossIntroTitle21590{font-size:13px}#tournament21540Panel.tourFireFit .tourRoundIntroSub21590,#tournament21540Panel.tourFireFit .tourBossIntroSub21590{font-size:8px}
+@media(prefers-reduced-motion:reduce){#tournament21540Panel .tourBracketRoundTitle:after,#tournament21540Panel .tourBracketSlot.current,#tournament21540Panel .tourBracketSlot.currentOpp,#tournament21540Panel .tourBracketSlot.tourVisualAdvance21590,#tournament21540Panel .tourRoundIntro21590,#tournament21540Panel .tourRoundIntroCard21590,#tournament21540Panel .tourBossIntro21590,#tournament21540Panel .tourBossIntroCard21590,#tournament21540Panel .tourVisualBossGate21590{animation:none!important}#tournament21540Panel .tourBracketSlot,#tournament21540Panel .tourAvatar img{transition:none!important}}
 `;
     document.head.appendChild(s);
   }
@@ -75,16 +77,24 @@
     panel.appendChild(veil);clearTimeout(introTimer);introTimer=setTimeout(()=>veil.remove(),1200);
   }
   function bossGate(){
-    const active=document.querySelector('#tournament21540Panel .tourActive');if(!active)return;
-    const existing=active.querySelector('.tourVisualBossGate21590'),boss=active.querySelector('.tourBoss21546');if(!boss){existing?.remove();return}if(existing)return;
+    const active=document.querySelector('#tournament21540Panel .tourActive');if(!active)return null;
+    const existing=active.querySelector('.tourVisualBossGate21590'),boss=active.querySelector('.tourBoss21546');if(!boss){existing?.remove();return null}if(existing)return existing;
     const row=boss.querySelector('.tourBoss21546Row'),img=row?.querySelector('img'),name=row?.querySelector('b')?.textContent?.replace('👑','').trim()||'杯ボス';
-    const card=document.createElement('div');card.className='tourVisualBossGate21590';card.setAttribute('aria-label','トーナメント優勝後のボス戦');const portrait=document.createElement('span');portrait.className='tourAvatar';
+    const card=document.createElement('div');card.className='tourVisualBossGate21590';card.dataset.bossName=name;card.setAttribute('aria-label','トーナメント優勝後のボス戦');const portrait=document.createElement('span');portrait.className='tourAvatar';
     if(img?.src){const clone=document.createElement('img');clone.src=img.currentSrc||img.src;clone.alt='';clone.loading='eager';portrait.appendChild(clone)}else portrait.textContent='👑';
-    const text=document.createElement('div');text.innerHTML='<div class="tourVisualBossGateTitle21590">FINAL BOSS · トーナメント優勝後</div><div class="tourVisualBossGateName21590">👑 '+name+'</div><div class="tourVisualBossGateNote21590">4勝で優勝したあとに挑む、ブラケット外の別5戦目です。</div>';card.append(portrait,text);boss.insertAdjacentElement('afterend',card);
+    const text=document.createElement('div');text.innerHTML='<div class="tourVisualBossGateTitle21590">FINAL BOSS · トーナメント優勝後</div><div class="tourVisualBossGateName21590">👑 '+name+'</div><div class="tourVisualBossGateNote21590">4勝で優勝したあとに挑む、ブラケット外の別5戦目です。</div>';card.append(portrait,text);boss.insertAdjacentElement('afterend',card);return card;
   }
-  function decorate(){ensureStyle();markPairs();animateAdvances();roundIntro();bossGate();const panel=document.getElementById('tournament21540Panel');if(panel)panel.dataset.visualVersion='21590a'}
+  function bossIntro(gate){
+    const panel=document.getElementById('tournament21540Panel');if(!panel||!gate)return;
+    const boss=String(gate.dataset.bossName||'杯ボス'),champion=cleanName(panel.querySelector('.tourBracketSlot.champion'))||'あなた';
+    const key=champion+':'+boss;if(seenBossIntro.has(key))return;seenBossIntro.add(key);
+    panel.querySelector('.tourBossIntro21590')?.remove();
+    const veil=document.createElement('div');veil.className='tourBossIntro21590';veil.setAttribute('aria-hidden','true');veil.innerHTML='<div class="tourBossIntroCard21590"><div class="tourBossIntroKicker21590">TOURNAMENT CHAMPION</div><div class="tourBossIntroTitle21590">🏆 4勝・優勝</div><div class="tourBossIntroSub21590">EXTRA MATCH · 👑 '+boss+' へ</div></div>';
+    panel.appendChild(veil);clearTimeout(bossIntroTimer);bossIntroTimer=setTimeout(()=>veil.remove(),1200);
+  }
+  function decorate(){ensureStyle();markPairs();animateAdvances();roundIntro();const gate=bossGate();bossIntro(gate);const panel=document.getElementById('tournament21540Panel');if(panel)panel.dataset.visualVersion='21590a'}
   function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;decorate()})}
-  function observe(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer?.disconnect();observer=new MutationObserver(muts=>{if(muts.every(m=>m.target?.closest?.('.tourVisualBossGate21590,.tourRoundIntro21590')))return;schedule()});observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});decorate();return true}
+  function observe(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer?.disconnect();observer=new MutationObserver(muts=>{if(muts.every(m=>m.target?.closest?.('.tourVisualBossGate21590,.tourRoundIntro21590,.tourBossIntro21590')))return;schedule()});observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});decorate();return true}
   let tries=0;const boot=setInterval(()=>{if(observe()||++tries>120)clearInterval(boot)},100);window.addEventListener('resize',schedule,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(schedule,120),{passive:true});
-  window.AI_SHOGI_TOURNAMENT_VISUAL={version:'21590a',refresh:decorate,audit:()=>{const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length;return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),roundIntro:!!panel?.querySelector('.tourRoundIntro21590'),fireFit:!!panel?.classList.contains('tourFireFit')}}};
+  window.AI_SHOGI_TOURNAMENT_VISUAL={version:'21590a',refresh:decorate,audit:()=>{const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length;return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),roundIntro:!!panel?.querySelector('.tourRoundIntro21590'),bossIntro:!!panel?.querySelector('.tourBossIntro21590'),fireFit:!!panel?.classList.contains('tourFireFit')}}};
 })();
