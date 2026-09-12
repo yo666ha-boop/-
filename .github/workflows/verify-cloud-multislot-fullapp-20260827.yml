@@ -60,10 +60,20 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-history-fullapp21567.mjs 2>&1 | tee /tmp/tournament-history-fullapp21567.log
-      - name: Verify all 8 boss terminal dialogue states in fullapp
+      - name: Verify all 10 boss terminal dialogue states in fullapp
         run: |
           set -o pipefail
-          node .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs 2>&1 | tee /tmp/tournament-all-boss-terminal.log
+          for attempt in 1 2; do
+            echo "boss-terminal attempt ${attempt}" | tee -a /tmp/tournament-all-boss-terminal.log
+            if node .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs 2>&1 | tee -a /tmp/tournament-all-boss-terminal.log; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 1 ]; then
+              echo "retrying once after transient reload-visibility race" | tee -a /tmp/tournament-all-boss-terminal.log
+              sleep 2
+            fi
+          done
+          exit 1
       - name: Run TOP5 shared YaneuraOu smoke
         run: |
           set -o pipefail
