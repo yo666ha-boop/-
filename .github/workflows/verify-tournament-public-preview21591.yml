@@ -34,11 +34,10 @@ jobs:
           done
           cat /tmp/tournament21591-server.log
           exit 1
-      - name: Verify local and public same-origin visual preview
+      - name: Verify local and Vercel proxy visual preview
         env:
           HOME: /root
           BROWSER: ${{ matrix.browser }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           node <<'NODE'
           const pw=require('playwright');
@@ -46,7 +45,7 @@ jobs:
           const engine=pw[kind];
           if(!engine) throw new Error('unknown browser '+kind);
           function fail(msg,obj){throw new Error(msg+' '+JSON.stringify(obj));}
-          async function audit(url,isPublic){
+          async function audit(url){
             const browser=await engine.launch({headless:true});
             const context=await browser.newContext({viewport:{width:1280,height:800}});
             const page=await context.newPage();
@@ -70,5 +69,8 @@ jobs:
             console.log('PASS_TOURNAMENT21591_PUBLIC_VISUAL_'+kind.toUpperCase(),JSON.stringify({url,status:response.status(),initial,started,rawRequests:rawRequests.length,pageErrors,failed,badResponses}));
             await browser.close();
           }
-          (async()=>{await audit('http://127.0.0.1:8765/preview/tournament-16/index21591-public.html',false);await audit(`https://cdn.jsdelivr.net/gh/yo666ha-boop/-@${process.env.HEAD_SHA}/preview/tournament-16/index21591-public.html`,true)})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{
+            await audit('http://127.0.0.1:8765/preview/tournament-16/index21591-public.html');
+            await audit('https://mitsuki-shogi-tournament-preview-21-ten.vercel.app/');
+          })().catch(e=>{console.error(e);process.exit(1)});
           NODE
