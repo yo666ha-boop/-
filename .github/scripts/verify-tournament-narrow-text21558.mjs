@@ -95,7 +95,7 @@ try{
     const row=await sample(width,scale);
     console.log('TRACE_TOURNAMENT21558_NARROW_TEXT_SAMPLE '+JSON.stringify({width,scale,...row}));
     const f=[];
-    if(!row.hostVisible||!row.oppVisible||!row.hostText||!row.oppText)f.push('dialogue visibility');
+    if(row.hostVisible||!row.oppVisible||!row.hostText||!row.oppText)f.push('opponent-only dialogue visibility');
     if(row.sideOverflow!==0||row.docOverflow!==0||row.bodyOverflow!==0)f.push('overflow '+JSON.stringify(row));
     if(row.hostWidth>width||row.oppWidth>width||row.panelWidth>width)f.push('width '+JSON.stringify(row));
     if(!row.panelWidth)f.push('panel not open '+JSON.stringify(row));
@@ -122,7 +122,7 @@ try{
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
   const stress21574=checks.find(x=>x.width===280&&x.scale===150)?.accessible21574;
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());
-  console.log('PASS_TOURNAMENT21558_NARROW_TEXT_SCALE '+JSON.stringify({checks,pageErrors:errors,stressApplied:true}));
+  console.log('PASS_TOURNAMENT21558_NARROW_TEXT_SCALE '+JSON.stringify({checks,pageErrors:errors,stressApplied:true,opponentOnlyRounds:true}));
   console.log('PASS_TOURNAMENT21572_NARROW_ACTION_TAP_TARGETS '+JSON.stringify({checks:checks.map(({width,scale,panelWidth,buttonCount,minButtonHeight,docOverflow,bodyOverflow})=>({width,scale,panelWidth,buttonCount,minButtonHeight,docOverflow,bodyOverflow})),pageErrors:errors}));
   console.log('PASS_TOURNAMENT21574_FULLAPP_280PX_150_TEXT_STRESS '+JSON.stringify({...stress21574,pageErrors:errors}));
 }finally{
