@@ -1,0 +1,29 @@
+name: Verify tournament image visuals 21590
+
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament-visual21590.js'
+      - 'shogi-v21528/rating-progress21536.js'
+      - '.github/scripts/verify-tournament-visual21590.mjs'
+      - '.github/workflows/verify-tournament-visual21590.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax check visual layer
+        run: |
+          node --check shogi-v21528/tournament-visual21590.js
+          node --check shogi-v21528/rating-progress21536.js
+          node --check .github/scripts/verify-tournament-visual21590.mjs
+      - name: Verify image-first bracket and motion contract
+        run: node .github/scripts/verify-tournament-visual21590.mjs
