@@ -186,3 +186,16 @@ body:has(#tournament21540Panel.tourFireFit) .side>#tourDialogue21547.tourDialogu
   window.addEventListener('ai-shogi-profile-stats',()=>setTimeout(dock,0));
   window.AI_SHOGI_TOURNAMENT_DIALOGUE_BATTLE_DOCK={version:'21547e',audit:()=>{const box=document.getElementById('tourDialogue21547'),a=read()?.active;return{bossActive:a?.bossChallenge?.status==='active',docked:box?.dataset.battleDock==='1',connected:!!box?.isConnected,parentClass:box?.parentElement?.className||''}}};
 })();
+
+/* v2.15.90a: image-first tournament bracket visuals and motion. */
+(function loadTournamentVisual21590(){
+  if(window.__AI_SHOGI_TOURNAMENT_VISUAL_LOADER_21590A)return;
+  window.__AI_SHOGI_TOURNAMENT_VISUAL_LOADER_21590A=true;
+  try{
+    const scriptURL=document.currentScript?.src||location.href;
+    const s=document.createElement('script');
+    s.src=new URL('./tournament-visual21590.js?v=21590a',scriptURL).href;
+    s.async=false;
+    document.head.appendChild(s);
+  }catch(e){console.error('tournament visual21590 loader failed',e)}
+})();
