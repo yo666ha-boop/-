@@ -49,7 +49,7 @@ jobs:
           async function audit(url,isPublic){
             const browser=await engine.launch({headless:true});
             const context=await browser.newContext({viewport:{width:1280,height:800}});
-            if(isPublic) await context.addCookies([{name:'__Http-phish',value:'1',domain:'rawcdn.githack.com',path:'/',secure:true,sameSite:'Lax'}]);
+            if(isPublic) await context.addCookies([{name:'__Http-phish',value:'1',domain:'raw.githack.com',path:'/',secure:true,sameSite:'Lax'}]);
             const page=await context.newPage();
             const pageErrors=[],failed=[],rawRequests=[],badResponses=[];
             page.on('pageerror',e=>pageErrors.push(String(e)));
@@ -60,43 +60,16 @@ jobs:
             if(!response||response.status()!==200)fail('entry http',{url,status:response&&response.status()});
             await page.waitForFunction(()=>document.querySelectorAll('.cup').length===10&&window.TOURNAMENT_PREVIEW_VISUAL_21591?.version==='21591a',{timeout:60000});
             await page.waitForFunction(()=>document.querySelector('#imageStatus')?.textContent?.includes('26キャラ画像準備完了'),{timeout:60000});
-            const initial=await page.evaluate(()=>({
-              title:document.title,
-              cups:document.querySelectorAll('.cup').length,
-              visual:window.TOURNAMENT_PREVIEW_VISUAL_21591?.version||'',
-              imageStatus:document.querySelector('#imageStatus')?.textContent||'',
-              stage:document.querySelector('#stage')?.classList.contains('on')||false,
-              overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
-              bodyText:document.body.innerText.slice(0,300)
-            }));
+            const initial=await page.evaluate(()=>({title:document.title,cups:document.querySelectorAll('.cup').length,visual:window.TOURNAMENT_PREVIEW_VISUAL_21591?.version||'',imageStatus:document.querySelector('#imageStatus')?.textContent||'',stage:document.querySelector('#stage')?.classList.contains('on')||false,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),bodyText:document.body.innerText.slice(0,300)}));
             if(initial.cups!==10||initial.visual!=='21591a'||!initial.imageStatus.includes('26キャラ画像準備完了')||initial.overflow!==0)fail('initial audit',initial);
             await page.locator('[data-start="kenshiro"]').click();
             await page.waitForFunction(()=>document.querySelector('#stage')?.classList.contains('on')&&document.querySelectorAll('#bracket .round').length===5,{timeout:15000});
             await page.waitForTimeout(180);
-            const started=await page.evaluate(()=>{
-              const rounds=[...document.querySelectorAll('#bracket .round')];
-              const first=[...(rounds[0]?.querySelectorAll('.slot')||[])];
-              const names=first.map(s=>s.querySelector('.name')?.textContent?.trim()||'').filter(Boolean);
-              return {
-                stage:document.querySelector('#stage')?.classList.contains('on')||false,
-                rounds:rounds.length,
-                firstRound:first.length,
-                aiImages:first.filter(s=>!s.classList.contains('player')).filter(s=>s.querySelector('.avatar img')).length,
-                bossInBracket:names.includes('ケンシロウ'),
-                currentRound:document.querySelectorAll('#bracket .pvCurrentRound21591').length,
-                roundIntro:!!document.querySelector('.pvRoundIntro21591'),
-                visual:window.TOURNAMENT_PREVIEW_VISUAL_21591?.version||'',
-                overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
-                stageText:document.querySelector('#stage')?.innerText?.slice(0,500)||''
-              };
-            });
+            const started=await page.evaluate(()=>{const rounds=[...document.querySelectorAll('#bracket .round')],first=[...(rounds[0]?.querySelectorAll('.slot')||[])],names=first.map(s=>s.querySelector('.name')?.textContent?.trim()||'').filter(Boolean);return{stage:document.querySelector('#stage')?.classList.contains('on')||false,rounds:rounds.length,firstRound:first.length,aiImages:first.filter(s=>!s.classList.contains('player')).filter(s=>s.querySelector('.avatar img')).length,bossInBracket:names.includes('ケンシロウ'),currentRound:document.querySelectorAll('#bracket .pvCurrentRound21591').length,roundIntro:!!document.querySelector('.pvRoundIntro21591'),visual:window.TOURNAMENT_PREVIEW_VISUAL_21591?.version||'',overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),stageText:document.querySelector('#stage')?.innerText?.slice(0,500)||''}});
             if(!started.stage||started.rounds!==5||started.firstRound!==16||started.aiImages!==15||started.bossInBracket||started.currentRound!==1||!started.roundIntro||started.visual!=='21591a'||started.overflow!==0)fail('started audit',started);
             if(rawRequests.length||pageErrors.length||failed.length||badResponses.length)fail('network/page errors',{rawRequests,pageErrors,failed,badResponses});
             console.log('PASS_TOURNAMENT21591_PUBLIC_VISUAL_'+kind.toUpperCase(),JSON.stringify({url,status:response.status(),initial,started,rawRequests:rawRequests.length,pageErrors,failed,badResponses}));
             await browser.close();
           }
-          (async()=>{
-            await audit('http://127.0.0.1:8765/preview/tournament-16/index21591-public.html',false);
-            await audit(`https://rawcdn.githack.com/yo666ha-boop/-/${process.env.HEAD_SHA}/preview/tournament-16/index21591-public.html`,true);
-          })().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{await audit('http://127.0.0.1:8765/preview/tournament-16/index21591-public.html',false);await audit(`https://raw.githack.com/yo666ha-boop/-/${process.env.HEAD_SHA}/preview/tournament-16/index21591-public.html`,true)})().catch(e=>{console.error(e);process.exit(1)});
           NODE
