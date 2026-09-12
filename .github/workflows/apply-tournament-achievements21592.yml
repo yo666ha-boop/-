@@ -1,0 +1,35 @@
+name: apply tournament achievements 21592
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-achievements21592.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply achievement counters and verification
+        run: node .github/scripts/apply-tournament-achievements21592.mjs
+      - name: Syntax and source gates
+        run: |
+          node --check shogi-v21528/tournament21541.js
+          node --check .github/scripts/verify-tournament21540.mjs
+          grep -q "championships" shogi-v21528/tournament21541.js
+          grep -q "streaks" shogi-v21528/tournament21541.js
+          grep -q "🏆 杯獲得" shogi-v21528/tournament21541.js
+          grep -q "連覇中" shogi-v21528/tournament21541.js
+          grep -q "version:'21592'" shogi-v21528/tournament21541.js
+          grep -q "PASS_TOURNAMENT21592_ACHIEVEMENTS" .github/scripts/verify-tournament21540.mjs
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament21541.js .github/scripts/verify-tournament21540.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: show cup clears titles and streaks 21592"
+          git push origin HEAD:feature/tournament-cups-20260902

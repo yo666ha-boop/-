@@ -1,0 +1,36 @@
+name: apply tournament dialogue ten cups 21586
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-dialogue-ten-cups21586.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply ten-cup dialogue migration
+        run: node .github/scripts/apply-tournament-dialogue-ten-cups21586.mjs
+      - name: Verify dialogue coverage
+        run: |
+          grep -q "souther:{name:'サウザー'" shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q "raoh:{name:'ラオウ'" shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q "mama:{name:'まま'" shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q "onimama:{name:'おにまま'" shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q "souther:'サウザー'" shogi-v21528/tournament-dialogue21547.js
+          grep -q "onimama:'おにまま'" shogi-v21528/tournament-dialogue21547.js
+          ! grep -q "CUP_BOSS={shinji" shogi-v21528/tournament-dialogue21547.js
+          node --check shogi-v21528/tournament-dialogue-bank21547.js
+          node --check shogi-v21528/tournament-dialogue21547.js
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament-dialogue-bank21547.js shogi-v21528/tournament-dialogue21547.js
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: add dialogue for 10 tournament bosses 21586"
+          git push origin HEAD:feature/tournament-cups-20260902
