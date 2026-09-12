@@ -24,19 +24,21 @@ need(visual.includes('prefers-reduced-motion:reduce'),'reduced-motion support mi
 need(visual.includes('#tournament21540Panel.tourFireFit'),'Fire fit override missing');
 need(visual.includes("querySelector('.tourAvatar img')"),'portrait audit missing');
 
-// 21592: the active bracket opponent, not the cup host, owns the in-match dialogue.
-need(visual.includes('const OPPONENT_LINES='),'character-specific opponent line bank missing');
+// 21592 main: promote the existing canonical participant card; do not create a second opponent card.
+need(visual.includes('const OPPONENT_LINES='),'character-specific opponent reveal bank missing');
 need(visual.includes('currentOpponentSlot()'),'current opponent resolver missing');
-need(visual.includes('tourOpponentDialogue21592'),'dedicated opponent dialogue card missing');
-need(visual.includes("card.dataset.role='対戦相手'"),'opponent role must be explicit');
+need(visual.includes("participant=document.getElementById('tourOpponentVoice21549')"),'canonical participant card must be used');
+need(visual.includes("participant.dataset.visualRole='対戦相手'"),'visible opponent role must be explicit');
+need(visual.includes("badge.textContent='対戦相手'"),'participant role badge must read 対戦相手');
 need(visual.includes('NEXT OPPONENT'),'next opponent reveal title missing');
 need(visual.includes('tourNextOpponent21592'),'next opponent reveal card missing');
 need(visual.includes('portraitSrc(opp)'),'next opponent portrait must come from actual bracket opponent slot');
-need(visual.includes("original.style.setProperty('display','none','important')"),'host card must be suppressed during active opponent dialogue');
+need(visual.includes("host.style.setProperty('display','none','important')"),'cup host must be suppressed during bracket match');
 need(visual.includes("['pending','active','won','lost','draw'].includes(bossStatus)"),'boss phase separation missing');
 need(visual.includes('杯ボス・別5戦目'),'extra-match boss role missing');
+need(!visual.includes("card.id='tourOpponentDialogue21592'"),'duplicate opponent dialogue card must not be created');
 
-// Public preview must mirror the same speaker contract.
+// Public preview mirrors the same user-facing speaker contract.
 need(preview.includes('const OPPONENT_LINES='),'preview opponent line bank missing');
 need(preview.includes('function opponentSlot()'),'preview actual opponent resolver missing');
 need(preview.includes('opponentDialoguePreview21592'),'preview opponent dialogue card missing');
@@ -47,27 +49,16 @@ need(preview.includes("orig.style.setProperty('display','none','important')"),'p
 need(preview.includes('TOURNAMENT CHAMPION'),'preview champion/boss split missing');
 
 for(const name of ['みつき','みっちゃん','あき王','おにまま','まま','ケンシロウ','ジャギ','しんじ','直江兼続','あやなみ','バット','伊達政宗','あすか','ユリア','玉ちゃん','まり','ぺんぺん','げんどー','前田慶次','シン','みさとさん','サウザー','リン','ラオウ','カヲル','未来からやってきたみつき']){
-  need(visual.includes("'"+name+"':{reveal:"),'main opponent voice missing: '+name);
-  need(preview.includes("'"+name+"':{reveal:"),'preview opponent voice missing: '+name);
+  need(visual.includes("'"+name+"':{reveal:"),'main opponent reveal voice missing: '+name);
+  need(preview.includes("'"+name+"':{reveal:"),'preview opponent reveal voice missing: '+name);
 }
 need(!/AIShogiIOS\.(?:select|stats|characters)\s*=/.test(visual),'visual layer must not mutate core AIShogiIOS API');
 need(!/localStorage\.setItem/.test(visual),'visual layer must not mutate tournament/save state');
 need(!/localStorage\.setItem/.test(preview),'preview visual layer must not mutate tournament/save state');
 
 console.log('PASS_TOURNAMENT21590_IMAGE_VISUAL_STATIC',JSON.stringify({
-  loader:true,
-  imageCards:true,
-  advanceMotion:true,
-  roundIntro:true,
-  nextOpponentReveal:true,
-  opponentSpeaker:true,
-  opponentVoices:26,
-  hostOpponentSeparated:true,
-  championBossTransition:true,
-  bossGate:true,
-  attemptScoped:true,
-  reducedMotion:true,
-  fireFit:true,
-  previewParity:true,
-  stateWrites:0
+  loader:true,imageCards:true,advanceMotion:true,roundIntro:true,nextOpponentReveal:true,
+  canonicalOpponentSpeaker:true,opponentVoices:26,hostOpponentSeparated:true,
+  duplicateOpponentCards:0,championBossTransition:true,bossGate:true,attemptScoped:true,
+  reducedMotion:true,fireFit:true,previewParity:true,stateWrites:0
 }));
