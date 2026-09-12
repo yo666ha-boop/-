@@ -7,18 +7,15 @@
   if(window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A)return;
   window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A=true;
 
-  const seenAdvance=new Set();
-  let observer=null,raf=0;
+  const seenAdvance=new Set(),seenRoundIntro=new Set();
+  let observer=null,raf=0,introTimer=0;
 
   function ensureStyle(){
     if(document.getElementById('tournamentVisual21590Style'))return;
     const s=document.createElement('style');
     s.id='tournamentVisual21590Style';
     s.textContent=`
-#tournament21540Panel .tourBracket{background:
-  radial-gradient(circle at 14% 12%,rgba(101,168,255,.10),transparent 30%),
-  radial-gradient(circle at 86% 88%,rgba(255,225,116,.09),transparent 28%),
-  linear-gradient(180deg,#081510 0%,#07110e 100%);border-color:#55482b;box-shadow:inset 0 0 0 1px rgba(255,231,155,.035),0 10px 30px rgba(0,0,0,.18)}
+#tournament21540Panel .tourBracket{background:radial-gradient(circle at 14% 12%,rgba(101,168,255,.10),transparent 30%),radial-gradient(circle at 86% 88%,rgba(255,225,116,.09),transparent 28%),linear-gradient(180deg,#081510 0%,#07110e 100%);border-color:#55482b;box-shadow:inset 0 0 0 1px rgba(255,231,155,.035),0 10px 30px rgba(0,0,0,.18)}
 #tournament21540Panel .tourBracketRound{padding:0 2px;box-sizing:border-box}
 #tournament21540Panel .tourBracketRoundTitle{position:relative;overflow:hidden;border:1px solid rgba(181,145,62,.36);border-radius:999px;padding:4px 6px;background:linear-gradient(180deg,rgba(45,48,31,.86),rgba(16,28,22,.86));letter-spacing:.04em;text-shadow:0 1px 2px #000}
 #tournament21540Panel .tourBracketRoundTitle:after{content:'';position:absolute;inset:0 auto 0 -35%;width:28%;transform:skewX(-20deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.13),transparent);animation:tour21590RoundShine 5.4s ease-in-out infinite}
@@ -43,82 +40,51 @@
 #tournament21540Panel .tourVisualBossGateTitle21590{font-size:10px;color:#ceb66f;font-weight:900;letter-spacing:.05em}
 #tournament21540Panel .tourVisualBossGateName21590{font-size:13px;color:#ffe38a;font-weight:900;margin-top:2px}
 #tournament21540Panel .tourVisualBossGateNote21590{font-size:9px;color:#b9ad8a;margin-top:2px;line-height:1.35}
+#tournament21540Panel .tourRoundIntro21590{position:absolute;inset:0;z-index:60;display:grid;place-items:center;pointer-events:none;background:radial-gradient(circle at 50% 48%,rgba(24,48,37,.72),rgba(4,11,9,.82));animation:tour21590IntroBackdrop 1.15s ease both}
+#tournament21540Panel .tourRoundIntroCard21590{min-width:min(72%,270px);padding:14px 18px;border:1px solid rgba(235,199,92,.58);border-radius:16px;text-align:center;background:linear-gradient(145deg,rgba(32,45,29,.97),rgba(9,20,16,.98));box-shadow:0 12px 38px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,238,166,.06);animation:tour21590IntroCard 1.15s cubic-bezier(.18,.78,.25,1.08) both}
+#tournament21540Panel .tourRoundIntroKicker21590{font-size:9px;letter-spacing:.16em;color:#bda45f;font-weight:900}
+#tournament21540Panel .tourRoundIntroTitle21590{margin-top:3px;font-size:20px;line-height:1.1;color:#ffe58a;font-weight:950;text-shadow:0 2px 8px #000}
+#tournament21540Panel .tourRoundIntroSub21590{margin-top:5px;font-size:10px;color:#d7d1b8}
 @keyframes tour21590Advance{0%{transform:translateX(-8px) scale(.95);opacity:.48;filter:brightness(1.7)}55%{transform:translateX(2px) scale(1.04);opacity:1}100%{transform:none;filter:none}}
 @keyframes tour21590CurrentPulse{0%,100%{box-shadow:0 0 0 1px rgba(101,168,255,.16),0 0 8px rgba(101,168,255,.12)}50%{box-shadow:0 0 0 2px rgba(255,211,89,.26),0 0 18px rgba(255,195,56,.18)}}
 @keyframes tour21590RoundShine{0%,72%,100%{left:-35%}86%{left:115%}}
+@keyframes tour21590IntroBackdrop{0%{opacity:0}18%,72%{opacity:1}100%{opacity:0}}
+@keyframes tour21590IntroCard{0%{opacity:0;transform:scale(.82) translateY(10px)}22%,72%{opacity:1;transform:scale(1) translateY(0)}100%{opacity:0;transform:scale(1.03) translateY(-3px)}}
 @media(max-width:520px){#tournament21540Panel:not(.tourFireFit) .tourAvatar{width:36px;height:36px;flex-basis:36px}#tournament21540Panel:not(.tourFireFit) .tourBracketSlot.champion .tourAvatar{width:40px;height:40px;flex-basis:40px}}
 #tournament21540Panel.tourFireFit .tourBracketSlot[data-tour-visual-pair='a']:after{display:none}
 #tournament21540Panel.tourFireFit .tourVisualBossGate21590{grid-template-columns:42px minmax(0,1fr);padding:5px;gap:6px;margin:4px 0}#tournament21540Panel.tourFireFit .tourVisualBossGate21590 .tourAvatar{width:40px!important;height:40px!important;flex-basis:40px!important}
-@media(prefers-reduced-motion:reduce){#tournament21540Panel .tourBracketRoundTitle:after,#tournament21540Panel .tourBracketSlot.current,#tournament21540Panel .tourBracketSlot.currentOpp,#tournament21540Panel .tourBracketSlot.tourVisualAdvance21590{animation:none!important}#tournament21540Panel .tourBracketSlot,#tournament21540Panel .tourAvatar img{transition:none!important}}
+#tournament21540Panel.tourFireFit .tourRoundIntroCard21590{padding:8px 10px;min-width:58%}#tournament21540Panel.tourFireFit .tourRoundIntroTitle21590{font-size:13px}#tournament21540Panel.tourFireFit .tourRoundIntroSub21590{font-size:8px}
+@media(prefers-reduced-motion:reduce){#tournament21540Panel .tourBracketRoundTitle:after,#tournament21540Panel .tourBracketSlot.current,#tournament21540Panel .tourBracketSlot.currentOpp,#tournament21540Panel .tourBracketSlot.tourVisualAdvance21590,#tournament21540Panel .tourRoundIntro21590,#tournament21540Panel .tourRoundIntroCard21590{animation:none!important}#tournament21540Panel .tourBracketSlot,#tournament21540Panel .tourAvatar img{transition:none!important}}
 `;
     document.head.appendChild(s);
   }
 
-  function cleanName(slot){
-    return String(slot?.querySelector('.tourSlotName')?.textContent||'').replace(/[👑🏆]/gu,'').trim();
-  }
-  function roundIndex(slot){
-    const round=slot?.closest('.tourBracketRound');
-    return Number(round?.dataset?.round??-1);
-  }
-  function slotIndex(slot){
-    const body=slot?.parentElement;if(!body)return-1;
-    return [...body.children].filter(x=>x.classList?.contains('tourBracketSlot')).indexOf(slot);
-  }
-  function markPairs(){
-    document.querySelectorAll('#tournament21540Panel .tourBracketRound').forEach(round=>{
-      const r=Number(round.dataset.round||0);if(r>=4)return;
-      const slots=[...round.querySelectorAll('.tourBracketSlot')];
-      slots.forEach((slot,i)=>{
-        if(i%2===0&&i+1<slots.length)slot.dataset.tourVisualPair='a';
-        else delete slot.dataset.tourVisualPair;
-      });
-    });
-  }
-  function animateAdvances(){
-    document.querySelectorAll('#tournament21540Panel .tourBracketSlot.tourAdvanced').forEach(slot=>{
-      const name=cleanName(slot),r=roundIndex(slot),i=slotIndex(slot);if(!name||r<0||i<0)return;
-      const key=r+':'+i+':'+name;
-      if(seenAdvance.has(key))return;
-      seenAdvance.add(key);slot.classList.add('tourVisualAdvance21590');
-      setTimeout(()=>slot.classList.remove('tourVisualAdvance21590'),780);
-    });
+  function cleanName(slot){return String(slot?.querySelector('.tourSlotName')?.textContent||'').replace(/[👑🏆]/gu,'').trim()}
+  function roundIndex(slot){const round=slot?.closest('.tourBracketRound');return Number(round?.dataset?.round??-1)}
+  function slotIndex(slot){const body=slot?.parentElement;if(!body)return-1;return [...body.children].filter(x=>x.classList?.contains('tourBracketSlot')).indexOf(slot)}
+  function markPairs(){document.querySelectorAll('#tournament21540Panel .tourBracketRound').forEach(round=>{const r=Number(round.dataset.round||0);if(r>=4)return;const slots=[...round.querySelectorAll('.tourBracketSlot')];slots.forEach((slot,i)=>{if(i%2===0&&i+1<slots.length)slot.dataset.tourVisualPair='a';else delete slot.dataset.tourVisualPair})})}
+  function animateAdvances(){document.querySelectorAll('#tournament21540Panel .tourBracketSlot.tourAdvanced').forEach(slot=>{const name=cleanName(slot),r=roundIndex(slot),i=slotIndex(slot);if(!name||r<0||i<0)return;const key=r+':'+i+':'+name;if(seenAdvance.has(key))return;seenAdvance.add(key);slot.classList.add('tourVisualAdvance21590');setTimeout(()=>slot.classList.remove('tourVisualAdvance21590'),780)})}
+  function activeRound(){const slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot.current,#tournament21540Panel .tourBracketSlot.currentOpp')];const rounds=slots.map(roundIndex).filter(r=>r>=0&&r<4);return rounds.length?Math.max(...rounds):-1}
+  function roundIntro(){
+    const panel=document.getElementById('tournament21540Panel'),r=activeRound();if(!panel||r<0)return;
+    const active=document.querySelector('#tournament21540Panel .tourActive'),attempt=active?.dataset?.attemptId||active?.dataset?.cupId||'';
+    const key=attempt+':'+r;if(seenRoundIntro.has(key))return;seenRoundIntro.add(key);
+    const titles=['1回戦','準々決勝','準決勝','決勝'],subs=['ROUND OF 16','QUARTERFINAL','SEMIFINAL','FINAL'];
+    panel.querySelector('.tourRoundIntro21590')?.remove();
+    const veil=document.createElement('div');veil.className='tourRoundIntro21590';veil.setAttribute('aria-hidden','true');veil.innerHTML='<div class="tourRoundIntroCard21590"><div class="tourRoundIntroKicker21590">TOURNAMENT</div><div class="tourRoundIntroTitle21590">'+titles[r]+'</div><div class="tourRoundIntroSub21590">'+subs[r]+' · 次の対局へ</div></div>';
+    panel.appendChild(veil);clearTimeout(introTimer);introTimer=setTimeout(()=>veil.remove(),1200);
   }
   function bossGate(){
     const active=document.querySelector('#tournament21540Panel .tourActive');if(!active)return;
-    const existing=active.querySelector('.tourVisualBossGate21590');
-    const boss=active.querySelector('.tourBoss21546');
-    if(!boss){existing?.remove();return}
-    if(existing)return;
+    const existing=active.querySelector('.tourVisualBossGate21590'),boss=active.querySelector('.tourBoss21546');if(!boss){existing?.remove();return}if(existing)return;
     const row=boss.querySelector('.tourBoss21546Row'),img=row?.querySelector('img'),name=row?.querySelector('b')?.textContent?.replace('👑','').trim()||'杯ボス';
-    const card=document.createElement('div');card.className='tourVisualBossGate21590';card.setAttribute('aria-label','トーナメント優勝後のボス戦');
-    const portrait=document.createElement('span');portrait.className='tourAvatar';
+    const card=document.createElement('div');card.className='tourVisualBossGate21590';card.setAttribute('aria-label','トーナメント優勝後のボス戦');const portrait=document.createElement('span');portrait.className='tourAvatar';
     if(img?.src){const clone=document.createElement('img');clone.src=img.currentSrc||img.src;clone.alt='';clone.loading='eager';portrait.appendChild(clone)}else portrait.textContent='👑';
-    const text=document.createElement('div');text.innerHTML='<div class="tourVisualBossGateTitle21590">FINAL BOSS · トーナメント優勝後</div><div class="tourVisualBossGateName21590">👑 '+name+'</div><div class="tourVisualBossGateNote21590">4勝で優勝したあとに挑む、ブラケット外の別5戦目です。</div>';
-    card.append(portrait,text);boss.insertAdjacentElement('afterend',card);
+    const text=document.createElement('div');text.innerHTML='<div class="tourVisualBossGateTitle21590">FINAL BOSS · トーナメント優勝後</div><div class="tourVisualBossGateName21590">👑 '+name+'</div><div class="tourVisualBossGateNote21590">4勝で優勝したあとに挑む、ブラケット外の別5戦目です。</div>';card.append(portrait,text);boss.insertAdjacentElement('afterend',card);
   }
-  function decorate(){
-    ensureStyle();markPairs();animateAdvances();bossGate();
-    const panel=document.getElementById('tournament21540Panel');
-    if(panel)panel.dataset.visualVersion='21590a';
-  }
+  function decorate(){ensureStyle();markPairs();animateAdvances();roundIntro();bossGate();const panel=document.getElementById('tournament21540Panel');if(panel)panel.dataset.visualVersion='21590a'}
   function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;decorate()})}
-  function observe(){
-    const panel=document.getElementById('tournament21540Panel');if(!panel)return false;
-    observer?.disconnect();observer=new MutationObserver(muts=>{
-      if(muts.every(m=>m.target?.closest?.('.tourVisualBossGate21590')))return;
-      schedule();
-    });observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});decorate();return true;
-  }
-  let tries=0;const boot=setInterval(()=>{if(observe()||++tries>120)clearInterval(boot)},100);
-  window.addEventListener('resize',schedule,{passive:true});
-  window.addEventListener('orientationchange',()=>setTimeout(schedule,120),{passive:true});
-
-  window.AI_SHOGI_TOURNAMENT_VISUAL={
-    version:'21590a',refresh:decorate,
-    audit:()=>{
-      const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length;
-      return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),fireFit:!!panel?.classList.contains('tourFireFit')};
-    }
-  };
+  function observe(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer?.disconnect();observer=new MutationObserver(muts=>{if(muts.every(m=>m.target?.closest?.('.tourVisualBossGate21590,.tourRoundIntro21590')))return;schedule()});observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});decorate();return true}
+  let tries=0;const boot=setInterval(()=>{if(observe()||++tries>120)clearInterval(boot)},100);window.addEventListener('resize',schedule,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(schedule,120),{passive:true});
+  window.AI_SHOGI_TOURNAMENT_VISUAL={version:'21590a',refresh:decorate,audit:()=>{const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length;return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),roundIntro:!!panel?.querySelector('.tourRoundIntro21590'),fireFit:!!panel?.classList.contains('tourFireFit')}}};
 })();
