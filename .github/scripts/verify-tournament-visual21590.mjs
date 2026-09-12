@@ -8,6 +8,11 @@ need(loader.includes("./tournament-visual21590.js?v=21590a"),'21590 visual loade
 need(visual.includes("version:'21590a'"),'visual audit version missing');
 need(visual.includes('.tourBracketSlot.tourAdvanced'),'winner/advance visual missing');
 need(visual.includes('tourVisualAdvance21590'),'advance animation marker missing');
+need(visual.includes('tourRoundIntro21590'),'round intro visual missing');
+need(visual.includes('TOURNAMENT CHAMPION'),'champion transition title missing');
+need(visual.includes('EXTRA MATCH · 👑'),'extra boss match transition missing');
+need(visual.includes('tourBossIntro21590'),'boss intro visual missing');
+need(visual.includes('tour21590BossGate'),'boss gate entrance animation missing');
 need(visual.includes('FINAL BOSS · トーナメント優勝後'),'boss gate visual missing');
 need(visual.includes('prefers-reduced-motion:reduce'),'reduced-motion support missing');
 need(visual.includes('#tournament21540Panel.tourFireFit'),'Fire fit override missing');
@@ -19,6 +24,8 @@ console.log('PASS_TOURNAMENT21590_IMAGE_VISUAL_STATIC',JSON.stringify({
   loader:true,
   imageCards:true,
   advanceMotion:true,
+  roundIntro:true,
+  championBossTransition:true,
   bossGate:true,
   reducedMotion:true,
   fireFit:true,
