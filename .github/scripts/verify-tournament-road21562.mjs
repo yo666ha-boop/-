@@ -35,15 +35,16 @@ try{
   }
 
   // Bracket geometry is verified on a fresh desktop page so responsive state from the
-  // 390px ROAD run cannot leak into the connector audit.
+  // 390px ROAD run cannot leak into the connector audit. Match the authoritative 21543
+  // bracket test by making the panel visible and refreshing the tournament skin first.
   const desktopErrors=[];
   const desktop=await browser.newPage({viewport:{width:1280,height:844}});
   desktop.on('pageerror',e=>desktopErrors.push(String(e?.message||e))); desktop.on('dialog',async d=>d.accept());
   await desktop.goto('http://127.0.0.1:8000/shogi-v21528/?road21562desktop='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
-  await desktop.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit,{timeout:60000});
-  await desktop.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('desktop start failed');for(let i=0;i<3;i++){t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();}});
-  await desktop.waitForFunction(()=>{window.AI_SHOGI_TOURNAMENT?.render?.();const a=window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.();return a?.connectors>=30&&a?.alignmentErrors===0&&a?.pairingErrors===0},{timeout:30000});
-  const desktopBracket=await desktop.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT,a=t?.state?.()?.active,boss=t?.cups?.().find(c=>c.id===a?.cupId)?.boss||'',audit=window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.()||{};return {connectors:Number(audit.connectors||0),alignmentErrors:Number(audit.alignmentErrors??-1),pairingErrors:Number(audit.pairingErrors??-1),bossInBracket:!!boss&&[...document.querySelectorAll('.tourBracketSlot')].some(x=>(x.textContent||'').includes(boss)),roster:document.querySelectorAll('#chars .ch').length,overflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}});
+  await desktop.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit&&window.AI_SHOGI_TOURNAMENT_SKIN?.refresh,{timeout:60000});
+  await desktop.evaluate(async()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('desktop start failed');document.getElementById('tournament21540Panel')?.classList.add('on');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();window.AI_SHOGI_TOURNAMENT_SKIN?.refresh?.();await new Promise(r=>setTimeout(r,300));});
+  await desktop.waitForFunction(()=>{window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_SKIN?.refresh?.();const a=window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.();return a?.connectors>=30&&a?.alignmentErrors===0&&a?.pairingErrors===0},{timeout:30000});
+  const desktopBracket=await desktop.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT,a=t?.state?.()?.active,boss=t?.cups?.().find(c=>c.id===a?.cupId)?.boss||'',audit=window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.()||{},skin=window.AI_SHOGI_TOURNAMENT_SKIN?.audit?.()||{};return {connectors:Number(audit.connectors||skin.connectors||0),alignmentErrors:Number(audit.alignmentErrors??-1),pairingErrors:Number(audit.pairingErrors??-1),bossInBracket:!!boss&&[...document.querySelectorAll('.tourBracketSlot')].some(x=>(x.textContent||'').includes(boss)),roster:document.querySelectorAll('#chars .ch').length,overflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}});
   if(desktopBracket.connectors<30||desktopBracket.alignmentErrors!==0||desktopBracket.pairingErrors!==0||desktopBracket.bossInBracket||desktopBracket.roster!==26||desktopBracket.overflow!==0)throw new Error('desktop bracket invariants '+JSON.stringify(desktopBracket));
   await desktop.close();
   if(errors.length||desktopErrors.length)throw new Error('pageErrors '+JSON.stringify({mobile:errors,desktop:desktopErrors}));
