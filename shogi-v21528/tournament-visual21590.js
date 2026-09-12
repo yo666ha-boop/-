@@ -7,6 +7,7 @@
   if(window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A)return;
   window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A=true;
 
+  const KEY='aiShogiTournament21540';
   const seenAdvance=new Set(),seenRoundIntro=new Set(),seenBossIntro=new Set();
   let observer=null,raf=0,introTimer=0,bossIntroTimer=0;
 
@@ -64,13 +65,13 @@
   function cleanName(slot){return String(slot?.querySelector('.tourSlotName')?.textContent||'').replace(/[👑🏆]/gu,'').trim()}
   function roundIndex(slot){const round=slot?.closest('.tourBracketRound');return Number(round?.dataset?.round??-1)}
   function slotIndex(slot){const body=slot?.parentElement;if(!body)return-1;return [...body.children].filter(x=>x.classList?.contains('tourBracketSlot')).indexOf(slot)}
+  function attemptKey(){try{const a=JSON.parse(localStorage.getItem(KEY)||'null')?.active;return String(a?.cupId||'')+':'+String(a?.startedAt||'')}catch(e){return''}}
   function markPairs(){document.querySelectorAll('#tournament21540Panel .tourBracketRound').forEach(round=>{const r=Number(round.dataset.round||0);if(r>=4)return;const slots=[...round.querySelectorAll('.tourBracketSlot')];slots.forEach((slot,i)=>{if(i%2===0&&i+1<slots.length)slot.dataset.tourVisualPair='a';else delete slot.dataset.tourVisualPair})})}
   function animateAdvances(){document.querySelectorAll('#tournament21540Panel .tourBracketSlot.tourAdvanced').forEach(slot=>{const name=cleanName(slot),r=roundIndex(slot),i=slotIndex(slot);if(!name||r<0||i<0)return;const key=r+':'+i+':'+name;if(seenAdvance.has(key))return;seenAdvance.add(key);slot.classList.add('tourVisualAdvance21590');setTimeout(()=>slot.classList.remove('tourVisualAdvance21590'),780)})}
   function activeRound(){const slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot.current,#tournament21540Panel .tourBracketSlot.currentOpp')];const rounds=slots.map(roundIndex).filter(r=>r>=0&&r<4);return rounds.length?Math.max(...rounds):-1}
   function roundIntro(){
     const panel=document.getElementById('tournament21540Panel'),r=activeRound();if(!panel||r<0)return;
-    const active=document.querySelector('#tournament21540Panel .tourActive'),attempt=active?.dataset?.attemptId||active?.dataset?.cupId||'';
-    const key=attempt+':'+r;if(seenRoundIntro.has(key))return;seenRoundIntro.add(key);
+    const key=attemptKey()+':'+r;if(seenRoundIntro.has(key))return;seenRoundIntro.add(key);
     const titles=['1回戦','準々決勝','準決勝','決勝'],subs=['ROUND OF 16','QUARTERFINAL','SEMIFINAL','FINAL'];
     panel.querySelector('.tourRoundIntro21590')?.remove();
     const veil=document.createElement('div');veil.className='tourRoundIntro21590';veil.setAttribute('aria-hidden','true');veil.innerHTML='<div class="tourRoundIntroCard21590"><div class="tourRoundIntroKicker21590">TOURNAMENT</div><div class="tourRoundIntroTitle21590">'+titles[r]+'</div><div class="tourRoundIntroSub21590">'+subs[r]+' · 次の対局へ</div></div>';
@@ -87,7 +88,7 @@
   function bossIntro(gate){
     const panel=document.getElementById('tournament21540Panel');if(!panel||!gate)return;
     const boss=String(gate.dataset.bossName||'杯ボス'),champion=cleanName(panel.querySelector('.tourBracketSlot.champion'))||'あなた';
-    const key=champion+':'+boss;if(seenBossIntro.has(key))return;seenBossIntro.add(key);
+    const key=attemptKey()+':'+champion+':'+boss;if(seenBossIntro.has(key))return;seenBossIntro.add(key);
     panel.querySelector('.tourBossIntro21590')?.remove();
     const veil=document.createElement('div');veil.className='tourBossIntro21590';veil.setAttribute('aria-hidden','true');veil.innerHTML='<div class="tourBossIntroCard21590"><div class="tourBossIntroKicker21590">TOURNAMENT CHAMPION</div><div class="tourBossIntroTitle21590">🏆 4勝・優勝</div><div class="tourBossIntroSub21590">EXTRA MATCH · 👑 '+boss+' へ</div></div>';
     panel.appendChild(veil);clearTimeout(bossIntroTimer);bossIntroTimer=setTimeout(()=>veil.remove(),1200);
@@ -96,5 +97,5 @@
   function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;decorate()})}
   function observe(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer?.disconnect();observer=new MutationObserver(muts=>{if(muts.every(m=>m.target?.closest?.('.tourVisualBossGate21590,.tourRoundIntro21590,.tourBossIntro21590')))return;schedule()});observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});decorate();return true}
   let tries=0;const boot=setInterval(()=>{if(observe()||++tries>120)clearInterval(boot)},100);window.addEventListener('resize',schedule,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(schedule,120),{passive:true});
-  window.AI_SHOGI_TOURNAMENT_VISUAL={version:'21590a',refresh:decorate,audit:()=>{const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length;return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),roundIntro:!!panel?.querySelector('.tourRoundIntro21590'),bossIntro:!!panel?.querySelector('.tourBossIntro21590'),fireFit:!!panel?.classList.contains('tourFireFit')}}};
+  window.AI_SHOGI_TOURNAMENT_VISUAL={version:'21590a',refresh:decorate,audit:()=>{const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length;return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),roundIntro:!!panel?.querySelector('.tourRoundIntro21590'),bossIntro:!!panel?.querySelector('.tourBossIntro21590'),attemptKey:attemptKey(),fireFit:!!panel?.classList.contains('tourFireFit')}}};
 })();
