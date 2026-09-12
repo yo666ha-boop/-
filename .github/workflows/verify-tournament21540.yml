@@ -27,5 +27,7 @@ jobs:
           node --check shogi-v21528/tournament-boss21546.js
           node --check shogi-v21528/rating-progress21536.js
           node --check .github/scripts/verify-tournament21540.mjs
-      - name: Verify tournament then boss flow
+          grep -q "version:'21592'" shogi-v21528/tournament21541.js
+          grep -q "PASS_TOURNAMENT21592_ACHIEVEMENTS" .github/scripts/verify-tournament21540.mjs
+      - name: Verify tournament then boss flow and achievements 21592
         run: node .github/scripts/verify-tournament21540.mjs
