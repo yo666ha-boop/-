@@ -34,8 +34,13 @@ try{
     if(bad.length)throw new Error(name+' '+bad.join(' | ')); cases.push({name,...row});
   }
 
+  // Geometry belongs to the normal active bracket, not the champion/EX terminal view.
+  await page.evaluate(()=>{
+    const k='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(k)||'null');if(!s?.active)throw new Error('no active for desktop audit');
+    Object.assign(s.active,{round:0,status:'active'});s.active.bossChallenge={...(s.active.bossChallenge||{}),status:'locked'};localStorage.setItem(k,JSON.stringify(s));
+  });
   await page.setViewportSize({width:1280,height:844});
-  await page.evaluate(()=>{window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
+  await page.evaluate(async()=>{window.dispatchEvent(new Event('resize'));for(let i=0;i<6;i++){window.AI_SHOGI_TOURNAMENT?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();await new Promise(r=>setTimeout(r,100));}});
   await page.waitForFunction(()=>{const a=window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.();return a?.connectors>=30&&a?.alignmentErrors===0&&a?.pairingErrors===0},{timeout:30000});
   const desktopBracket=await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT,a=t?.state?.()?.active,boss=t?.cups?.().find(c=>c.id===a?.cupId)?.boss||'',audit=window.AI_SHOGI_TOURNAMENT_BRACKET_UI?.audit?.()||{};return {connectors:Number(audit.connectors||0),alignmentErrors:Number(audit.alignmentErrors??-1),pairingErrors:Number(audit.pairingErrors??-1),bossInBracket:!!boss&&[...document.querySelectorAll('.tourBracketSlot')].some(x=>(x.textContent||'').includes(boss)),roster:document.querySelectorAll('#chars .ch').length,overflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}});
   if(desktopBracket.connectors<30||desktopBracket.alignmentErrors!==0||desktopBracket.pairingErrors!==0||desktopBracket.bossInBracket||desktopBracket.roster!==26||desktopBracket.overflow!==0)throw new Error('desktop bracket invariants '+JSON.stringify(desktopBracket));
