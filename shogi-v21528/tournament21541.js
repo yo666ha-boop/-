@@ -25,12 +25,20 @@
   ];
 
   const now=()=>Date.now();
-  const fresh=()=>({version:VERSION,active:null,trophies:{},history:[]});
+  const seedChampionships=trophies=>Object.fromEntries(Object.entries(trophies||{}).map(([id,n])=>[id,Number(n)||0]));
+  const fresh=()=>({version:VERSION,active:null,trophies:{},championships:{},streaks:{},history:[]});
+  const normalize=x=>{
+    x.trophies=x.trophies||{};
+    x.championships=x.championships||seedChampionships(x.trophies);
+    x.streaks=x.streaks||{};
+    x.history=Array.isArray(x.history)?x.history:[];
+    return x;
+  };
   const read=()=>{
     try{
       const x=JSON.parse(localStorage.getItem(KEY)||'null');
-      if(x&&x.version===VERSION)return x;
-      if(x&&(x.version===1||x.version===2))return{version:VERSION,active:null,trophies:x.trophies||{},history:Array.isArray(x.history)?x.history:[]};
+      if(x&&x.version===VERSION)return normalize(x);
+      if(x&&(x.version===1||x.version===2))return normalize({version:VERSION,active:null,trophies:x.trophies||{},championships:seedChampionships(x.trophies),streaks:{},history:Array.isArray(x.history)?x.history:[]});
       return fresh();
     }catch(e){return fresh()}
   };
@@ -194,7 +202,7 @@
 #tournament21540Panel{margin:10px 0 12px;border:1px solid #8b6c2f;border-radius:14px;background:#091411;padding:10px;color:#f1dfa6;display:none}#tournament21540Panel.on{display:block}
 .tourHead{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}.tourHead strong{font-size:15px}.tourHead .miniBtn{white-space:nowrap}.tourLead{font-size:12px;line-height:1.5;color:#cfc39e;margin-bottom:8px}.tourRecommended{font-weight:900;color:#ffe49a}
 .tourActive{border:1px solid #846526;border-radius:11px;padding:9px;margin:8px 0;background:#0e1b17}.tourActiveTitle{font-weight:900;margin-bottom:4px}.tourCurrentMatch{font-size:12px;font-weight:900;margin:7px 0}.tourCurrentMatch .bossMark{color:#ffe174}.tourActions{display:flex;gap:6px;flex-wrap:wrap}.tourActions .btn{flex:1 1 130px}
-.tourGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.tourCup{border:1px solid #4c4329;border-radius:11px;padding:8px;background:#0b1512;min-width:0}.tourCup.recommended{border-color:#d3a93d;box-shadow:0 0 0 1px #d3a93d inset}.tourCup.won{background:#171a0e}.tourCupName{font-weight:900;font-size:13px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.tourCupMeta{font-size:11px;line-height:1.4;color:#bdb18c;margin:4px 0 7px}.tourCup .btn{width:100%;padding:7px 8px}.tourTag{font-size:10px;border:1px solid currentColor;border-radius:999px;padding:1px 5px}.tourTrophy{color:#ffe174}.tourResult{font-size:12px;font-weight:900;margin:6px 0}.tourSubtle{font-size:11px;color:#a99f80;line-height:1.4}
+.tourGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.tourCup{border:1px solid #4c4329;border-radius:11px;padding:8px;background:#0b1512;min-width:0}.tourCup.recommended{border-color:#d3a93d;box-shadow:0 0 0 1px #d3a93d inset}.tourCup.won{background:#171a0e}.tourCupName{font-weight:900;font-size:13px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.tourCupMeta{font-size:11px;line-height:1.4;color:#bdb18c;margin:4px 0 4px}.tourCupRecord{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:0 0 7px;font-size:10px;font-weight:900;color:#d8c99a}.tourCupRecord .tourStreak{color:#ffb45b}.tourCupRecord .tourChampionCount{color:#eee0b3}.tourCup .btn{width:100%;padding:7px 8px}.tourTag{font-size:10px;border:1px solid currentColor;border-radius:999px;padding:1px 5px}.tourTrophy{color:#ffe174}.tourResult{font-size:12px;font-weight:900;margin:6px 0}.tourSubtle{font-size:11px;color:#a99f80;line-height:1.4}
 .tourNews{border:1px solid #365147;border-radius:9px;background:#07110e;padding:6px 8px;margin:7px 0}.tourNewsTitle{font-size:11px;font-weight:900;color:#f0d47e;margin-bottom:3px}.tourNewsItem{font-size:10px;line-height:1.45;color:#c7c0a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tourNewsItem.start::before{content:'● ';color:#ef9d31}.tourNewsItem.result::before{content:'✓ ';color:#77c96b}
 .tourBracketWrap{margin:8px 0 10px}.tourBracketCaption{display:flex;justify-content:space-between;gap:8px;align-items:end;font-size:11px;color:#cfc39e;margin-bottom:5px}.tourBracketScroll{overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:5px}.tourBracket{display:flex;gap:6px;min-width:880px;border:1px solid #3f3827;border-radius:11px;background:#07100e;padding:7px}.tourBracketRound{width:164px;flex:0 0 164px;min-width:0}.tourBracketRoundTitle{text-align:center;font-size:11px;font-weight:900;color:#e6ce82;margin-bottom:4px}.tourBracketRoundBody{height:650px;display:flex;flex-direction:column;justify-content:space-around;gap:2px}
 .tourBracketSlot{min-height:40px;border:1px solid #423c2a;border-radius:8px;background:#0b1512;padding:4px 5px;font-size:10px;line-height:1.15;display:flex;align-items:center;gap:5px;min-width:0}.tourAvatar{width:30px;height:30px;flex:0 0 30px;border-radius:50%;overflow:hidden;border:1px solid #786431;background:#17201b;display:grid;place-items:center;font-weight:900}.tourAvatar img{width:100%;height:100%;object-fit:cover;display:block}.tourAvatarPlayer{background:#153866;border-color:#65a8ff;color:white}.tourAvatarFallback{font-size:13px}.tourSlotMain{min-width:0;flex:1}.tourSlotName{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:800}.tourSlotMeta{display:flex;gap:4px;align-items:center;margin-top:2px}.tourBracketRating{font-size:9px;opacity:.74}.tourMatchState{font-size:9px;border-radius:999px;padding:1px 4px;border:1px solid #625a43;color:#bdb393}.tourMatchState.running{border-color:#c77c26;color:#ffc06f}.tourMatchState.win{border-color:#4a8c46;color:#9ee896}.tourMatchState.loss{opacity:.7}.tourMatchState.wait{opacity:.65}
@@ -291,8 +299,9 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     document.body.classList.toggle('tournament21540Active',!!store.active&&['active','draw'].includes(store.active.status));
     const btn=document.getElementById('tournament21540Btn');if(btn)btn.innerHTML='🏆 大会モード'+(store.active&&['active','draw'].includes(store.active.status)?'<span class="tourDot"></span>':'');
     const cards=CUPS.map(c=>{
-      const wins=Number(store.trophies?.[c.id]||0),recommended=c.id===rec.id;
-      return'<div class="tourCup '+(recommended?'recommended ':'')+(wins?'won':'')+'"><div class="tourCupName">'+esc(c.name)+(recommended?'<span class="tourTag">おすすめ</span>':'')+(wins?'<span class="tourTrophy">🏆×'+wins+'</span>':'')+'</div><div class="tourCupMeta">'+esc(c.label)+' ／ 優勝後ボス '+esc(c.boss)+' R'+c.bossRating+'<br>16人・4勝で優勝</div><button class="btn '+(recommended?'primary':'')+'" data-tour-start="'+c.id+'">挑戦する</button></div>';
+      const cupWins=Number(store.trophies?.[c.id]||0),championships=Number(store.championships?.[c.id]??cupWins)||0,streak=Number(store.streaks?.[c.id]||0),recommended=c.id===rec.id;
+      const streakHtml=streak>=2?'<span class="tourStreak">🔥 '+streak+'連覇中</span>':'';
+      return'<div class="tourCup '+(recommended?'recommended ':'')+((cupWins||championships)?'won':'')+'"><div class="tourCupName">'+esc(c.name)+(recommended?'<span class="tourTag">おすすめ</span>':'')+(cupWins?'<span class="tourTrophy">🏆 杯獲得 '+cupWins+'回</span>':'')+'</div><div class="tourCupMeta">'+esc(c.label)+' ／ 優勝後ボス '+esc(c.boss)+' R'+c.bossRating+'<br>16人・4勝で優勝</div><div class="tourCupRecord"><span class="tourChampionCount">優勝 '+championships+'回</span>'+streakHtml+'</div><button class="btn '+(recommended?'primary':'')+'" data-tour-start="'+c.id+'">挑戦する</button></div>';
     }).join('');
     body.innerHTML='<div class="tourLead">あなたは <b>R'+rating+'</b>。現在のおすすめは <span class="tourRecommended">'+esc(rec.name)+'</span>。出場AI15人は全員ボス未満のRから毎大会ランダム選出・配置。AI同士も同じ回戦をリアルタイム進行し、ボスは優勝後の別5戦目です。</div>'+renderActive(store)+'<div class="tourGrid">'+cards+'</div>';
     body.querySelectorAll('[data-tour-start]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourStart)));
@@ -350,8 +359,10 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
       addNews(a,ROUNDS[a.round]+'：あなたが '+displayName(opponent)+' に勝利','result');
       if(a.round>=ROUNDS.length-1){
         a.bracket.rounds[4][0]=PLAYER;a.status='champion';a.finishedAt=now();a.pending=null;
+        store.championships=store.championships||{};store.championships[cup.id]=(Number(store.championships[cup.id])||0)+1;
+        store.streaks=store.streaks||{};store.streaks[cup.id]=(Number(store.streaks[cup.id])||0)+1;
         store.trophies=store.trophies||{};store.trophies[cup.id]=(Number(store.trophies[cup.id])||0)+1;
-        addNews(a,cup.name+' 優勝！','result');
+        addNews(a,cup.name+' 優勝！ 通算'+store.championships[cup.id]+'回'+(store.streaks[cup.id]>=2?'・'+store.streaks[cup.id]+'連覇':'')+'。','result');
       }else{
         const oldRound=a.round,nextSlot=Math.floor(a.playerSlot/2);
         a.bracket.rounds[oldRound+1][nextSlot]=PLAYER;
@@ -361,6 +372,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
       addNews(a,ROUNDS[a.round]+'：あなたは '+displayName(opponent)+' に敗退','result');
       if(a.round<ROUNDS.length){a.bracket.rounds[a.round+1][Math.floor(a.playerSlot/2)]=opponent}
       a.status='lost';a.finishedAt=now();a.pending=null;
+      store.streaks=store.streaks||{};store.streaks[cup.id]=0;
       scheduleRoundAI(a,cup,a.round+1);
     }else{
       a.status='draw';a.pending=null;addNews(a,ROUNDS[a.round]+'：引き分け・指し直し','result');
@@ -395,7 +407,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
   window.addEventListener('ai-shogi-profile-stats',()=>setTimeout(render,0));
 
   window.AI_SHOGI_TOURNAMENT={
-    version:'21585',cups:()=>CUPS.map(c=>({...c})),recommended:()=>({...recommendedCup()}),state:()=>JSON.parse(JSON.stringify(read())),start:startCup,next:startCurrentMatch,exit:exitCup,render,
+    version:'21592',cups:()=>CUPS.map(c=>({...c})),recommended:()=>({...recommendedCup()}),state:()=>JSON.parse(JSON.stringify(read())),start:startCup,next:startCurrentMatch,exit:exitCup,render,
     tick:()=>{const store=read();advanceAIProgress(store);write(store);render();return JSON.parse(JSON.stringify(store.active))},
     settleCurrentRound:()=>{const store=read();if(store.active)settleRoundAI(store,store.active.round);write(store);render();return JSON.parse(JSON.stringify(store.active))},
     audit:()=>{const s=read(),r=Number(currentStats().rating)||1500,rec=recommendedCup(r),a=s.active,cup=cupById(a?.cupId),matches=Object.values(a?.bracket?.matches||{}),portraitNames=[...new Set((a?.bracket?.rounds?.flat?.()||[]).filter(n=>n&&n!==PLAYER))];return{ok:!!window.AIShogiIOS,cups:CUPS.length,rating:r,recommended:rec.id,format:'16-player-live',bracketSize:16,rounds:4,active:a?JSON.parse(JSON.stringify(a)):null,currentOpponent:a?currentOpponent(a):null,bossSeeded:!!(a&&cup&&a.bracket?.rounds?.[0]?.[15]===cup.boss),runningAI:matches.filter(m=>m.status==='running').length,resolvedAI:matches.filter(m=>m.status==='done').length,liveProgress:true,portraits:portraitNames.filter(n=>!!avatarFor(n)).length,newsCount:a?.news?.length||0,charactersReady:CUPS.every(validCup),button:!!document.getElementById('tournament21540Btn'),panel:!!document.getElementById('tournament21540Panel'),bracketUI:!!document.querySelector('.tourBracket')}}
