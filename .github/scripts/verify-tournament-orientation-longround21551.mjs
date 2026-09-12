@@ -22,7 +22,9 @@ try{
     for(let i=1;i<=3;i++){if(speech)speech.textContent='LONG_SYNC_'+i+'_21551';await delay(750);updates.push(snap('update'+i))}
     if(speech)speech.textContent=before;return{initial,updates};
   });
-  const check=x=>x.hostDocked&&x.oppDocked&&x.hostParent==='side'&&x.oppParent==='side'&&x.hostHeight>0&&x.oppHeight>0&&x.hostHeight<=115&&x.oppHeight<=115&&x.sideOverflow===0&&x.docOverflow===0;
+  // During 1R/QF/SF/F the approved contract is opponent-as-speaker. The cup host stays
+  // structurally docked for stable layout/reload semantics but is visually hidden (0px).
+  const check=x=>x.hostDocked&&x.oppDocked&&x.hostParent==='side'&&x.oppParent==='side'&&x.hostHeight===0&&x.oppHeight>0&&x.oppHeight<=115&&x.sideOverflow===0&&x.docOverflow===0;
   const failures=[];for(const x of [setup.initial,...setup.updates])if(!check(x))failures.push('portrait/long '+JSON.stringify(x));
   for(let i=1;i<=3;i++)if(setup.updates[i-1]?.opponentText!=='LONG_SYNC_'+i+'_21551')failures.push('sync '+i+' '+setup.updates[i-1]?.opponentText);
   await page.setViewportSize({width:844,height:390});await page.evaluate(()=>window.dispatchEvent(new Event('orientationchange')));await page.waitForTimeout(450);
@@ -33,5 +35,5 @@ try{
   if(!check(portraitAgain)||portraitAgain.iw!==390||portraitAgain.ih!==844)failures.push('portraitAgain '+JSON.stringify(portraitAgain));
   if(pageErrors.length)failures.push('pageErrors '+JSON.stringify(pageErrors));
   await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT?.exit?.());if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS_TOURNAMENT21551_ORIENTATION_LONGROUND '+JSON.stringify({initial:setup.initial,updates:setup.updates,landscape,portraitAgain,pageErrors}));
+  console.log('PASS_TOURNAMENT21551_ORIENTATION_LONGROUND '+JSON.stringify({speaker:'opponent',hostHiddenDuringRound:true,initial:setup.initial,updates:setup.updates,landscape,portraitAgain,pageErrors}));
 }finally{await browser.close()}
