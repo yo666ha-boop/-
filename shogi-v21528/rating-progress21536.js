@@ -194,7 +194,7 @@ body:has(#tournament21540Panel.tourFireFit) .side>#tourDialogue21547.tourDialogu
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const s=document.createElement('script');
-    s.src=new URL('./tournament-visual21590.js?v=21590a',scriptURL).href;
+    s.src=new URL('./tournament-visual21590.js?v=21590b',scriptURL).href;
     s.async=false;
     document.head.appendChild(s);
   }catch(e){console.error('tournament visual21590 loader failed',e)}
