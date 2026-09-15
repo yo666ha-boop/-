@@ -1,0 +1,53 @@
+name: apply tournament focus 21594 regression alignment
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-focus21594-regression.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Align 21592 regression with 21594 focus UI
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const file='.github/scripts/verify-tournament21540.mjs';
+          let s=fs.readFileSync(file,'utf8');
+          function rep(from,to,label){
+            if(!s.includes(from)) throw new Error('missing anchor '+label);
+            s=s.replace(from,to);
+          }
+          rep(` const cupTap=await page.evaluate(()=>{const hs=[...document.querySelectorAll('#tournament21540Panel .tourCup .btn')].map(x=>x.getBoundingClientRect().height);return{count:hs.length,min:Math.min(...hs),max:Math.max(...hs)}});assert.equal(cupTap.count,10);assert.ok(cupTap.min>=44,JSON.stringify(cupTap));`,
+` const cupTap=await page.evaluate(()=>{const panel=document.getElementById('tournament21540Panel'),text=panel?.textContent||'',hs=[...document.querySelectorAll('#tournament21540Panel .tourCup .btn')].map(x=>x.getBoundingClientRect().height);return{count:hs.length,min:Math.min(...hs),max:Math.max(...hs),postChampionBossLabels:(text.match(/優勝後ボス/g)||[]).length}});assert.equal(cupTap.count,10);assert.ok(cupTap.min>=44,JSON.stringify(cupTap));assert.equal(cupTap.postChampionBossLabels,10,'selection view must show all 10 cup boss labels');`,
+'pre-start cup selection');
+          rep(` const ui=await page.evaluate(()=>{const text=document.getElementById('tournament21540Panel')?.textContent||'';return{cols:document.querySelectorAll('.tourBracketRound').length,round0:document.querySelectorAll('.tourBracketRound[data-round="0"] .tourBracketSlot').length,imgs:document.querySelectorAll('.tourBracketRound[data-round="0"] .tourAvatar img').length,bossSlots:[...document.querySelectorAll('.tourBracketRound[data-round="0"] .tourSlotName')].filter(x=>x.textContent.includes('ケンシロウ')).length,legacyBossLabels:(text.match(/決勝ボス/g)||[]).length,postChampionBossLabels:(text.match(/優勝後ボス/g)||[]).length}});assert.equal(ui.cols,5);assert.equal(ui.round0,16);assert.equal(ui.imgs,15);assert.equal(ui.bossSlots,0);assert.equal(ui.legacyBossLabels,0);assert.equal(ui.postChampionBossLabels,10);`,
+` const ui=await page.evaluate(()=>{const text=document.getElementById('tournament21540Panel')?.textContent||'';return{cols:document.querySelectorAll('.tourBracketRound').length,round0:document.querySelectorAll('.tourBracketRound[data-round="0"] .tourBracketSlot').length,imgs:document.querySelectorAll('.tourBracketRound[data-round="0"] .tourAvatar img').length,bossSlots:[...document.querySelectorAll('.tourBracketRound[data-round="0"] .tourSlotName')].filter(x=>x.textContent.includes('ケンシロウ')).length,cupCards:document.querySelectorAll('#tournament21540Panel .tourCup').length,focusLead:document.querySelectorAll('#tournament21540Panel .tourFocusLead').length,legacyBossLabels:(text.match(/決勝ボス/g)||[]).length,postChampionBossLabels:(text.match(/優勝後ボス/g)||[]).length}});assert.equal(ui.cols,5);assert.equal(ui.round0,16);assert.equal(ui.imgs,15);assert.equal(ui.bossSlots,0);assert.equal(ui.cupCards,0,'active cup focus must hide the 10-cup grid');assert.equal(ui.focusLead,1,'active cup focus lead must be visible');assert.equal(ui.legacyBossLabels,0);assert.equal(ui.postChampionBossLabels,0,'hidden cup grid must not leak boss labels during active tournament');`,
+'active focus assertions');
+          rep(` await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render()});await page.waitForTimeout(80);\n const achievementText=await page.evaluate(()=>{const b=document.querySelector('[data-tour-start="kenshiro"]');return b?.closest('.tourCup')?.innerText||''});assert.ok(achievementText.includes('🏆 杯獲得 1回'),achievementText);assert.ok(achievementText.includes('優勝 2回'),achievementText);assert.ok(achievementText.includes('🔥 2連覇中'),achievementText);\n await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss());`,
+` await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render()});await page.waitForTimeout(80);\n const hiddenCupCards=await page.evaluate(()=>document.querySelectorAll('#tournament21540Panel .tourCup').length);assert.equal(hiddenCupCards,0,'cup cards stay hidden through boss-pending focus state');\n await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss());`,
+'hide achievement cards while active');
+          rep(` await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss());await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_BOSS.audit().bossStatus==='active');await result('loss');await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_BOSS.audit().bossStatus==='lost');state=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.state());assert.equal(state.trophies.kenshiro,1,'boss loss must not remove prior cup clears');assert.equal(state.championships.kenshiro,2);assert.equal(state.streaks.kenshiro,2,'boss loss must not break tournament title streak');\n await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.start('kenshiro',true));`,
+` await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.challengeBoss());await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_BOSS.audit().bossStatus==='active');await result('loss');await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_BOSS.audit().bossStatus==='lost');state=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.state());assert.equal(state.trophies.kenshiro,1,'boss loss must not remove prior cup clears');assert.equal(state.championships.kenshiro,2);assert.equal(state.streaks.kenshiro,2,'boss loss must not break tournament title streak');\n const endedAfterBossLoss=await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.exit());assert.equal(endedAfterBossLoss,true);await page.evaluate(()=>{document.getElementById('tournament21540Panel').classList.add('on');window.AI_SHOGI_TOURNAMENT.render()});await page.waitForTimeout(80);const achievementText=await page.evaluate(()=>{const b=document.querySelector('[data-tour-start="kenshiro"]');return b?.closest('.tourCup')?.innerText||''});assert.ok(achievementText.includes('🏆 杯獲得 1回'),achievementText);assert.ok(achievementText.includes('優勝 2回'),achievementText);assert.ok(achievementText.includes('🔥 2連覇中'),achievementText);\n await page.evaluate(()=>window.AI_SHOGI_TOURNAMENT.start('kenshiro',true));`,
+'restore achievement cards after tournament exit');
+          rep(`postChampionBossLabels:ui.postChampionBossLabels`, `postChampionBossLabels:cupTap.postChampionBossLabels,activeFocusBossLabels:ui.postChampionBossLabels`, 'pass payload');
+          fs.writeFileSync(file,s);
+          NODE
+      - name: Syntax gate
+        run: |
+          node --check .github/scripts/verify-tournament21540.mjs
+          grep -q "active cup focus must hide the 10-cup grid" .github/scripts/verify-tournament21540.mjs
+          grep -q "selection view must show all 10 cup boss labels" .github/scripts/verify-tournament21540.mjs
+      - name: Commit regression alignment
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/scripts/verify-tournament21540.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "test: align tournament regression with 21594 focus UI"
+          git push origin HEAD:feature/tournament-cups-20260902
