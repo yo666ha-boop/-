@@ -15,16 +15,21 @@ jobs:
           fetch-depth: 0
       - name: Align 21592 regression with 21594 focus UI
         run: node .github/scripts/apply-tournament-focus21594-regression.mjs
+      - name: Align Fire regression with hidden active cup grid
+        run: |
+          node -e "const fs=require('fs');const f='.github/scripts/verify-tournament-fire-ui21542.mjs';let s=fs.readFileSync(f,'utf8');const a='assert.equal(skinAudit.cups,10);assert.equal(skinAudit.recommended,1);';const b=\"assert.equal(skinAudit.cups,0,'active focus hides cup cards in Fire view');assert.equal(skinAudit.recommended,0,'active focus hides recommended cup card in Fire view');\";if(!s.includes(b)){if(!s.includes(a))throw Error('missing Fire focus anchor');s=s.replace(a,b);fs.writeFileSync(f,s)}"
       - name: Syntax gate
         run: |
           node --check .github/scripts/verify-tournament21540.mjs
+          node --check .github/scripts/verify-tournament-fire-ui21542.mjs
           grep -q "active cup focus must hide the 10-cup grid" .github/scripts/verify-tournament21540.mjs
           grep -q "selection view must show all 10 cup boss labels" .github/scripts/verify-tournament21540.mjs
+          grep -q "active focus hides cup cards in Fire view" .github/scripts/verify-tournament-fire-ui21542.mjs
       - name: Commit regression alignment
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .github/scripts/verify-tournament21540.mjs
+          git add .github/scripts/verify-tournament21540.mjs .github/scripts/verify-tournament-fire-ui21542.mjs
           git diff --cached --quiet && exit 0
-          git commit -m "test: align tournament regression with 21594 focus UI"
+          git commit -m "test: align tournament Fire regression with 21594 focus UI"
           git push origin HEAD:feature/tournament-cups-20260902
