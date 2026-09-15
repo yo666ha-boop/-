@@ -10,6 +10,7 @@ on:
       - '.github/scripts/verify-tournament-dialogue21547.mjs'
       - '.github/scripts/verify-tournament-all-boss-dialogue21547.mjs'
       - '.github/scripts/verify-tournament-four-round-opponents21553.mjs'
+      - '.github/scripts/verify-tournament-all-opponent-voices21599.mjs'
       - '.github/scripts/verify-tournament-dialogue-release21580.mjs'
       - '.github/scripts/verify-tournament-micchan-voice21595.mjs'
       - '.github/scripts/verify-tournament-character-voices21596.mjs'
@@ -35,6 +36,7 @@ jobs:
           node --check .github/scripts/verify-tournament-dialogue21547.mjs
           node --check .github/scripts/verify-tournament-all-boss-dialogue21547.mjs
           node --check .github/scripts/verify-tournament-four-round-opponents21553.mjs
+          node --check .github/scripts/verify-tournament-all-opponent-voices21599.mjs
           node --check .github/scripts/verify-tournament-dialogue-release21580.mjs
           node --check .github/scripts/verify-tournament-micchan-voice21595.mjs
           node --check .github/scripts/verify-tournament-character-voices21596.mjs
@@ -55,6 +57,15 @@ jobs:
           trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
           for i in $(seq 1 50); do curl -fsS http://127.0.0.1:8000/shogi-v21528/ >/dev/null && break; sleep .2; done
           node .github/scripts/verify-tournament-four-round-opponents21553.mjs
+      - name: Verify all 25 eligible opponent voices 21599
+        env:
+          HOME: /root
+        run: |
+          python3 -m http.server 8000 >/tmp/tournament-dialogue21599-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:8000/shogi-v21528/ >/dev/null && break; sleep .2; done
+          node .github/scripts/verify-tournament-all-opponent-voices21599.mjs
       - name: Verify 21580 dialogue release accessibility at 280px / 150% text
         env:
           HOME: /root
