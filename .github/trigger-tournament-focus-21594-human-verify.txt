@@ -1,0 +1,3 @@
+Tournament 21594 verification trigger.
+Purpose: retrigger PR validation from a user-authored commit after the product apply workflow committed e240d3dbf36286ed8d6fe4f9b22e2b067757f012 as github-actions[bot].
+No production behavior is changed by this file.
