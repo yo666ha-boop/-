@@ -1,0 +1,38 @@
+name: Apply tournament character voices 21596
+on:
+  push:
+    branches: [feature/tournament-cups-20260902]
+    paths:
+      - '.github/scripts/apply-tournament-character-voice21596.mjs'
+      - '.github/workflows/apply-tournament-character-voice21596.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply 21596 voice alignment
+        run: node .github/scripts/apply-tournament-character-voice21596.mjs
+      - name: Static regression markers
+        run: |
+          grep -q 'PASS_TOURNAMENT21558_NARROW_TEXT_SCALE' .github/scripts/verify-tournament-narrow-text21558.mjs
+          grep -q 'PASS_TOURNAMENT21595_MICCHAN' .github/scripts/verify-tournament-micchan-voice21595.mjs
+          grep -q 'にゃんびー' shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q '余が待つ' shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q '集中しなさい' shogi-v21528/tournament-dialogue-bank21547.js
+          grep -q '落ち着いて盤面を見ていきましょう' shogi-v21528/tournament-dialogue-bank21547.js
+      - name: Commit applied bank
+        run: |
+          if git diff --quiet; then echo 'already applied'; exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament-dialogue-bank21547.js
+          git commit -m 'fix: apply tournament character voices 21596'
+          git push origin HEAD:feature/tournament-cups-20260902
