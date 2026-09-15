@@ -22,37 +22,25 @@ try{
 
   const rows=[];
   for(const target of init.targets){
-    await page.evaluate(name=>{
-      const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===name);
-      if(!card)throw new Error('card missing '+name);
-      card.click();
-    },target.name);
-    await page.waitForFunction(name=>{
-      const opp=(document.getElementById('oppName')?.textContent||'').trim();
-      const speech=(document.getElementById('charSpeech')?.textContent||'').trim();
-      return opp.startsWith(name)&&!!speech;
-    },target.name,{timeout:5000});
-    await page.waitForTimeout(80);
-
     const row=await page.evaluate(async({name,rating,eligibleCup})=>{
       const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(r=>setTimeout(r,ms));
       const KEY='aiShogiTournament21540';
       const canon=s=>{if(!s)return'';try{const u=new URL(s,location.href);return u.origin+u.pathname}catch{return String(s).split('?')[0]}};
       const card=[...document.querySelectorAll('#chars .ch')].find(c=>(c.querySelector('.chName')?.textContent||c.querySelector('img')?.alt||'').trim()===name);
       const cardImg=card?.querySelector('img');
-      const baseSpeech=(document.getElementById('charSpeech')?.textContent||'').trim();
-      const selected=(document.getElementById('oppName')?.textContent||'').trim();
       const store=JSON.parse(localStorage.getItem(KEY)||'null');
       const a=store?.active;
       if(!a)throw new Error('active tournament missing '+name);
       a.status='active';a.pending=null;a.round=0;
       a.bossChallenge=a.bossChallenge||{};a.bossChallenge.status='locked';
-      const row=a.bracket?.rounds?.[0];
-      if(!Array.isArray(row))throw new Error('round0 missing '+name);
+      const bracketRow=a.bracket?.rounds?.[0];
+      if(!Array.isArray(bracketRow))throw new Error('round0 missing '+name);
       const playerSlot=Number(a.playerSlot)||0,oppSlot=playerSlot^1;
-      row[oppSlot]=name;
+      bracketRow[oppSlot]=name;
       localStorage.setItem(KEY,JSON.stringify(store));
-      t.render();d.render();await delay(100);d.render();
+      t.render();await delay(120);d.render();await delay(80);d.render();
+      const baseSpeech=(document.getElementById('charSpeech')?.textContent||'').trim();
+      const selected=(document.getElementById('oppName')?.textContent||'').trim();
       const box=document.getElementById('tourOpponentVoice21549'),img=box?.querySelector('img'),r=box?.getBoundingClientRect?.()||{};
       const text=(box?.querySelector('.tourDialogueBubble')?.textContent||'').trim();
       return{name,rating,eligibleCup,selected,baseSpeech,text,speaker:box?.dataset.speaker||'',role:box?.dataset.role||'',round:box?.dataset.round||'',cardSrc:canon(cardImg?.currentSrc||cardImg?.src||''),voiceSrc:canon(img?.currentSrc||img?.src||''),complete:!!img?.complete,w:Number(img?.naturalWidth)||0,h:Number(r.height)||0,docked:box?.classList.contains('tourRoundBattleDock21550')===true,parent:box?.parentElement?.classList?.contains('side')?'side':'other'};
