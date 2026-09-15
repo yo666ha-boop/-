@@ -9,7 +9,7 @@ try{
   const url='http://127.0.0.1:8000/shogi-v21528/?awardPersistence21593='+Date.now();
   const boot=async()=>{
     await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.version==='21592'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,null,{timeout:60000});
+    await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT?.version==='21594'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,null,{timeout:60000});
   };
   const openAndAudit=async()=>{
     await page.evaluate(()=>{
