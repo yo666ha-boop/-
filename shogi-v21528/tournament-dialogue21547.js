@@ -166,7 +166,10 @@
     const bossState=d?.a?.bossChallenge?.status||'locked';
     if(!d||!root||!d.opp||d.opp===PLAYER||bossState!=='locked'||d.a.pending||!['active','draw'].includes(d.a.status)){box?.remove();return false}
     if(!box){box=document.createElement('section');box.id='tourOpponentVoice21549';box.className='tourDialogue21547';box.setAttribute('role','status');box.setAttribute('aria-live','polite');box.setAttribute('aria-atomic','true');box.setAttribute('aria-label','大会の対戦相手のセリフ');const host=document.getElementById('tourDialogue21547');host?.parentElement===root?host.insertAdjacentElement('afterend',box):root.prepend(box)}
-    const src=portrait(d.opp),speech=(document.getElementById('charSpeech')?.textContent||'').trim()||'いい勝負にしよう。',round=String(Number(d.a.round)||0),oldImg=box.querySelector('img'),oldBubble=(box.querySelector('.tourDialogueBubble')?.textContent||'').trim();
+    const baseSpeech=(document.getElementById('charSpeech')?.textContent||'').trim()||'いい勝負にしよう。';
+    const micchanLines21595=['にゃんびー！','でんじゃーでんじゃーえまーじぇんしー！','にゃんびー警報、ぴこぴこぴー！','でんじゃー！こまこま大渋滞！','えまーじぇんしー！将棋が飛んでる！','にゃんびーにゃんびー、こまこまこま！'];
+    const speech=d.opp==='みっちゃん'?micchanLines21595[(Math.max(0,Number(d.a.round)||0)+Math.max(0,moveCount()))%micchanLines21595.length]:baseSpeech;
+    const src=portrait(d.opp),round=String(Number(d.a.round)||0),oldImg=box.querySelector('img'),oldBubble=(box.querySelector('.tourDialogueBubble')?.textContent||'').trim();
     if(box.dataset.speaker===d.opp&&box.dataset.role==='対戦相手・トーナメント参加者'&&box.dataset.round===round&&oldBubble===speech&&(!src||oldImg?.src===src))return true;
     box.dataset.speaker=d.opp;box.dataset.role='対戦相手・トーナメント参加者';box.dataset.round=round;
     box.innerHTML='<div class="tourDialoguePortrait">'+(src?'<img src="'+esc(src)+'" alt="'+esc(d.opp)+'">':'')+'</div><div class="tourDialogueBody"><div class="tourDialogueTop"><span class="tourDialogueStatus">'+esc(ROUNDS[Number(d.a.round)||0]||'大会')+'・対戦相手</span><span class="tourDialogueRole">対戦相手・トーナメント参加者</span></div><div class="tourDialogueName">'+esc(d.opp)+'</div><div class="tourDialogueBubble">'+esc(speech)+'</div></div>';
