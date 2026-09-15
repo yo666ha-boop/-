@@ -4,3 +4,7 @@ No production behavior is changed by this file.
 
 2026-09-15 validation retrigger after regression alignment commit 8ef4685969d42e0aa700d0da031089434976be7e.
 Require exact-head full regression GREEN for 21594 focus UI before completion.
+
+2026-09-15 final human-side retrigger after Fire regression alignment head dd5bbca3cb1c00405ad18c56d8e63fb175949e17.
+Reason: prior PR runs were action_required with zero jobs because the head commit was created by github-actions[bot].
+No production behavior changed; rerun exact-head PR regression only.
