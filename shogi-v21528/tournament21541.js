@@ -303,7 +303,10 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
       const streakHtml=streak>=2?'<span class="tourStreak">🔥 '+streak+'連覇中</span>':'';
       return'<div class="tourCup '+(recommended?'recommended ':'')+((cupWins||championships)?'won':'')+'"><div class="tourCupName">'+esc(c.name)+(recommended?'<span class="tourTag">おすすめ</span>':'')+(cupWins?'<span class="tourTrophy">🏆 杯獲得 '+cupWins+'回</span>':'')+'</div><div class="tourCupMeta">'+esc(c.label)+' ／ 優勝後ボス '+esc(c.boss)+' R'+c.bossRating+'<br>16人・4勝で優勝</div><div class="tourCupRecord"><span class="tourChampionCount">優勝 '+championships+'回</span>'+streakHtml+'</div><button class="btn '+(recommended?'primary':'')+'" data-tour-start="'+c.id+'">挑戦する</button></div>';
     }).join('');
-    body.innerHTML='<div class="tourLead">あなたは <b>R'+rating+'</b>。現在のおすすめは <span class="tourRecommended">'+esc(rec.name)+'</span>。出場AI15人は全員ボス未満のRから毎大会ランダム選出・配置。AI同士も同じ回戦をリアルタイム進行し、ボスは優勝後の別5戦目です。</div>'+renderActive(store)+'<div class="tourGrid">'+cards+'</div>';
+    const activeCup=store.active?cupById(store.active.cupId):null;
+    const selection='<div class="tourLead">あなたは <b>R'+rating+'</b>。現在のおすすめは <span class="tourRecommended">'+esc(rec.name)+'</span>。出場AI15人は全員ボス未満のRから毎大会ランダム選出・配置。AI同士も同じ回戦をリアルタイム進行し、ボスは優勝後の別5戦目です。</div><div class="tourGrid">'+cards+'</div>';
+    const focus=activeCup?'<div class="tourLead tourFocusLead"><b>'+esc(activeCup.name)+'</b> を進行中。杯選択は大会を終えるまで隠し、トーナメント表に集中して表示します。</div>'+renderActive(store):selection;
+    body.innerHTML=focus;
     body.querySelectorAll('[data-tour-start]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourStart)));
     body.querySelectorAll('[data-tour-retry]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourRetry,true)));
     body.querySelector('[data-tour-next]')?.addEventListener('click',()=>startCurrentMatch());
@@ -407,7 +410,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
   window.addEventListener('ai-shogi-profile-stats',()=>setTimeout(render,0));
 
   window.AI_SHOGI_TOURNAMENT={
-    version:'21592',cups:()=>CUPS.map(c=>({...c})),recommended:()=>({...recommendedCup()}),state:()=>JSON.parse(JSON.stringify(read())),start:startCup,next:startCurrentMatch,exit:exitCup,render,
+    version:'21594',cups:()=>CUPS.map(c=>({...c})),recommended:()=>({...recommendedCup()}),state:()=>JSON.parse(JSON.stringify(read())),start:startCup,next:startCurrentMatch,exit:exitCup,render,
     tick:()=>{const store=read();advanceAIProgress(store);write(store);render();return JSON.parse(JSON.stringify(store.active))},
     settleCurrentRound:()=>{const store=read();if(store.active)settleRoundAI(store,store.active.round);write(store);render();return JSON.parse(JSON.stringify(store.active))},
     audit:()=>{const s=read(),r=Number(currentStats().rating)||1500,rec=recommendedCup(r),a=s.active,cup=cupById(a?.cupId),matches=Object.values(a?.bracket?.matches||{}),portraitNames=[...new Set((a?.bracket?.rounds?.flat?.()||[]).filter(n=>n&&n!==PLAYER))];return{ok:!!window.AIShogiIOS,cups:CUPS.length,rating:r,recommended:rec.id,format:'16-player-live',bracketSize:16,rounds:4,active:a?JSON.parse(JSON.stringify(a)):null,currentOpponent:a?currentOpponent(a):null,bossSeeded:!!(a&&cup&&a.bracket?.rounds?.[0]?.[15]===cup.boss),runningAI:matches.filter(m=>m.status==='running').length,resolvedAI:matches.filter(m=>m.status==='done').length,liveProgress:true,portraits:portraitNames.filter(n=>!!avatarFor(n)).length,newsCount:a?.news?.length||0,charactersReady:CUPS.every(validCup),button:!!document.getElementById('tournament21540Btn'),panel:!!document.getElementById('tournament21540Panel'),bracketUI:!!document.querySelector('.tourBracket')}}
