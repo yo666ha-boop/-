@@ -39,6 +39,20 @@
       else el.style.removeProperty('display');
     }
   }
+  function installFocusObserver(base){
+    if(base.__focusObserver21562)return;
+    const panel=document.getElementById('tournament21540Panel');
+    if(!panel)return;
+    let queued=false;
+    const resync=()=>{
+      if(queued)return;queued=true;
+      queueMicrotask(()=>{queued=false;syncActiveFocus(!!state())});
+    };
+    const observer=new MutationObserver(resync);
+    observer.observe(panel,{childList:true,subtree:true});
+    base.__focusObserver21562=observer;
+    resync();
+  }
   function render(){
     style();
     const a=state(),hero=document.querySelector('#tournament21540Panel .tourGameHero21559');
@@ -59,7 +73,7 @@
     base.__road21562=true;const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
     base.render=()=>{const r=oldRender();render();return r};
     base.audit=()=>{render();const out=oldAudit(),stages=[...document.querySelectorAll('#tournament21540Panel .tourRoadStage21562')];return{...out,road21562:stages.length===5,roadDone21562:stages.filter(x=>x.classList.contains('done')).length,roadCurrent21562:stages.findIndex(x=>x.classList.contains('current')),roadFailed21562:stages.some(x=>x.classList.contains('failed'))}};
-    render();return true;
+    installFocusObserver(base);render();return true;
   }
   let installed=false,tries=0;const t=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(t);else if(++tries>80)clearInterval(t)},100);
   window.addEventListener('ai-shogi-local-save',render);
