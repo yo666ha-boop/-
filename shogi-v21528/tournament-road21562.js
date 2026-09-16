@@ -19,6 +19,7 @@
   function style(){
     if(document.getElementById('tournamentRoad21562Style'))return;
     const s=document.createElement('style');s.id='tournamentRoad21562Style';s.textContent=
+      '#tournament21540Panel.tourHasActive .tourLead,#tournament21540Panel.tourHasActive .tourGrid{display:none!important}'+
       '#tournament21540Panel .tourRoad21562{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:3px;padding-top:7px;border-top:1px solid rgba(255,224,135,.12);min-width:0}'+
       '#tournament21540Panel .tourRoadStage21562{position:relative;min-width:0;text-align:center;padding-top:10px;color:#756f5c;font-size:7px;font-weight:900;white-space:nowrap}'+
       '#tournament21540Panel .tourRoadStage21562:before{content:"";position:absolute;left:50%;top:0;width:7px;height:7px;margin-left:-4px;border-radius:50%;border:1px solid #67614f;background:#19201b;z-index:2}'+
