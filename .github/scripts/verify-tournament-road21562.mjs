@@ -12,6 +12,12 @@ try{
   await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('start failed');document.getElementById('tournament21540Panel')?.classList.add('on');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
   await page.waitForFunction(()=>document.querySelectorAll('#tournament21540Panel .tourRoadStage21562').length===5,{timeout:30000});
 
+  const focus=await page.evaluate(()=>{
+    const panel=document.getElementById('tournament21540Panel'),lead=panel?.querySelector('.tourLead'),grid=panel?.querySelector('.tourGrid'),active=panel?.querySelector('.tourActive');
+    return{active:!!active,hasActiveClass:!!panel?.classList.contains('tourHasActive'),leadDisplay:lead?getComputedStyle(lead).display:null,gridDisplay:grid?getComputedStyle(grid).display:null,roadStages:panel?.querySelectorAll('.tourRoadStage21562').length||0};
+  });
+  if(!focus.active||!focus.hasActiveClass||focus.leadDisplay!=='none'||focus.gridDisplay!=='none'||focus.roadStages!==5)throw new Error('active tournament focus '+JSON.stringify(focus));
+
   const setState=async (patch,expect)=>page.evaluate(async ({p,e})=>{
     const k='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(k)||'null');
     if(!s?.active)throw new Error('no active');
@@ -48,5 +54,6 @@ try{
   // kept in the authoritative 21543/Fire regressions so a duplicate layout audit cannot
   // make the ROAD state-machine check flaky while those exact-head checks remain green.
   if(errors.length)throw new Error('pageErrors '+JSON.stringify(errors));
+  console.log('PASS_TOURNAMENT21600_ACTIVE_FOCUS '+JSON.stringify({focus,pageErrors:errors}));
   console.log('PASS_TOURNAMENT21562_ROAD_STAGE_TRANSITIONS '+JSON.stringify({cases,pageErrors:errors,geometry:'covered-by-21543-and-fire-regressions'}));
 }finally{await browser.close()}
