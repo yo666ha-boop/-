@@ -19,7 +19,6 @@
   function style(){
     if(document.getElementById('tournamentRoad21562Style'))return;
     const s=document.createElement('style');s.id='tournamentRoad21562Style';s.textContent=
-      '#tournament21540Panel.tourHasActive .tourLead,#tournament21540Panel.tourHasActive .tourGrid{display:none!important}'+
       '#tournament21540Panel .tourRoad21562{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:3px;padding-top:7px;border-top:1px solid rgba(255,224,135,.12);min-width:0}'+
       '#tournament21540Panel .tourRoadStage21562{position:relative;min-width:0;text-align:center;padding-top:10px;color:#756f5c;font-size:7px;font-weight:900;white-space:nowrap}'+
       '#tournament21540Panel .tourRoadStage21562:before{content:"";position:absolute;left:50%;top:0;width:7px;height:7px;margin-left:-4px;border-radius:50%;border:1px solid #67614f;background:#19201b;z-index:2}'+
@@ -30,33 +29,9 @@
       '#tournament21540Panel.tourFireFit .tourRoad21562{gap:2px;margin-top:1px;padding-top:4px}#tournament21540Panel.tourFireFit .tourRoadStage21562{padding-top:7px;font-size:5px}';
     document.head.appendChild(s);
   }
-  function syncActiveFocus(active){
-    const panel=document.getElementById('tournament21540Panel');
-    if(!panel)return;
-    for(const sel of ['.tourLead','.tourGrid']){
-      const el=panel.querySelector(sel);if(!el)continue;
-      if(active)el.style.setProperty('display','none','important');
-      else el.style.removeProperty('display');
-    }
-  }
-  function installFocusObserver(base){
-    if(base.__focusObserver21562)return;
-    const panel=document.getElementById('tournament21540Panel');
-    if(!panel)return;
-    let queued=false;
-    const resync=()=>{
-      if(queued)return;queued=true;
-      queueMicrotask(()=>{queued=false;syncActiveFocus(!!state())});
-    };
-    const observer=new MutationObserver(resync);
-    observer.observe(panel,{childList:true,subtree:true});
-    base.__focusObserver21562=observer;
-    resync();
-  }
   function render(){
     style();
     const a=state(),hero=document.querySelector('#tournament21540Panel .tourGameHero21559');
-    syncActiveFocus(!!a);
     document.querySelectorAll('#tournament21540Panel .tourRoad21562').forEach(x=>x.remove());
     if(!a||!hero)return false;
     const p=phase(a),labels=['1R','QF','SF','F','EX'],road=document.createElement('div');
@@ -73,7 +48,7 @@
     base.__road21562=true;const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
     base.render=()=>{const r=oldRender();render();return r};
     base.audit=()=>{render();const out=oldAudit(),stages=[...document.querySelectorAll('#tournament21540Panel .tourRoadStage21562')];return{...out,road21562:stages.length===5,roadDone21562:stages.filter(x=>x.classList.contains('done')).length,roadCurrent21562:stages.findIndex(x=>x.classList.contains('current')),roadFailed21562:stages.some(x=>x.classList.contains('failed'))}};
-    installFocusObserver(base);render();return true;
+    render();return true;
   }
   let installed=false,tries=0;const t=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(t);else if(++tries>80)clearInterval(t)},100);
   window.addEventListener('ai-shogi-local-save',render);

@@ -14,9 +14,9 @@ try{
 
   const focus=await page.evaluate(()=>{
     const panel=document.getElementById('tournament21540Panel'),lead=panel?.querySelector('.tourLead'),grid=panel?.querySelector('.tourGrid'),active=panel?.querySelector('.tourActive');
-    return{active:!!active,hasActiveClass:!!panel?.classList.contains('tourHasActive'),leadDisplay:lead?getComputedStyle(lead).display:null,gridDisplay:grid?getComputedStyle(grid).display:null,roadStages:panel?.querySelectorAll('.tourRoadStage21562').length||0};
+    return{active:!!active,focusLead:!!lead?.classList.contains('tourFocusLead'),gridPresent:!!grid,cupStartButtons:panel?.querySelectorAll('[data-tour-start]').length||0,roadStages:panel?.querySelectorAll('.tourRoadStage21562').length||0};
   });
-  if(!focus.active||!focus.hasActiveClass||focus.leadDisplay!=='none'||focus.gridDisplay!=='none'||focus.roadStages!==5)throw new Error('active tournament focus '+JSON.stringify(focus));
+  if(!focus.active||!focus.focusLead||focus.gridPresent||focus.cupStartButtons!==0||focus.roadStages!==5)throw new Error('active tournament focus '+JSON.stringify(focus));
 
   const setState=async (patch,expect)=>page.evaluate(async ({p,e})=>{
     const k='aiShogiTournament21540',s=JSON.parse(localStorage.getItem(k)||'null');
