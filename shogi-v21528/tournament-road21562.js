@@ -30,9 +30,19 @@
       '#tournament21540Panel.tourFireFit .tourRoad21562{gap:2px;margin-top:1px;padding-top:4px}#tournament21540Panel.tourFireFit .tourRoadStage21562{padding-top:7px;font-size:5px}';
     document.head.appendChild(s);
   }
+  function syncActiveFocus(active){
+    const panel=document.getElementById('tournament21540Panel');
+    if(!panel)return;
+    for(const sel of ['.tourLead','.tourGrid']){
+      const el=panel.querySelector(sel);if(!el)continue;
+      if(active)el.style.setProperty('display','none','important');
+      else el.style.removeProperty('display');
+    }
+  }
   function render(){
     style();
     const a=state(),hero=document.querySelector('#tournament21540Panel .tourGameHero21559');
+    syncActiveFocus(!!a);
     document.querySelectorAll('#tournament21540Panel .tourRoad21562').forEach(x=>x.remove());
     if(!a||!hero)return false;
     const p=phase(a),labels=['1R','QF','SF','F','EX'],road=document.createElement('div');
