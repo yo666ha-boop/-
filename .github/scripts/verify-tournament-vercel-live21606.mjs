@@ -53,7 +53,7 @@ try{
   page.on('dialog',async d=>d.accept());
 
   await page.goto(BASE+'/?live21606='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
-  await page.waitForFunction(()=>crossOriginIsolated===true&&document.querySelectorAll('#chars .ch').length===26&&document.getElementById('board')?.children?.length===81&&window.AIShogiIOS&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AI_SHOGI_TOURNAMENT_BOSS?.version==='21583',null,{timeout:120000});
+  await page.waitForFunction(()=>crossOriginIsolated===true&&document.querySelectorAll('#chars .ch').length===26&&document.getElementById('board')?.children?.length===81&&window.AIShogiIOS&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AI_SHOGI_TOURNAMENT_BOSS?.version==='21583'&&window.AI_SHOGI_TOURNAMENT_GAME_UI?.__road21562===true,null,{timeout:120000});
   await page.waitForTimeout(500);
   await page.waitForFunction(()=>document.getElementById('resultBanner')?.dataset?.tourObserve21541==='1'&&document.getElementById('resultBanner')?.dataset?.bossObserve21546==='1',null,{timeout:30000});
 
@@ -153,6 +153,7 @@ try{
   },null,{timeout:15000});
 
   await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.innerText?.includes('完全制覇'),null,{timeout:10000});
+  await page.waitForFunction(()=>document.querySelectorAll('#tournament21540Panel .tourRoadStage21562').length===5,null,{timeout:15000});
 
   const final=await page.evaluate(()=>{
     const t=window.AI_SHOGI_TOURNAMENT,s=t.state(),a=s.active,b=window.AI_SHOGI_TOURNAMENT_BOSS.audit(),panel=document.getElementById('tournament21540Panel');
