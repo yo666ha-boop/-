@@ -100,19 +100,19 @@ try{
   const advanced=await page.evaluate(()=>{
     const t=window.AI_SHOGI_TOURNAMENT;
     const a=t.state().active;
-    const road=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.();
+    const panel=document.getElementById('tournament21540Panel');
     return{
       cup:a?.cupId||'',
       round:a?.round,
       pending:a?.pending??null,
       opponent:t.audit().currentOpponent||'',
-      panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')||false,
+      panelOpen:panel?.classList.contains('on')||false,
       resultClass:document.getElementById('resultBanner')?.className||'',
       resultText:document.getElementById('resultBanner')?.textContent||'',
-      currentMarkers:road?.currentMarkers??null,
-      connectors:road?.connectors??null,
-      bossInBracket:road?.bossInBracket??null,
-      roster:road?.roster??null
+      bracketVisible:!!panel?.querySelector('.tourBracket'),
+      bracketRounds:panel?.querySelectorAll('.tourBracketRound')?.length||0,
+      roadStages:panel?.querySelectorAll('.tourRoadStage21562')?.length||0,
+      roster:document.querySelectorAll('#chars .ch').length
     };
   });
 
@@ -120,7 +120,9 @@ try{
   assert.equal(advanced.round,1,JSON.stringify(advanced));
   assert.equal(advanced.pending,'next',JSON.stringify(advanced));
   assert.equal(advanced.panelOpen,true,JSON.stringify(advanced));
-  assert.equal(advanced.bossInBracket,false,JSON.stringify(advanced));
+  assert.equal(advanced.bracketVisible,true,JSON.stringify(advanced));
+  assert.equal(advanced.bracketRounds,4,JSON.stringify(advanced));
+  assert.equal(advanced.roadStages,5,JSON.stringify(advanced));
   assert.equal(advanced.roster,26,JSON.stringify(advanced));
   assert.deepEqual(pageErrors,[]);
 
