@@ -1,0 +1,39 @@
+name: Verify tournament live real move 21604
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firefox-live-move:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check live move verifier
+        run: node --check .github/scripts/verify-tournament-vercel-live21604.mjs
+      - name: Install Playwright Firefox
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+          npx playwright install --with-deps firefox
+      - name: Verify real tournament move and AI reply
+        env:
+          PREVIEW_URL: https://mitsuki-shogi-fullapp-unified21602.vercel.app
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-vercel-live21604.mjs 2>&1 | tee /tmp/tournament-vercel-live21604.log
+      - name: Upload live move diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tournament-vercel-live21604
+          if-no-files-found: warn
+          path: /tmp/tournament-vercel-live21604.log
