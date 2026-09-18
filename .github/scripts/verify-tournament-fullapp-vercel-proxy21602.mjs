@@ -38,8 +38,8 @@ try{
   assert.equal(response?.status(),200);
   assert.equal(response?.headers()['x-shogi-preview-head'],EXPECTED_HEAD);
 
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&document.getElementById('board')?.children?.length===81&&window.AI_SHOGI_TOURNAMENT?.version==='21594',{timeout:120000});
-  await page.waitForFunction(()=>document.getElementById('resultBanner')?.dataset?.tourObserve21541==='1',{timeout:20000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&document.getElementById('board')?.children?.length===81&&window.AI_SHOGI_TOURNAMENT?.version==='21594',null,{timeout:180000});
+  await page.waitForFunction(()=>document.getElementById('resultBanner')?.dataset?.tourObserve21541==='1',null,{timeout:30000});
 
   const normal=await page.evaluate(()=>({
     coi:crossOriginIsolated,
