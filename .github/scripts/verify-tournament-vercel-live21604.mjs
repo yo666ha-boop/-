@@ -52,10 +52,11 @@ try{
       if(!p||Number(p.o)!==1)continue;
       squares[i]?.click();
       await wait(15);
-      const legal=[...document.querySelectorAll('#board .sq.legal')];
+      const currentSquares=[...document.querySelectorAll('#board .sq')];
+      const legal=currentSquares.filter(q=>q.classList.contains('legal'));
       if(legal.length){
         from=i;
-        to=squares.indexOf(legal[0]);
+        to=currentSquares.indexOf(legal[0]);
         legal[0].click();
         break;
       }
