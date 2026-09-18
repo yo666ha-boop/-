@@ -1,0 +1,39 @@
+name: Verify tournament live full cup 21606
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firefox-live-cup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check full cup verifier
+        run: node --check .github/scripts/verify-tournament-vercel-live21606.mjs
+      - name: Install Playwright Firefox
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+          npx playwright install --with-deps firefox
+      - name: Verify four real wins and separate boss cup
+        env:
+          PREVIEW_URL: https://mitsuki-shogi-fullapp-unified21602.vercel.app
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-vercel-live21606.mjs 2>&1 | tee /tmp/tournament-vercel-live21606.log
+      - name: Upload full cup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tournament-vercel-live21606
+          if-no-files-found: warn
+          path: /tmp/tournament-vercel-live21606.log
