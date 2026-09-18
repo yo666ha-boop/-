@@ -70,8 +70,9 @@ try{
   });
   await page.waitForFunction(()=>{
     const a=window.AI_SHOGI_TOURNAMENT?.state?.()?.active;
-    return !!a&&a.round===1&&a.pending==='next';
-  },{timeout:15000});
+    const panelOpen=document.getElementById('tournament21540Panel')?.classList.contains('on');
+    return !!a&&a.round===1&&a.pending==='next'&&panelOpen;
+  },null,{timeout:15000});
 
   const afterWin=await page.evaluate(()=>{
     const a=window.AI_SHOGI_TOURNAMENT.state().active;
