@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { firefox } from 'playwright';
 
 const BASE=(process.env.PREVIEW_URL||'https://mitsuki-shogi-fullapp-unified21602.vercel.app').replace(/\/$/,'');
-const EXPECTED_HEAD='98eb60c1849c0fe63a68f9f462298dc3b4365c7f';
+const EXPECTED_HEAD='92a001494957d537dbca6f35ff9a5b139501c56c';
 
 async function waitStable(page){
   let last;
