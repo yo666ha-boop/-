@@ -50,8 +50,26 @@
     base.audit=()=>{render();const out=oldAudit(),stages=[...document.querySelectorAll('#tournament21540Panel .tourRoadStage21562')];return{...out,road21562:stages.length===5,roadDone21562:stages.filter(x=>x.classList.contains('done')).length,roadCurrent21562:stages.findIndex(x=>x.classList.contains('current')),roadFailed21562:stages.some(x=>x.classList.contains('failed'))}};
     render();return true;
   }
-  let installed=false,tries=0;const t=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(t);else if(++tries>80)clearInterval(t)},100);
-  window.addEventListener('ai-shogi-local-save',render);
+  let panelObserver=null,raf=0;
+  function ensureRoad(){
+    const panel=document.getElementById('tournament21540Panel');
+    if(!panel||!state())return false;
+    if(panel.querySelectorAll('.tourRoadStage21562').length===5)return true;
+    return render();
+  }
+  function observePanel(){
+    const panel=document.getElementById('tournament21540Panel');
+    if(!panel||panelObserver)return false;
+    panelObserver=new MutationObserver(ms=>{
+      if(ms.every(m=>m.target?.closest?.('.tourRoad21562')))return;
+      if(raf)return;
+      raf=requestAnimationFrame(()=>{raf=0;ensureRoad()});
+    });
+    panelObserver.observe(panel,{childList:true,subtree:true});
+    return true;
+  }
+  let installed=false,tries=0;const t=setInterval(()=>{if(!installed)installed=install();observePanel();if(installed&&render())clearInterval(t);else if(++tries>80)clearInterval(t)},100);
+  window.addEventListener('ai-shogi-local-save',()=>{render();observePanel()});
   window.addEventListener('resize',render,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
 })();
