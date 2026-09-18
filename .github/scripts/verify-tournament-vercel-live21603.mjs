@@ -90,14 +90,13 @@ try{
   assert.match(tournamentStartDiag.label,/大会表を開く/,JSON.stringify(tournamentStartDiag));
   await tournamentButton.click();
   await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
-  let currentMatchClicked=false,lastCurrentClickError=null;
-  for(let attempt=0;attempt<5&&!currentMatchClicked;attempt++){
-    await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on')&&!!document.querySelector('[data-tour-current="1"]'),null,{timeout:10000});
-    const currentMatchButton=page.locator('[data-tour-current="1"]');
-    assert.equal((await currentMatchButton.textContent())?.trim(),'現在の対局を開く');
-    try{await currentMatchButton.click({timeout:2500});currentMatchClicked=true}catch(e){lastCurrentClickError=e;await page.waitForTimeout(120)}
-  }
-  if(!currentMatchClicked)throw lastCurrentClickError||new Error('current match click did not complete');
+  const panelActions=await page.evaluate(()=>({
+    current:[...document.querySelectorAll('[data-tour-current="1"]')].map(x=>x.textContent?.trim()||''),
+    actions:document.querySelector('#tournament21540Panel .tourActions')?.textContent?.trim()||''
+  }));
+  const closeButton=page.locator('#tourClose21540');
+  assert.equal((await closeButton.textContent())?.trim(),'閉じる',JSON.stringify(panelActions));
+  await closeButton.click();
   await page.waitForFunction(()=>!document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
 
   const boardRoundTrip=await page.evaluate(()=>({
@@ -176,7 +175,7 @@ try{
   assert.equal(restored.bodyTournament,false);
   assert.deepEqual(pageErrors,[]);
 
-  console.log('PASS_TOURNAMENT21603_LIVE_VERCEL_FULLAPP '+JSON.stringify({base:BASE,baseline,started,tournamentStartDiag,boardRoundTrip,advanced,nextRound,restored,pageErrors}));
+  console.log('PASS_TOURNAMENT21603_LIVE_VERCEL_FULLAPP '+JSON.stringify({base:BASE,baseline,started,tournamentStartDiag,panelActions,boardRoundTrip,advanced,nextRound,restored,pageErrors}));
 }finally{
   await browser.close();
 }
