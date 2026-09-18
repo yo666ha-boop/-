@@ -55,8 +55,11 @@ try{
       const pxAll=s=>[...document.querySelectorAll(s)].map(e=>Number.parseFloat(getComputedStyle(e).fontSize)||0);
       const overflow=s=>{const e=document.querySelector(s);return e?Math.max(0,e.scrollWidth-e.clientWidth):0};
       const gameAudit=window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.()||{};
+      const swipe=panel?.querySelector('.tourBracketSwipeHint'),wide=panel?.querySelector('.tourBracketWideHint'),scroll=panel?.querySelector('.tourBracketScroll');
+      const sr=swipe?.getBoundingClientRect?.()||{width:0,height:0};
       return {
         width:innerWidth,
+        swipeHint:{visible:!!swipe&&getComputedStyle(swipe).display!=='none'&&sr.width>0&&sr.height>0,text:(swipe?.textContent||'').trim(),wideVisible:!!wide&&getComputedStyle(wide).display!=='none',scrollable:!!scroll&&scroll.scrollWidth>scroll.clientWidth,scrollOverflow:scroll?Math.max(0,scroll.scrollWidth-scroll.clientWidth):0},
         hostVisible:!!host&&getComputedStyle(host).display!=='none'&&h.width>0&&h.height>0,
         oppVisible:!!opp&&getComputedStyle(opp).display!=='none'&&o.width>0&&o.height>0,
         hostWidth:Math.round(h.width||0),hostHeight:Math.round(h.height||0),
@@ -101,6 +104,7 @@ try{
     if(!row.panelWidth)f.push('panel not open '+JSON.stringify(row));
     if(!row.buttonCount)f.push('no visible tournament buttons '+JSON.stringify(row));
     if(row.minButtonHeight<44)f.push('tap target '+JSON.stringify(row));
+    if(!row.swipeHint?.visible||!row.swipeHint?.text.includes('横にスワイプ')||row.swipeHint?.wideVisible||!row.swipeHint?.scrollable||row.swipeHint?.scrollOverflow<=0)f.push('mobile swipe hint '+JSON.stringify(row.swipeHint));
     const expected=12*(scale/100);
     if(Math.abs(row.hostBubbleFont-expected)>.6||Math.abs(row.oppBubbleFont-expected)>.6)f.push('text scale not applied '+JSON.stringify(row));
     if(width===280&&scale===150){
