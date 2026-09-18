@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { firefox } from 'playwright';
 
 const BASE=(process.env.PREVIEW_URL||'https://mitsuki-shogi-fullapp-unified21602.vercel.app').replace(/\/$/,'');
-const EXPECTED_HEAD='9e25af904cc87f03a8c4a97765a5f28a4f073721';
+const EXPECTED_HEAD='4ea98f7905b1419e9b15ecc3d63589382d7dc908';
 
 async function waitStable(page){
   let last;
@@ -90,10 +90,26 @@ try{
   assert.match(tournamentStartDiag.label,/大会表を開く/,JSON.stringify(tournamentStartDiag));
   await tournamentButton.click();
   await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
-  const panelActions=await page.evaluate(()=>({
-    current:[...document.querySelectorAll('[data-tour-current="1"]')].map(x=>x.textContent?.trim()||''),
-    actions:document.querySelector('#tournament21540Panel .tourActions')?.textContent?.trim()||''
-  }));
+  const panelActions=await page.evaluate(()=>{
+    const panel=document.getElementById('tournament21540Panel'),actions=panel?.querySelector('.tourActions'),bracket=panel?.querySelector('.tourBracketWrap'),current=actions?.querySelector('[data-tour-current="1"]'),close=document.getElementById('tourClose21540'),top=document.getElementById('tournament21540Btn');
+    const ar=actions?.getBoundingClientRect()||{top:0},br=bracket?.getBoundingClientRect()||{top:0},cr=current?.getBoundingClientRect()||{height:0},xr=close?.getBoundingClientRect()||{height:0},tr=top?.getBoundingClientRect()||{height:0};
+    return{
+      current:[...document.querySelectorAll('[data-tour-current="1"]')].map(x=>x.textContent?.trim()||''),
+      actions:actions?.textContent?.trim()||'',
+      actionsBeforeBracket:!!actions&&!!bracket&&ar.top<br.top,
+      currentPrimary:!!current?.classList.contains('primary'),
+      currentHeight:Math.round(cr.height),
+      closeHeight:Math.round(xr.height),
+      topButtonHeight:Math.round(tr.height),
+      overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)
+    };
+  });
+  assert.equal(panelActions.actionsBeforeBracket,true,JSON.stringify(panelActions));
+  assert.equal(panelActions.currentPrimary,true,JSON.stringify(panelActions));
+  assert.ok(panelActions.currentHeight>=44,JSON.stringify(panelActions));
+  assert.ok(panelActions.closeHeight>=40,JSON.stringify(panelActions));
+  assert.ok(panelActions.topButtonHeight>=44,JSON.stringify(panelActions));
+  assert.equal(panelActions.overflow,0,JSON.stringify(panelActions));
   const closeButton=page.locator('#tourClose21540');
   assert.equal((await closeButton.textContent())?.trim(),'閉じる',JSON.stringify(panelActions));
   await closeButton.click();
@@ -123,10 +139,15 @@ try{
   },null,{timeout:20000});
 
   const advanced=await page.evaluate(()=>{
-    const a=window.AI_SHOGI_TOURNAMENT.state().active;
-    return{round:a?.round,pending:a?.pending,panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')};
+    const a=window.AI_SHOGI_TOURNAMENT.state().active,panel=document.getElementById('tournament21540Panel'),actions=panel?.querySelector('.tourActions'),bracket=panel?.querySelector('.tourBracketWrap'),next=actions?.querySelector('[data-tour-next="1"]'),ar=actions?.getBoundingClientRect()||{top:0},br=bracket?.getBoundingClientRect()||{top:0},nr=next?.getBoundingClientRect()||{height:0};
+    return{round:a?.round,pending:a?.pending,panelOpen:panel?.classList.contains('on')||false,actionsBeforeBracket:!!actions&&!!bracket&&ar.top<br.top,nextHeight:Math.round(nr.height),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)};
   });
-  assert.deepEqual(advanced,{round:1,pending:'next',panelOpen:true});
+  assert.equal(advanced.round,1,JSON.stringify(advanced));
+  assert.equal(advanced.pending,'next',JSON.stringify(advanced));
+  assert.equal(advanced.panelOpen,true,JSON.stringify(advanced));
+  assert.equal(advanced.actionsBeforeBracket,true,JSON.stringify(advanced));
+  assert.ok(advanced.nextHeight>=44,JSON.stringify(advanced));
+  assert.equal(advanced.overflow,0,JSON.stringify(advanced));
 
   const nextButton=page.locator('[data-tour-next="1"]');
   assert.equal((await nextButton.textContent())?.trim(),'次の対局へ');

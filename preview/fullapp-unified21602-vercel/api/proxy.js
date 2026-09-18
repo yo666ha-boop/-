@@ -1,4 +1,4 @@
-const HEAD='9e25af904cc87f03a8c4a97765a5f28a4f073721';
+const HEAD='4ea98f7905b1419e9b15ecc3d63589382d7dc908';
 const ALLOWED=['shogi-v21528/','shogi/','shogi-side-test/'];
 
 function normalize(value){
