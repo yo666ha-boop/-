@@ -297,7 +297,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     const store=read(),body=document.getElementById('tourBody21540');if(!body)return;
     const rating=Number(currentStats().rating)||1500,rec=recommendedCup(rating);
     document.body.classList.toggle('tournament21540Active',!!store.active&&['active','draw'].includes(store.active.status));
-    const btn=document.getElementById('tournament21540Btn');if(btn)btn.innerHTML='🏆 大会モード'+(store.active&&['active','draw'].includes(store.active.status)?'<span class="tourDot"></span>':'');
+    const btn=document.getElementById('tournament21540Btn');if(btn){const running=!!store.active&&['active','draw'].includes(store.active.status);btn.innerHTML=(running?'🏆 大会表を開く':'🏆 大会モード')+(running?'<span class="tourDot"></span>':'')}
     const cards=CUPS.map(c=>{
       const cupWins=Number(store.trophies?.[c.id]||0),championships=Number(store.championships?.[c.id]??cupWins)||0,streak=Number(store.streaks?.[c.id]||0),recommended=c.id===rec.id;
       const streakHtml=streak>=2?'<span class="tourStreak">🔥 '+streak+'連覇中</span>':'';
