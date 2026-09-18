@@ -149,6 +149,13 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
     }finally{decorating=false}
   }
   function renderAndDecorate(){try{window.AI_SHOGI_TOURNAMENT?.render?.()}catch(e){}setTimeout(()=>{decorate();try{window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()}catch(e){}},0)}
+  function ensureBossTerminalRoad(){
+    const b=read()?.active?.bossChallenge,panel=document.getElementById('tournament21540Panel');
+    if(!b||!['won','lost','draw'].includes(b.status)||!panel?.classList.contains('on'))return false;
+    if(panel.querySelectorAll('.tourRoadStage21562').length===5)return true;
+    try{window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()}catch(e){}
+    return panel.querySelectorAll('.tourRoadStage21562').length===5;
+  }
 
   function patchAPI(){
     const t=window.AI_SHOGI_TOURNAMENT;if(!t||patched||typeof t.start!=='function')return false;
@@ -195,7 +202,7 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
   }
 
   let tries=0;const timer=setInterval(()=>{patchAPI();installObservers();promoteTournamentChampion();decorate();if(patched&&++tries>20)clearInterval(timer)},80);
-  setInterval(()=>{if(!patched)patchAPI();installObservers();promoteTournamentChampion();decorate()},500);
+  setInterval(()=>{if(!patched)patchAPI();installObservers();promoteTournamentChampion();decorate();ensureBossTerminalRoad()},500);
   patchAPI();installObservers();
 
   window.AI_SHOGI_TOURNAMENT_BOSS={
