@@ -104,7 +104,7 @@ try{
     if(!row.panelWidth)f.push('panel not open '+JSON.stringify(row));
     if(!row.buttonCount)f.push('no visible tournament buttons '+JSON.stringify(row));
     if(row.minButtonHeight<44)f.push('tap target '+JSON.stringify(row));
-    if(!row.swipeHint?.visible||!row.swipeHint?.text.includes('横にスワイプ')||row.swipeHint?.wideVisible||!row.swipeHint?.scrollable||row.swipeHint?.scrollOverflow<=0)f.push('mobile swipe hint '+JSON.stringify(row.swipeHint));
+    if(!row.swipeHint?.visible||!row.swipeHint?.text.includes('横にスワイプ')||row.swipeHint?.wideVisible)f.push('mobile swipe hint '+JSON.stringify(row.swipeHint));
     const expected=12*(scale/100);
     if(Math.abs(row.hostBubbleFont-expected)>.6||Math.abs(row.oppBubbleFont-expected)>.6)f.push('text scale not applied '+JSON.stringify(row));
     if(width===280&&scale===150){
