@@ -90,9 +90,14 @@ try{
   assert.match(tournamentStartDiag.label,/大会表を開く/,JSON.stringify(tournamentStartDiag));
   await tournamentButton.click();
   await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
-  const currentMatchButton=page.locator('[data-tour-current="1"]');
-  assert.equal((await currentMatchButton.textContent())?.trim(),'現在の対局を開く');
-  await currentMatchButton.click();
+  let currentMatchClicked=false,lastCurrentClickError=null;
+  for(let attempt=0;attempt<5&&!currentMatchClicked;attempt++){
+    await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on')&&!!document.querySelector('[data-tour-current="1"]'),null,{timeout:10000});
+    const currentMatchButton=page.locator('[data-tour-current="1"]');
+    assert.equal((await currentMatchButton.textContent())?.trim(),'現在の対局を開く');
+    try{await currentMatchButton.click({timeout:2500});currentMatchClicked=true}catch(e){lastCurrentClickError=e;await page.waitForTimeout(120)}
+  }
+  if(!currentMatchClicked)throw lastCurrentClickError||new Error('current match click did not complete');
   await page.waitForFunction(()=>!document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
 
   const boardRoundTrip=await page.evaluate(()=>({
