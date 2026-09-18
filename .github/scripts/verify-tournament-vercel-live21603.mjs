@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { firefox } from 'playwright';
 
 const BASE=(process.env.PREVIEW_URL||'https://mitsuki-shogi-fullapp-unified21602.vercel.app').replace(/\/$/,'');
-const EXPECTED_HEAD='4ea98f7905b1419e9b15ecc3d63589382d7dc908';
+const EXPECTED_HEAD='7c4873ead72af2276351a2b0c27cfc0ab4f7df37';
 
 async function waitStable(page){
   let last;
@@ -91,7 +91,7 @@ try{
   await tournamentButton.click();
   await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
   const panelActions=await page.evaluate(()=>{
-    const panel=document.getElementById('tournament21540Panel'),actions=panel?.querySelector('.tourActions'),bracket=panel?.querySelector('.tourBracketWrap'),current=actions?.querySelector('[data-tour-current="1"]'),close=document.getElementById('tourClose21540'),top=document.getElementById('tournament21540Btn');
+    const panel=document.getElementById('tournament21540Panel'),actions=panel?.querySelector('.tourActions'),bracket=panel?.querySelector('.tourBracketWrap'),current=actions?.querySelector('[data-tour-current="1"]'),close=document.getElementById('tourClose21540'),top=document.getElementById('tournament21540Btn'),swipe=panel?.querySelector('.tourBracketSwipeHint');
     const ar=actions?.getBoundingClientRect()||{top:0},br=bracket?.getBoundingClientRect()||{top:0},cr=current?.getBoundingClientRect()||{height:0},xr=close?.getBoundingClientRect()||{height:0},tr=top?.getBoundingClientRect()||{height:0};
     return{
       current:[...document.querySelectorAll('[data-tour-current="1"]')].map(x=>x.textContent?.trim()||''),
@@ -101,6 +101,8 @@ try{
       currentHeight:Math.round(cr.height),
       closeHeight:Math.round(xr.height),
       topButtonHeight:Math.round(tr.height),
+      swipeText:swipe?.textContent?.trim()||'',
+      swipeVisible:!!swipe&&getComputedStyle(swipe).display!=='none',
       overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)
     };
   });
@@ -109,7 +111,15 @@ try{
   assert.ok(panelActions.currentHeight>=44,JSON.stringify(panelActions));
   assert.ok(panelActions.closeHeight>=40,JSON.stringify(panelActions));
   assert.ok(panelActions.topButtonHeight>=44,JSON.stringify(panelActions));
+  assert.equal(panelActions.swipeVisible,true,JSON.stringify(panelActions));
+  assert.match(panelActions.swipeText,/横にスワイプ/,JSON.stringify(panelActions));
   assert.equal(panelActions.overflow,0,JSON.stringify(panelActions));
+  await page.setViewportSize({width:900,height:844});
+  await page.waitForFunction(()=>{const x=document.querySelector('#tournament21540Panel .tourBracketSwipeHint');return !!x&&getComputedStyle(x).display==='none'},null,{timeout:5000});
+  const wideSwipeVisible=await page.evaluate(()=>{const x=document.querySelector('#tournament21540Panel .tourBracketSwipeHint');return !!x&&getComputedStyle(x).display!=='none'});
+  assert.equal(wideSwipeVisible,false,'wide viewport must hide swipe hint');
+  await page.setViewportSize({width:390,height:844});
+  await page.waitForFunction(()=>{const x=document.querySelector('#tournament21540Panel .tourBracketSwipeHint');return !!x&&getComputedStyle(x).display!=='none'},null,{timeout:5000});
   const closeButton=page.locator('#tourClose21540');
   assert.equal((await closeButton.textContent())?.trim(),'閉じる',JSON.stringify(panelActions));
   await closeButton.click();
