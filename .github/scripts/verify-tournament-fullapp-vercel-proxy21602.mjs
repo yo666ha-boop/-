@@ -3,7 +3,7 @@ import http from 'node:http';
 import { firefox } from 'playwright';
 import proxy from '../../preview/fullapp-unified21602-vercel/api/proxy.js';
 
-const EXPECTED_HEAD='92a001494957d537dbca6f35ff9a5b139501c56c';
+const EXPECTED_HEAD='6f63eb828b2e84cd0d3913f5e0a9b5d0fd1b9d7d';
 
 function resAdapter(res){
   const out={
