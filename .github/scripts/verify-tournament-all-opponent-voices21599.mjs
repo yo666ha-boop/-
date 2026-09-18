@@ -6,8 +6,10 @@ try{
   page.on('pageerror',e=>errs.push(String(e?.message||e)));
   page.on('dialog',async d=>d.accept());
   await page.goto('http://127.0.0.1:8000/shogi-v21528/?allOpponentVoices='+Date.now(),{waitUntil:'domcontentloaded',timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,{timeout:60000});
-  await page.waitForFunction(()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AIShogiIOS?.characters?.().length===26,{timeout:30000});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26,null,{timeout:60000});
+  await page.waitForFunction(()=>crossOriginIsolated===true,null,{timeout:60000});
+  await page.waitForTimeout(250);
+  await page.waitForFunction(()=>crossOriginIsolated===true&&window.AI_SHOGI_TOURNAMENT_DIALOGUE?.version==='21547d'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.AIShogiIOS?.characters?.().length===26&&document.querySelectorAll('#chars .ch').length===26,null,{timeout:60000});
 
   const result=await page.evaluate(async()=>{
     const t=window.AI_SHOGI_TOURNAMENT,d=window.AI_SHOGI_TOURNAMENT_DIALOGUE,delay=ms=>new Promise(r=>setTimeout(r,ms));
