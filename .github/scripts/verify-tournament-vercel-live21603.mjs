@@ -71,6 +71,24 @@ try{
   assert.equal(started.board,81);
   assert.equal(started.controls,3);
 
+  const tournamentButton=page.locator('#tournament21540Btn');
+  assert.match((await tournamentButton.textContent())||'',/大会表を開く/);
+  await tournamentButton.click();
+  await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
+  const currentMatchButton=page.locator('[data-tour-current="1"]');
+  assert.equal((await currentMatchButton.textContent())?.trim(),'現在の対局を開く');
+  await currentMatchButton.click();
+  await page.waitForFunction(()=>!document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
+
+  const boardRoundTrip=await page.evaluate(()=>({
+    panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on'),
+    active:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.status||'',
+    buttonText:document.getElementById('tournament21540Btn')?.textContent?.trim()||''
+  }));
+  assert.equal(boardRoundTrip.panelOpen,false,JSON.stringify(boardRoundTrip));
+  assert.equal(boardRoundTrip.active,'active',JSON.stringify(boardRoundTrip));
+  assert.match(boardRoundTrip.buttonText,/大会表を開く/,JSON.stringify(boardRoundTrip));
+
   await page.evaluate(()=>{
     const rb=document.getElementById('resultBanner');
     rb.className='resultBanner';
@@ -90,6 +108,28 @@ try{
     return{round:a?.round,pending:a?.pending,panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')};
   });
   assert.deepEqual(advanced,{round:1,pending:'next',panelOpen:true});
+
+  const nextButton=page.locator('[data-tour-next="1"]');
+  assert.equal((await nextButton.textContent())?.trim(),'次の対局へ');
+  await nextButton.click();
+  await page.waitForFunction(()=>{
+    const t=window.AI_SHOGI_TOURNAMENT;
+    const a=t?.state?.()?.active;
+    return !!a&&a.round===1&&a.pending===null&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&window.AIShogiIOS?.char?.()?.[0]===t.audit?.().currentOpponent;
+  },null,{timeout:20000});
+
+  const nextRound=await page.evaluate(()=>({
+    round:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.round,
+    pending:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.pending??null,
+    panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on'),
+    selected:window.AIShogiIOS?.char?.()?.[0]||'',
+    opponent:window.AI_SHOGI_TOURNAMENT?.audit?.().currentOpponent||''
+  }));
+  assert.equal(nextRound.round,1,JSON.stringify(nextRound));
+  assert.equal(nextRound.pending,null,JSON.stringify(nextRound));
+  assert.equal(nextRound.panelOpen,false,JSON.stringify(nextRound));
+  assert.ok(nextRound.opponent,JSON.stringify(nextRound));
+  assert.equal(nextRound.selected,nextRound.opponent,JSON.stringify(nextRound));
 
   const restored=await page.evaluate(()=>{
     const t=window.AI_SHOGI_TOURNAMENT;
@@ -116,7 +156,7 @@ try{
   assert.equal(restored.bodyTournament,false);
   assert.deepEqual(pageErrors,[]);
 
-  console.log('PASS_TOURNAMENT21603_LIVE_VERCEL_FULLAPP '+JSON.stringify({base:BASE,baseline,started,advanced,restored,pageErrors}));
+  console.log('PASS_TOURNAMENT21603_LIVE_VERCEL_FULLAPP '+JSON.stringify({base:BASE,baseline,started,boardRoundTrip,advanced,nextRound,restored,pageErrors}));
 }finally{
   await browser.close();
 }
