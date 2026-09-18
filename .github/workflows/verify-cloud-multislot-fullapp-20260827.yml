@@ -50,6 +50,10 @@ jobs:
         run: |
           set -o pipefail
           node .github/scripts/verify-tournament-fullapp-unified21601.mjs 2>&1 | tee /tmp/tournament-fullapp-unified21601.log
+      - name: Verify branch fullapp Vercel proxy 21602
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-fullapp-vercel-proxy21602.mjs 2>&1 | tee /tmp/tournament-fullapp-vercel-proxy21602.log
       - name: Verify tournament dialogue live fullapp API and 21547c cache key
         run: |
           set -o pipefail
@@ -109,6 +113,7 @@ jobs:
           if-no-files-found: warn
           path: |
             /tmp/tournament-fullapp-unified21601.log
+            /tmp/tournament-fullapp-vercel-proxy21602.log
             /tmp/tournament-narrow-text21558.log
             /tmp/tournament-dialogue-fullapp.log
             /tmp/tournament-road21562.log
