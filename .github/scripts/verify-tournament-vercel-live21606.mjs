@@ -114,7 +114,8 @@ try{
           status:a?.status||'',round:a?.round,champion:a?.bracket?.rounds?.[4]?.[0]||'',
           bossStatus:b?.status||'',boss:b?.boss||'',trophy:Number(s.trophies?.kenshiro||0),
           championships:Number(s.championships?.kenshiro||0),streak:Number(s.streaks?.kenshiro||0),
-          panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')||false
+          panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')||false,
+          buttonText:document.getElementById('tournament21540Btn')?.textContent?.trim()||''
         };
       });
       bracketWins.push({round,before,mate,champion});
@@ -126,13 +127,14 @@ try{
       assert.equal(champion.championships,1,JSON.stringify(champion));
       assert.equal(champion.streak,1,JSON.stringify(champion));
       assert.equal(champion.panelOpen,true,JSON.stringify(champion));
+      assert.match(champion.buttonText,/大会表を開く/,JSON.stringify(champion));
     }
   }
 
   const bossStart=await page.evaluate(()=>{
     const ok=window.AI_SHOGI_TOURNAMENT_BOSS.challenge();
     const a=window.AI_SHOGI_TOURNAMENT.state().active,b=window.AI_SHOGI_TOURNAMENT_BOSS.state();
-    return{ok,status:a?.status||'',bossStatus:b?.status||'',boss:b?.boss||'',selected:window.AIShogiIOS.char()?.[0]||'',panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')||false};
+    return{ok,status:a?.status||'',bossStatus:b?.status||'',boss:b?.boss||'',selected:window.AIShogiIOS.char()?.[0]||'',panelOpen:document.getElementById('tournament21540Panel')?.classList.contains('on')||false,buttonText:document.getElementById('tournament21540Btn')?.textContent?.trim()||''};
   });
   assert.equal(bossStart.ok,true,JSON.stringify(bossStart));
   assert.equal(bossStart.status,'boss_active',JSON.stringify(bossStart));
@@ -140,6 +142,7 @@ try{
   assert.equal(bossStart.boss,'ケンシロウ',JSON.stringify(bossStart));
   assert.equal(bossStart.selected,'ケンシロウ',JSON.stringify(bossStart));
   assert.equal(bossStart.panelOpen,false,JSON.stringify(bossStart));
+  assert.match(bossStart.buttonText,/大会表を開く/,JSON.stringify(bossStart));
 
   const bossPrep=await prepareMate(page);
   assert.equal(bossPrep.hasMateMove,true,JSON.stringify(bossPrep));
@@ -163,7 +166,8 @@ try{
       trophy:Number(s.trophies?.kenshiro||0),championships:Number(s.championships?.kenshiro||0),streak:Number(s.streaks?.kenshiro||0),
       panelOpen:panel?.classList.contains('on')||false,panelComplete:panel?.innerText?.includes('完全制覇')||false,
       bracketRounds:panel?.querySelectorAll('.tourBracketRound')?.length||0,roadStages:panel?.querySelectorAll('.tourRoadStage21562')?.length||0,
-      roster:document.querySelectorAll('#chars .ch').length,resultText:document.getElementById('resultBanner')?.textContent||''
+      roster:document.querySelectorAll('#chars .ch').length,resultText:document.getElementById('resultBanner')?.textContent||'',
+      buttonText:document.getElementById('tournament21540Btn')?.textContent?.trim()||''
     };
   });
 
@@ -181,6 +185,7 @@ try{
   assert.equal(final.bracketRounds,5,JSON.stringify(final));
   assert.equal(final.roadStages,5,JSON.stringify(final));
   assert.equal(final.roster,26,JSON.stringify(final));
+  assert.match(final.buttonText,/大会結果を開く/,JSON.stringify(final));
   assert.deepEqual(pageErrors,[]);
 
   console.log('PASS_TOURNAMENT21606_LIVE_REAL_FOUR_WINS_BOSS_CUP '+JSON.stringify({base:BASE,start,bracketWins,bossStart,bossMate,final,pageErrors}));
