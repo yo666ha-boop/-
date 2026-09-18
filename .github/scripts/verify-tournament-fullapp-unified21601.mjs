@@ -12,6 +12,7 @@ try{
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AIShogiIOS&&window.AI_SHOGI_TOURNAMENT?.version==='21594'&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10,{timeout:60000});
   await page.waitForFunction(()=>document.getElementById('board')?.children?.length>0,{timeout:30000});
+  await page.waitForFunction(()=>document.getElementById('resultBanner')?.dataset?.tourObserve21541==='1',{timeout:10000});
 
   const baseline=await page.evaluate(()=>{
     const t=window.AI_SHOGI_TOURNAMENT;
