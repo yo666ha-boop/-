@@ -6,21 +6,27 @@ import proxy from '../../preview/fullapp-unified21602-vercel/api/proxy.js';
 const EXPECTED_HEAD='b05834a8088fd2e8b73847d74a6aa09df442e81a';
 
 function resAdapter(res){
-  return {
-    statusCode:200,
+  const out={
     setHeader:(k,v)=>res.setHeader(k,v),
     end:value=>res.end(value)
   };
+  Object.defineProperty(out,'statusCode',{get:()=>res.statusCode,set:value=>{res.statusCode=value}});
+  return out;
 }
+const proxyRequests=[];
 const server=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://127.0.0.1');
   let p=u.pathname.replace(/^\/+/, '');
   if(!p||p==='shogi-v21528'||p==='shogi-v21528/')p='shogi-v21528/index.html';
   else if(p.endsWith('/'))p+='index.html';
+  const trace={path:p,status:null};
+  proxyRequests.push(trace);
   try{
     await proxy({query:{path:p},headers:req.headers},resAdapter(res));
+    trace.status=res.statusCode;
   }catch(e){
     res.statusCode=500;
+    trace.status=500;
     res.end(String(e?.stack||e));
   }
 });
@@ -30,15 +36,32 @@ let browser;
 try{
   browser=await firefox.launch({headless:true});
   const page=await browser.newPage({viewport:{width:390,height:844}});
-  const pageErrors=[];
+  const pageErrors=[],consoleErrors=[];
   page.on('pageerror',e=>pageErrors.push(String(e?.message||e)));
+  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
   page.on('dialog',d=>d.accept());
 
   const response=await page.goto('http://127.0.0.1:4199/shogi-v21528/?proxy21602='+Date.now(),{waitUntil:'domcontentloaded',timeout:120000});
   assert.equal(response?.status(),200);
   assert.equal(response?.headers()['x-shogi-preview-head'],EXPECTED_HEAD);
 
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&document.getElementById('board')?.children?.length===81&&window.AI_SHOGI_TOURNAMENT?.version==='21594',null,{timeout:180000});
+  try{
+    await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&document.getElementById('board')?.children?.length===81&&window.AI_SHOGI_TOURNAMENT?.version==='21594',null,{timeout:180000});
+  }catch(e){
+    const bootTrace=await page.evaluate(()=>({
+      href:location.href,
+      readyState:document.readyState,
+      chars:document.querySelectorAll('#chars .ch').length,
+      board:document.getElementById('board')?.children?.length||0,
+      tournamentVersion:window.AI_SHOGI_TOURNAMENT?.version||'',
+      webAudit:window.AI_SHOGI_WEB_AUDIT||null,
+      boot:document.getElementById('boot')?.textContent||'',
+      diag:document.getElementById('diag28')?.textContent||'',
+      scripts:[...document.scripts].map(s=>s.src||'[inline]').slice(-24)
+    }));
+    console.log('TRACE_TOURNAMENT21602_BOOT_TIMEOUT '+JSON.stringify({bootTrace,pageErrors,consoleErrors:consoleErrors.slice(-30),proxyRequests:proxyRequests.slice(-120)}));
+    throw e;
+  }
   await page.waitForFunction(()=>document.getElementById('resultBanner')?.dataset?.tourObserve21541==='1',null,{timeout:30000});
 
   const normal=await page.evaluate(()=>({

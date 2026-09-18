@@ -40,7 +40,7 @@ export default async function handler(req,res){
   try{upstream=await fetch(url,{headers,redirect:'follow',cache:'no-store'})}
   catch(e){res.statusCode=502;res.end('upstream fetch failed');return}
   res.statusCode=upstream.status;
-  for(const h of ['content-length','content-range','accept-ranges','etag','last-modified']){
+  for(const h of ['content-range','accept-ranges','etag','last-modified']){
     const v=upstream.headers.get(h);if(v)res.setHeader(h,v);
   }
   res.setHeader('Content-Type',typeFor(path,upstream.headers.get('content-type')||''));
