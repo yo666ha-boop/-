@@ -8,8 +8,8 @@ try{
   page.on('dialog',async d=>d.accept());
   const url='http://127.0.0.1:8000/shogi-v21528/?road21562='+Date.now();
   await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.__AI_SHOGI_TOURNAMENT_ROAD_21562,null,{timeout:60000});
-  await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('start failed');document.getElementById('tournament21540Panel')?.classList.add('on');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()});
+  await page.waitForFunction(()=>document.querySelectorAll('#chars .ch').length===26&&window.AI_SHOGI_TOURNAMENT?.cups?.().length===10&&window.__AI_SHOGI_TOURNAMENT_ROAD_21562&&window.AI_SHOGI_TOURNAMENT_GAME_UI?.__road21562===true,null,{timeout:60000});
+  await page.evaluate(()=>{const t=window.AI_SHOGI_TOURNAMENT;if(t.state()?.active)t.exit();if(!t.start('kenshiro'))throw new Error('start failed');document.getElementById('tournament21540Panel')?.classList.add('on');t.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.();window.AI_SHOGI_TOURNAMENT_GAME_UI?.audit?.()});
   const focusReady=()=>{
     const panel=document.getElementById('tournament21540Panel'),lead=panel?.querySelector('.tourLead'),grid=panel?.querySelector('.tourGrid'),active=panel?.querySelector('.tourActive');
     return !!active&&!!lead?.classList.contains('tourFocusLead')&&!grid&&(panel?.querySelectorAll('[data-tour-start]').length||0)===0&&(panel?.querySelectorAll('.tourRoadStage21562').length||0)===5;
