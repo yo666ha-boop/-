@@ -97,6 +97,11 @@ try{
     return !!a&&a.cupId==='kenshiro'&&a.round===1&&a.pending==='next'&&open;
   },null,{timeout:20000});
 
+  await page.waitForFunction(()=>{
+    const panel=document.getElementById('tournament21540Panel');
+    return !!panel?.classList.contains('on')&&(panel.querySelectorAll('.tourBracketRound').length===5)&&(panel.querySelectorAll('.tourRoadStage21562').length===5);
+  },null,{timeout:15000});
+
   const advanced=await page.evaluate(()=>{
     const t=window.AI_SHOGI_TOURNAMENT;
     const a=t.state().active;
@@ -121,7 +126,7 @@ try{
   assert.equal(advanced.pending,'next',JSON.stringify(advanced));
   assert.equal(advanced.panelOpen,true,JSON.stringify(advanced));
   assert.equal(advanced.bracketVisible,true,JSON.stringify(advanced));
-  assert.equal(advanced.bracketRounds,4,JSON.stringify(advanced));
+  assert.equal(advanced.bracketRounds,5,JSON.stringify(advanced));
   assert.equal(advanced.roadStages,5,JSON.stringify(advanced));
   assert.equal(advanced.roster,26,JSON.stringify(advanced));
   assert.deepEqual(pageErrors,[]);
