@@ -72,7 +72,22 @@ try{
   assert.equal(started.controls,3);
 
   const tournamentButton=page.locator('#tournament21540Btn');
-  assert.match((await tournamentButton.textContent())||'',/大会表を開く/);
+  const tournamentLabelReady=await page.waitForFunction(()=>{
+    const text=document.getElementById('tournament21540Btn')?.textContent||'';
+    return text.includes('大会表を開く');
+  },null,{timeout:3000}).then(()=>true).catch(()=>false);
+  const tournamentStartDiag=await page.evaluate(()=>({
+    label:document.getElementById('tournament21540Btn')?.textContent?.trim()||'',
+    activeStatus:window.AI_SHOGI_TOURNAMENT?.state?.()?.active?.status||'',
+    apiVersion:window.AI_SHOGI_TOURNAMENT?.version||'',
+    core21540:!!window.__AI_SHOGI_TOURNAMENT_21540,
+    core21541:!!window.__AI_SHOGI_TOURNAMENT_21541,
+    observer21540:document.getElementById('resultBanner')?.dataset?.tourObserve21540||'',
+    observer21541:document.getElementById('resultBanner')?.dataset?.tourObserve21541||'',
+    scripts:[...document.scripts].map(s=>s.src).filter(src=>/tournament/i.test(src))
+  }));
+  assert.equal(tournamentLabelReady,true,JSON.stringify(tournamentStartDiag));
+  assert.match(tournamentStartDiag.label,/大会表を開く/,JSON.stringify(tournamentStartDiag));
   await tournamentButton.click();
   await page.waitForFunction(()=>document.getElementById('tournament21540Panel')?.classList.contains('on'),null,{timeout:10000});
   const currentMatchButton=page.locator('[data-tour-current="1"]');
@@ -156,7 +171,7 @@ try{
   assert.equal(restored.bodyTournament,false);
   assert.deepEqual(pageErrors,[]);
 
-  console.log('PASS_TOURNAMENT21603_LIVE_VERCEL_FULLAPP '+JSON.stringify({base:BASE,baseline,started,boardRoundTrip,advanced,nextRound,restored,pageErrors}));
+  console.log('PASS_TOURNAMENT21603_LIVE_VERCEL_FULLAPP '+JSON.stringify({base:BASE,baseline,started,tournamentStartDiag,boardRoundTrip,advanced,nextRound,restored,pageErrors}));
 }finally{
   await browser.close();
 }
