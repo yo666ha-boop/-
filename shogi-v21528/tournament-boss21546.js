@@ -148,7 +148,7 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
       actions.querySelectorAll('[data-boss21546-board]').forEach(x=>x.onclick=()=>{document.getElementById('tournament21540Panel')?.classList.remove('on');document.getElementById('board')?.scrollIntoView?.({block:'center'})});
     }finally{decorating=false}
   }
-  function renderAndDecorate(){try{window.AI_SHOGI_TOURNAMENT?.render?.()}catch(e){}setTimeout(decorate,0)}
+  function renderAndDecorate(){try{window.AI_SHOGI_TOURNAMENT?.render?.()}catch(e){}setTimeout(()=>{decorate();try{window.AI_SHOGI_TOURNAMENT_GAME_UI?.render?.()}catch(e){}},0)}
 
   function patchAPI(){
     const t=window.AI_SHOGI_TOURNAMENT;if(!t||patched||typeof t.start!=='function')return false;
