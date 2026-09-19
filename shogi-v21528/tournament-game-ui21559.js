@@ -195,9 +195,9 @@
   const here=document.currentScript?.src||'';
   let src='';
   if(/tournament-game-ui21559\.js(?:[?#]|$)/.test(here)){
-    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562');
+    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562&perf=20260919fire2');
   }else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname)){
-    src=new URL('tournament-road21562.js?v=21562',location.href).href;
+    src=new URL('tournament-road21562.js?v=21562&perf=20260919fire2',location.href).href;
   }else return;
   window.__AI_SHOGI_TOURNAMENT_ROAD_LOADER_21562=true;
   if(window.__AI_SHOGI_TOURNAMENT_ROAD_21562)return;
