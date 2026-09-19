@@ -9,7 +9,7 @@
   function state(){
     try{return window.AI_SHOGI_TOURNAMENT?.state?.()?.active||null}catch(e){return null}
   }
-  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!state()&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
+  const fireBattleHidden=()=>{const a=state(),boss=a?.bossChallenge?.status||'locked';return !!(IS_FIRE_RUNTIME&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&!a.pending&&!document.getElementById('resultBanner')?.classList.contains('on')&&(['active','draw'].includes(a.status)&&boss==='locked'))};
   function phase(a){
     const b=a?.bossChallenge?.status||'locked';
     if(b==='won')return{done:5,current:-1,failed:false};
@@ -32,6 +32,7 @@
     document.head.appendChild(s);
   }
   function render(){
+    if(fireBattleHidden())return false;
     style();
     const a=state(),hero=document.querySelector('#tournament21540Panel .tourGameHero21559');
     document.querySelectorAll('#tournament21540Panel .tourRoad21562').forEach(x=>x.remove());
@@ -63,6 +64,7 @@
     const panel=document.getElementById('tournament21540Panel');
     if(!panel||panelObserver)return false;
     panelObserver=new MutationObserver(ms=>{
+      if(fireBattleHidden())return;
       if(ms.every(m=>m.target?.closest?.('.tourRoad21562')))return;
       if(raf)return;
       raf=requestAnimationFrame(()=>{raf=0;ensureRoad()});
@@ -81,8 +83,8 @@
   'use strict';
   if(window.__AI_SHOGI_TOURNAMENT_HISTORY_LOADER_21567)return;
   const here=document.currentScript?.src||'';let src='';
-  if(/tournament-road21562\.js(?:[?#]|$)/.test(here))src=here.replace(/tournament-road21562\.js(?:[?#].*)?$/,'tournament-history21567.js?v=21567&perf=20260919fire2');
-  else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname))src=new URL('tournament-history21567.js?v=21567&perf=20260919fire2',location.href).href;
+  if(/tournament-road21562\.js(?:[?#]|$)/.test(here))src=here.replace(/tournament-road21562\.js(?:[?#].*)?$/,'tournament-history21567.js?v=21567&perf=20260919fire3');
+  else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname))src=new URL('tournament-history21567.js?v=21567&perf=20260919fire3',location.href).href;
   else return;
   window.__AI_SHOGI_TOURNAMENT_HISTORY_LOADER_21567=true;
   if(window.__AI_SHOGI_TOURNAMENT_HISTORY_21567||!src||[...document.scripts].some(s=>s.src===src))return;

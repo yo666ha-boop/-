@@ -14,7 +14,7 @@
   const state=()=>{try{return api()?.state?.()||null}catch(e){return null}};
   const active=()=>state()?.active||null;
   const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
-  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!active()&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
+  const fireBattleHidden=()=>{const a=active(),boss=a?.bossChallenge?.status||'locked';return !!(IS_FIRE_RUNTIME&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&!a.pending&&!document.getElementById('resultBanner')?.classList.contains('on')&&(['active','draw'].includes(a.status)&&boss==='locked'))};
   const cups=()=>{try{return api()?.cups?.()||[]}catch(e){return[]}};
   const cupName=id=>cups().find(c=>c?.id===id)?.name||String(id||'大会');
   const history=()=>{const h=state()?.history;return Array.isArray(h)?h:[]};
@@ -76,6 +76,7 @@
   }
 
   function render(){
+    if(fireBattleHidden())return false;
     ensureStyle();
     const a=active(),panel=document.getElementById('tournament21540Panel'),root=panel?.querySelector('.tourActive');
     panel?.querySelectorAll('.tourAttemptHistory21567').forEach(x=>x.remove());

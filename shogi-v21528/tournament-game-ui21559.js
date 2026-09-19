@@ -20,7 +20,7 @@
   const api=()=>window.AI_SHOGI_TOURNAMENT;
   const store=()=>{try{return api()?.state?.()||null}catch(e){return null}};
   const active=()=>store()?.active||null;
-  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!active()&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
+  const fireBattleHidden=()=>{const a=active(),boss=a?.bossChallenge?.status||'locked';return !!(IS_FIRE_RUNTIME&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&!a.pending&&!document.getElementById('resultBanner')?.classList.contains('on')&&(['active','draw'].includes(a.status)&&boss==='locked'))};
   const cups=()=>{try{return api()?.cups?.()||[]}catch(e){return[]}};
   const navReload=()=>{try{return performance.getEntriesByType('navigation')?.[0]?.type==='reload'}catch(e){return false}};
   const restoredStartedAt=navReload()?(Number(active()?.startedAt)||0):0;
@@ -89,6 +89,7 @@
   function bossUnlocked(a){const b=a?.bossChallenge?.status;return a?.status==='champion'||['pending','active','draw','won','lost'].includes(b)}
 
   function decorate(){
+    if(fireBattleHidden()){removeOld();return false}
     ensureStyle();const a=active(),panel=document.getElementById('tournament21540Panel'),root=panel?.querySelector('.tourActive');
     if(!panel||!root||!a){removeOld();return false}
     const cup=cupFor(a);if(!cup)return false;
@@ -127,7 +128,7 @@
 
   let busy=false,raf=0;
   function request(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(busy)return;busy=true;try{decorate()}finally{busy=false}})}
-  const observer=new MutationObserver(ms=>{if(busy)return;if(ms.every(m=>m.target?.closest?.('.tourGameHero21559,.tourMatchup21559,.tourBossVault21559,.tourWinStamp21559')))return;request()});
+  const observer=new MutationObserver(ms=>{if(busy||fireBattleHidden())return;if(ms.every(m=>m.target?.closest?.('.tourGameHero21559,.tourMatchup21559,.tourBossVault21559,.tourWinStamp21559')))return;request()});
   function boot(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer.disconnect();observer.observe(panel,{childList:true,subtree:true,attributes:true});decorate();return true}
   let tries=0;const timer=setInterval(()=>{if(boot()||++tries>120)clearInterval(timer)},120);
   window.addEventListener('resize',request,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(request,120),{passive:true});window.addEventListener('ai-shogi-local-save',()=>{if(!fireBattleHidden())request()});
@@ -195,9 +196,9 @@
   const here=document.currentScript?.src||'';
   let src='';
   if(/tournament-game-ui21559\.js(?:[?#]|$)/.test(here)){
-    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562&perf=20260919fire2');
+    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562&perf=20260919fire3');
   }else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname)){
-    src=new URL('tournament-road21562.js?v=21562&perf=20260919fire2',location.href).href;
+    src=new URL('tournament-road21562.js?v=21562&perf=20260919fire3',location.href).href;
   }else return;
   window.__AI_SHOGI_TOURNAMENT_ROAD_LOADER_21562=true;
   if(window.__AI_SHOGI_TOURNAMENT_ROAD_21562)return;
