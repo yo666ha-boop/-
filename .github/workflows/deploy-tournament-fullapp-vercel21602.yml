@@ -1,0 +1,76 @@
+name: Deploy isolated tournament fullapp 21602
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-isolated-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_LXgcBDLoBpU1lMxZrMyxUQlg
+      VERCEL_PROJECT_ID: prj_SqCWAei0nS1b3iHeGWhw6E85meif
+      FIXED_URL: https://mitsuki-shogi-fullapp-unified21602.vercel.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned product HEAD
+        id: head
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_HEAD="$(node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('preview/fullapp-unified21602-vercel/api/proxy.js','utf8');
+          const m=s.match(/const HEAD='([0-9a-f]{40})'/);
+          if(!m) process.exit(2);
+          process.stdout.write(m[1]);
+          NODE
+          )"
+          echo "expected_head=$EXPECTED_HEAD" >> "$GITHUB_OUTPUT"
+          echo "Expected product HEAD: $EXPECTED_HEAD"
+
+      - name: Require Vercel deploy token
+        shell: bash
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::Repository secret VERCEL_TOKEN is not configured. No deployment was attempted."
+            exit 1
+          fi
+
+      - name: Bind exact isolated Vercel project
+        shell: bash
+        run: |
+          mkdir -p preview/fullapp-unified21602-vercel/.vercel
+          cat > preview/fullapp-unified21602-vercel/.vercel/project.json <<JSON
+          {"orgId":"$VERCEL_ORG_ID","projectId":"$VERCEL_PROJECT_ID"}
+          JSON
+
+      - name: Deploy isolated preview to production
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@latest deploy             --prod             --yes             --cwd preview/fullapp-unified21602-vercel             --token "$VERCEL_TOKEN"
+
+      - name: Wait for fixed alias exact HEAD
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ steps.head.outputs.expected_head }}
+        run: |
+          set -euo pipefail
+          actual=""
+          for attempt in $(seq 1 30); do
+            curl -fsS -D /tmp/headers -o /dev/null "$FIXED_URL/shogi-v21528/" || true
+            actual="$(awk 'BEGIN{IGNORECASE=1} /^x-shogi-preview-head:/ {gsub("\r","",$2); print $2}' /tmp/headers | tail -n1)"
+            echo "attempt=$attempt actual=$actual expected=$EXPECTED_HEAD"
+            if [ "$actual" = "$EXPECTED_HEAD" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Fixed alias did not reach expected product HEAD. actual=$actual expected=$EXPECTED_HEAD"
+          exit 1
