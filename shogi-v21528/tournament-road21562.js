@@ -83,8 +83,8 @@
   'use strict';
   if(window.__AI_SHOGI_TOURNAMENT_HISTORY_LOADER_21567)return;
   const here=document.currentScript?.src||'';let src='';
-  if(/tournament-road21562\.js(?:[?#]|$)/.test(here))src=here.replace(/tournament-road21562\.js(?:[?#].*)?$/,'tournament-history21567.js?v=21567&perf=20260919fire2');
-  else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname))src=new URL('tournament-history21567.js?v=21567&perf=20260919fire2',location.href).href;
+  if(/tournament-road21562\.js(?:[?#]|$)/.test(here))src=here.replace(/tournament-road21562\.js(?:[?#].*)?$/,'tournament-history21567.js?v=21567&perf=20260919fire3');
+  else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname))src=new URL('tournament-history21567.js?v=21567&perf=20260919fire3',location.href).href;
   else return;
   window.__AI_SHOGI_TOURNAMENT_HISTORY_LOADER_21567=true;
   if(window.__AI_SHOGI_TOURNAMENT_HISTORY_21567||!src||[...document.scripts].some(s=>s.src===src))return;
