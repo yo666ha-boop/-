@@ -207,6 +207,6 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
 
   window.AI_SHOGI_TOURNAMENT_BOSS={
     version:'21583',challenge:()=>startBoss(false),state:()=>JSON.parse(JSON.stringify(read()?.active?.bossChallenge||null)),
-    audit:()=>{const a=read()?.active,cup=cupOf(a),r0=a?.bracket?.rounds?.[0]||[],b=a?.bossChallenge;return{ok:patched,version:'21546a',bossSeparate:true,boss:cup?.boss||null,bossInBracket:!!(cup&&r0.includes(cup.boss)),entrants:r0.length,bossStatus:b?.status||null,tournamentChampion:a?.bracket?.rounds?.[4]?.[0]===PLAYER,trophy:cup?Number(read()?.trophies?.[cup.id]||0):0}}
+    audit:()=>{const a=read()?.active,cup=cupOf(a),r0=a?.bracket?.rounds?.[0]||[],b=a?.bossChallenge;return{ok:patched,version:'21583',bossSeparate:true,boss:cup?.boss||null,bossInBracket:!!(cup&&r0.includes(cup.boss)),entrants:r0.length,bossStatus:b?.status||null,tournamentChampion:a?.bracket?.rounds?.[4]?.[0]===PLAYER,trophy:cup?Number(read()?.trophies?.[cup.id]||0):0}}
   };
 })();
