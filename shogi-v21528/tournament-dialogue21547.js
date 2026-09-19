@@ -182,7 +182,20 @@
   }
 
   window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547d',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
-  observer=new MutationObserver(()=>setTimeout(()=>render(false),0));observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
-  let tries=0;const boot=setInterval(()=>{render(false);if(++tries>120)clearInterval(boot)},120);setInterval(()=>render(false),600);
-  window.addEventListener('resize',()=>render(false));window.addEventListener('orientationchange',()=>setTimeout(()=>render(false),100));window.addEventListener('ai-shogi-local-save',()=>setTimeout(()=>render(false),0));
+  let renderQueued=false;
+  const requestRender=()=>{if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;render(false)})};
+  const observedTargets=new WeakSet();
+  observer=new MutationObserver(requestRender);
+  function observeTarget(el,options){if(!el||observedTargets.has(el))return;observedTargets.add(el);observer.observe(el,options)}
+  function attachObservers(){
+    const panel=document.getElementById('tournament21540Panel'),speech=document.getElementById('charSpeech'),moves=document.getElementById('moves'),result=document.getElementById('resultBanner');
+    observeTarget(panel,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
+    observeTarget(speech,{childList:true,subtree:true,characterData:true});
+    observeTarget(moves,{childList:true,subtree:true,characterData:true});
+    observeTarget(result,{attributes:true,childList:true,subtree:true,characterData:true});
+    return !!panel;
+  }
+  let tries=0;const boot=setInterval(()=>{const ready=attachObservers();render(false);tries++;if((ready&&tries>2)||tries>120)clearInterval(boot)},120);
+  attachObservers();render(false);
+  window.addEventListener('resize',requestRender,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(requestRender,100),{passive:true});window.addEventListener('ai-shogi-local-save',requestRender);
 })();

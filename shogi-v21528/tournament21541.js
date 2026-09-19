@@ -405,7 +405,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
   }
 
   let boots=0;const timer=setInterval(()=>{ensureUI();installResultObserver();render();if(window.AIShogiIOS&&++boots>10)clearInterval(timer)},180);
-  setInterval(()=>{const store=read(),a=store.active;if(!a)return;const cup=cupById(a.cupId);if(!cup)return;const before=JSON.stringify(a.bracket.rounds)+JSON.stringify(a.bracket.matches);advanceAIProgress(store);if(JSON.stringify(a.bracket.rounds)+JSON.stringify(a.bracket.matches)!==before){write(store);render()}},900);
+  setInterval(()=>{const store=read(),a=store.active;if(!a)return;if(advanceAIProgress(store))render()},900);
   window.addEventListener('ai-shogi-local-save',()=>setTimeout(hydrateFromRestoredStorage,0));
   window.addEventListener('ai-shogi-profile-stats',()=>setTimeout(render,0));
 

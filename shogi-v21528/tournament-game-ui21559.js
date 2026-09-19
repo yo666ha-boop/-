@@ -179,7 +179,7 @@
     const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
     base.render=()=>{const out=oldRender();renderWait();return out};
     base.audit=()=>{renderWait();const out=oldAudit(),match=document.querySelector('#tournament21540Panel .tourMatchup21559');return{...out,matchupWaiting:match?.dataset.waiting==='1',matchupOpponentLabel:match?.querySelector('.tourMatchSide21559.opponent .tourMatchName21559')?.textContent||'',matchupOpponentMeta:match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||''}};
-    renderWait();setInterval(renderWait,250);return true;
+    renderWait();window.addEventListener('ai-shogi-local-save',renderWait);return true;
   }
   let n=0;const t=setInterval(()=>{if(install()||++n>80)clearInterval(t)},100);
 })();
