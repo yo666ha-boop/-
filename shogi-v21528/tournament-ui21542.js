@@ -12,7 +12,7 @@
   const host=String(location.hostname||'').toLowerCase();
   const IS_FIRE=/\bSilk\//i.test(ua)||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(ua)||host==='127.0.0.1'||host==='localhost';
   const active=()=>{try{return window.AI_SHOGI_TOURNAMENT?.state?.()?.active||null}catch(e){return null}};
-  const fireBattleHidden=()=>{const a=active(),boss=a?.bossChallenge?.status||'locked';return !!(IS_FIRE&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&!a.pending&&!document.getElementById('resultBanner')?.classList.contains('on')&&(['active','draw','boss_active','boss_draw'].includes(a.status)||['active','draw'].includes(boss)))};
+  const fireBattleHidden=()=>{const a=active(),boss=a?.bossChallenge?.status||'locked';return !!(IS_FIRE&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&!a.pending&&!document.getElementById('resultBanner')?.classList.contains('on')&&(['active','draw'].includes(a.status)&&boss==='locked'))};
   const norm=s=>String(s||'').replace(/[\s　]+/g,'').trim();
   const chars=()=>{try{return window.AIShogiIOS?.characters?.()||[]}catch(e){return[]}};
   const cards=()=>[...document.querySelectorAll('#chars .ch')];
