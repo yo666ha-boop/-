@@ -13,6 +13,8 @@
   const api=()=>window.AI_SHOGI_TOURNAMENT;
   const state=()=>{try{return api()?.state?.()||null}catch(e){return null}};
   const active=()=>state()?.active||null;
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
+  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!active()&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
   const cups=()=>{try{return api()?.cups?.()||[]}catch(e){return[]}};
   const cupName=id=>cups().find(c=>c?.id===id)?.name||String(id||'大会');
   const history=()=>{const h=state()?.history;return Array.isArray(h)?h:[]};
@@ -100,5 +102,5 @@
     render();return true;
   }
   let installed=false,tries=0;const timer=setInterval(()=>{if(!installed)installed=install();if(installed&&render())clearInterval(timer);else if(++tries>100)clearInterval(timer)},100);
-  window.addEventListener('ai-shogi-local-save',render);window.addEventListener('resize',render,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
+  window.addEventListener('ai-shogi-local-save',()=>{if(!fireBattleHidden())render()});window.addEventListener('resize',render,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
 })();

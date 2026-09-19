@@ -11,6 +11,7 @@
   const PLAYER='__PLAYER__';
   const ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const BRACKET_LABELS=[...ROUNDS,'優勝'];
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
   const CUPS=[
     {id:'kenshiro',name:'ケンシロウ杯',boss:'ケンシロウ',bossRating:2100,min:0,max:2149,label:'中級'},
     {id:'souther',name:'サウザー杯',boss:'サウザー',bossRating:2180,min:2150,max:2219,label:'中上級'},
@@ -405,8 +406,8 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
   }
 
   let boots=0;const timer=setInterval(()=>{ensureUI();installResultObserver();render();if(window.AIShogiIOS&&++boots>10)clearInterval(timer)},180);
-  setInterval(()=>{const store=read(),a=store.active;if(!a)return;if(advanceAIProgress(store))render()},900);
-  window.addEventListener('ai-shogi-local-save',()=>setTimeout(hydrateFromRestoredStorage,0));
+  setInterval(()=>{const store=read(),a=store.active;if(!a)return;if(IS_FIRE_RUNTIME&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&['active','draw'].includes(a.status)&&!a.pending)return;if(advanceAIProgress(store))render()},900);
+  window.addEventListener('ai-shogi-local-save',()=>{const a=read().active;if(IS_FIRE_RUNTIME&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&['active','draw'].includes(a.status)&&!a.pending)return;setTimeout(hydrateFromRestoredStorage,0)});
   window.addEventListener('ai-shogi-profile-stats',()=>setTimeout(render,0));
 
   window.AI_SHOGI_TOURNAMENT={

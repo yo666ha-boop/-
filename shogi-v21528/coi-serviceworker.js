@@ -76,7 +76,7 @@ if(typeof window==='undefined'){
         const managerURL=new URL('./cloud-family-manager21534.js?v=21534a',scriptURL);
         const playerNameURL=new URL('./player-name21534b.js?v=21534b',scriptURL);
         const profileStatsURL=new URL('./profile-stats21535.js?v=21535a',scriptURL);
-        const ratingProgressURL=new URL('./rating-progress21536.js?v=21536b',scriptURL);
+        const ratingProgressURL=new URL('./rating-progress21536.js?v=21536b&perf=20260919fire2',scriptURL);
         const [saveRes,cloudRes,pickerRes,familyRes,saveNameRes,managerRes,playerNameRes,profileStatsRes,ratingProgressRes]=await Promise.all([
           nativeFetch(saveURL,{cache:'no-store'}),nativeFetch(cloudURL,{cache:'no-store'}),nativeFetch(pickerURL,{cache:'no-store'}),nativeFetch(familyURL,{cache:'no-store'}),nativeFetch(saveNameURL,{cache:'no-store'}),nativeFetch(managerURL,{cache:'no-store'}),nativeFetch(playerNameURL,{cache:'no-store'}),nativeFetch(profileStatsURL,{cache:'no-store'}),nativeFetch(ratingProgressURL,{cache:'no-store'})
         ]);

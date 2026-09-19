@@ -9,6 +9,7 @@
   window.__AI_SHOGI_TOURNAMENT_VISUAL_21590A=true;
 
   const KEY='aiShogiTournament21540';
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
   const seenAdvance=new Set(),seenRoundIntro=new Set(),seenBossIntro=new Set();
   let observer=null,raf=0,introTimer=0,bossIntroTimer=0;
   const OPPONENT_LINES={
@@ -148,6 +149,6 @@
   function decorate(){ensureStyle();markPairs();animateAdvances();syncOpponentDialogue();roundIntro();const gate=bossGate();bossIntro(gate);const panel=document.getElementById('tournament21540Panel');if(panel)panel.dataset.visualVersion='21590a'}
   function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;decorate()})}
   function observe(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer?.disconnect();observer=new MutationObserver(muts=>{if(muts.every(m=>m.target?.closest?.('.tourVisualBossGate21590,.tourRoundIntro21590,.tourBossIntro21590,#tourOpponentVoice21549')))return;schedule()});observer.observe(panel,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});decorate();return true}
-  let tries=0;const boot=setInterval(()=>{if(observe()||++tries>120)clearInterval(boot)},100);setInterval(syncOpponentDialogue,320);window.addEventListener('resize',schedule,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(schedule,120),{passive:true});
+  let tries=0;const boot=setInterval(()=>{if(observe()||++tries>120)clearInterval(boot)},100);if(!IS_FIRE_RUNTIME)setInterval(syncOpponentDialogue,320);window.addEventListener('resize',schedule,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(schedule,120),{passive:true});
   window.AI_SHOGI_TOURNAMENT_VISUAL={version:'21590a',refresh:decorate,audit:()=>{const panel=document.getElementById('tournament21540Panel'),slots=[...document.querySelectorAll('#tournament21540Panel .tourBracketSlot')],portraits=slots.filter(s=>s.querySelector('.tourAvatar img')).length,fallbacks=slots.filter(s=>s.querySelector('.tourAvatarFallback')&&cleanName(s)&&cleanName(s)!=='—').length,opp=document.getElementById('tourOpponentVoice21549');return{ok:!!panel,version:panel?.dataset.visualVersion||'',slots:slots.length,portraits,fallbacks,advanced:slots.filter(s=>s.classList.contains('tourAdvanced')).length,current:slots.filter(s=>s.classList.contains('current')||s.classList.contains('currentOpp')).length,bossGate:!!panel?.querySelector('.tourVisualBossGate21590'),roundIntro:!!panel?.querySelector('.tourRoundIntro21590'),bossIntro:!!panel?.querySelector('.tourBossIntro21590'),nextOpponent:panel?.querySelector('.tourRoundIntro21590')?.dataset.nextOpponent||'',opponentSpeaker:opp?.dataset.speaker||'',opponentRole:opp?.dataset.visualRole||'',attemptKey:attemptKey(),fireFit:!!panel?.classList.contains('tourFireFit')}}};
 })();

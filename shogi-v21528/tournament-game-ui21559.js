@@ -14,11 +14,13 @@
 
   const PLAYER='__PLAYER__';
   const ROUND_NAMES=['1回戦','準々決勝','準決勝','決勝','優勝'];
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
   const clean=s=>String(s||'').replace(/[👑🏆]/gu,'').trim();
   const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const api=()=>window.AI_SHOGI_TOURNAMENT;
   const store=()=>{try{return api()?.state?.()||null}catch(e){return null}};
   const active=()=>store()?.active||null;
+  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!active()&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
   const cups=()=>{try{return api()?.cups?.()||[]}catch(e){return[]}};
   const navReload=()=>{try{return performance.getEntriesByType('navigation')?.[0]?.type==='reload'}catch(e){return false}};
   const restoredStartedAt=navReload()?(Number(active()?.startedAt)||0):0;
@@ -128,7 +130,7 @@
   const observer=new MutationObserver(ms=>{if(busy)return;if(ms.every(m=>m.target?.closest?.('.tourGameHero21559,.tourMatchup21559,.tourBossVault21559,.tourWinStamp21559')))return;request()});
   function boot(){const panel=document.getElementById('tournament21540Panel');if(!panel)return false;observer.disconnect();observer.observe(panel,{childList:true,subtree:true,attributes:true});decorate();return true}
   let tries=0;const timer=setInterval(()=>{if(boot()||++tries>120)clearInterval(timer)},120);
-  window.addEventListener('resize',request,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(request,120),{passive:true});window.addEventListener('ai-shogi-local-save',request);
+  window.addEventListener('resize',request,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(request,120),{passive:true});window.addEventListener('ai-shogi-local-save',()=>{if(!fireBattleHidden())request()});
 
   window.AI_SHOGI_TOURNAMENT_GAME_UI={version:'21559a',render:decorate,audit:()=>{const a=active(),panel=document.getElementById('tournament21540Panel'),hero=panel?.querySelector('.tourGameHero21559'),match=panel?.querySelector('.tourMatchup21559'),oppImg=match?.querySelector('.tourMatchSide21559.opponent img'),oppSrc=oppImg?.currentSrc||oppImg?.src||'',vault=panel?.querySelector('.tourBossVault21559'),bracket=panel?.querySelector('.tourBracket'),rounds=panel?[...panel.querySelectorAll('.tourBracketRound')]:[],stamps=panel?.querySelectorAll('.tourWinStamp21559')?.length||0,now=panel?.querySelectorAll('.tourGameNow21559')?.length||0;return{ok:!!hero&&!!vault,version:'21559a',cupId:a?.cupId||null,hero:!!hero,matchupCard:!!match,matchupOpponent:match?.dataset.opponent||'',matchupBoss:match?.dataset.boss==='1',matchupPortrait:!!oppImg,matchupPortraitCatalogMatch:portraitInRoster(oppSrc),matchupPlayerRating:playerRating(),matchupOpponentRating:Number((match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||'').match(/R(\d+)/)?.[1])||null,matchupOverflow:match?Math.max(0,match.scrollWidth-match.clientWidth):0,bossVault:!!vault,bossOutsideBracket:vault?.dataset.outsideBracket==='1'&&!bracket?.contains(vault),bossInBracket:!!(a&&cupFor(a)&&a.bracket?.rounds?.flat?.().includes(cupFor(a).boss)),roundPlates:rounds.length,currentMarkers:now,winnerStamps:stamps,progressValue:hero?.querySelector('.tourGameWinsNum21559')?.textContent||'',progressLabel:hero?.querySelector('.tourGameWinsLabel21559')?.textContent||'',attemptCount:Number(hero?.querySelector('[data-tour-attempt]')?.textContent?.match(/(\d+)回目/)?.[1])||0,resumeChip:!!hero?.querySelector('[data-tour-resume]'),connectors:panel?.querySelectorAll('.tourBracketLines path')?.length||0,roster:document.querySelectorAll('#chars .ch').length,sideOverflow:document.querySelector('.side')?Math.max(0,document.querySelector('.side').scrollWidth-document.querySelector('.side').clientWidth):0,docOverflow:Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth)}}};
 })();
@@ -179,7 +181,7 @@
     const oldRender=base.render.bind(base),oldAudit=base.audit.bind(base);
     base.render=()=>{const out=oldRender();renderWait();return out};
     base.audit=()=>{renderWait();const out=oldAudit(),match=document.querySelector('#tournament21540Panel .tourMatchup21559');return{...out,matchupWaiting:match?.dataset.waiting==='1',matchupOpponentLabel:match?.querySelector('.tourMatchSide21559.opponent .tourMatchName21559')?.textContent||'',matchupOpponentMeta:match?.querySelector('.tourMatchSide21559.opponent .tourMatchMeta21559')?.textContent||''}};
-    renderWait();window.addEventListener('ai-shogi-local-save',renderWait);return true;
+    renderWait();window.addEventListener('ai-shogi-local-save',()=>{if(!fireBattleHidden())renderWait()});return true;
   }
   let n=0;const t=setInterval(()=>{if(install()||++n>80)clearInterval(t)},100);
 })();
@@ -193,9 +195,9 @@
   const here=document.currentScript?.src||'';
   let src='';
   if(/tournament-game-ui21559\.js(?:[?#]|$)/.test(here)){
-    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562');
+    src=here.replace(/tournament-game-ui21559\.js(?:[?#].*)?$/,'tournament-road21562.js?v=21562&perf=20260919fire2');
   }else if(/\/shogi-v21528\/(?:index\.html)?$/.test(location.pathname)){
-    src=new URL('tournament-road21562.js?v=21562',location.href).href;
+    src=new URL('tournament-road21562.js?v=21562&perf=20260919fire2',location.href).href;
   }else return;
   window.__AI_SHOGI_TOURNAMENT_ROAD_LOADER_21562=true;
   if(window.__AI_SHOGI_TOURNAMENT_ROAD_21562)return;

@@ -12,12 +12,14 @@
   const KEY='aiShogiTournament21540';
   const HISTORY_KEY='aiShogiTournamentDialogue21547';
   const PLAYER='__PLAYER__';
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
   const ROUNDS=['1回戦','準々決勝','準決勝','決勝'];
   const CUP_BOSS={kenshiro:'ケンシロウ',souther:'サウザー',raoh:'ラオウ',kaworu:'カヲル',mama:'まま',onimama:'おにまま',akiou:'あき王',micchan:'みっちゃん',mitsuki:'みつき',future:'未来からやってきたみつき'};
   const CUP_NAME={kenshiro:'ケンシロウ杯',souther:'サウザー杯',raoh:'ラオウ杯',kaworu:'カヲル杯',mama:'まま杯',onimama:'おにまま杯',akiou:'あき王杯',micchan:'みっちゃん杯',mitsuki:'みつき杯',future:'未来みつき杯'};
   const MATERIAL_VAL={P:100,L:280,N:300,S:420,G:500,B:700,R:850,K:20000,'+P':500,'+L':500,'+N':500,'+S':500,'+B':900,'+R':1050};
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
+  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!read()?.active&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
   const readHistory=()=>{try{const x=JSON.parse(localStorage.getItem(HISTORY_KEY)||'null');if(x&&typeof x==='object'){x.byKey=x.byKey&&typeof x.byKey==='object'?x.byKey:{};x.sessions=x.sessions&&typeof x.sessions==='object'?x.sessions:{};return x}return{version:2,byKey:{},sessions:{}}}catch(e){return{version:2,byKey:{},sessions:{}}}};
   const writeHistory=x=>{try{x.version=2;x.byKey=x.byKey&&typeof x.byKey==='object'?x.byKey:{};x.sessions=x.sessions&&typeof x.sessions==='object'?x.sessions:{};localStorage.setItem(HISTORY_KEY,JSON.stringify(x));return true}catch(e){return false}};
   function persistSession(key,patch={}){
@@ -191,11 +193,11 @@
     const panel=document.getElementById('tournament21540Panel'),speech=document.getElementById('charSpeech'),moves=document.getElementById('moves'),result=document.getElementById('resultBanner');
     observeTarget(panel,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
     observeTarget(speech,{childList:true,subtree:true,characterData:true});
-    observeTarget(moves,{childList:true,subtree:true,characterData:true});
+    if(!IS_FIRE_RUNTIME)observeTarget(moves,{childList:true,subtree:true,characterData:true});
     observeTarget(result,{attributes:true,childList:true,subtree:true,characterData:true});
     return !!panel;
   }
   let tries=0;const boot=setInterval(()=>{const ready=attachObservers();render(false);tries++;if((ready&&tries>2)||tries>120)clearInterval(boot)},120);
   attachObservers();render(false);
-  window.addEventListener('resize',requestRender,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(requestRender,100),{passive:true});window.addEventListener('ai-shogi-local-save',requestRender);
+  window.addEventListener('resize',requestRender,{passive:true});window.addEventListener('orientationchange',()=>setTimeout(requestRender,100),{passive:true});window.addEventListener('ai-shogi-local-save',()=>{if(!fireBattleHidden())requestRender()});
 })();
