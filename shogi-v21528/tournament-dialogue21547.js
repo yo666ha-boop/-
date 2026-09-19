@@ -155,7 +155,6 @@
   }
 
   function render(force=false){
-    if(fireBattleHidden()){document.getElementById('tourDialogue21547')?.remove();document.getElementById('tourOpponentVoice21549')?.remove();lastSignature='';lastPick=null;return false}
     ensureStyle();const d=derive(),activeRoot=document.querySelector('#tournament21540Panel .tourActive');
     if(!d||!activeRoot){document.getElementById('tourDialogue21547')?.remove();lastSignature='';lastPick=null;return false}
     const p=choose(d,force);if(!p)return false;const src=portrait(d.boss),box=ensureBox(activeRoot);
@@ -186,7 +185,7 @@
 
   window.AI_SHOGI_TOURNAMENT_DIALOGUE={version:'21547d',render:()=>render(true),audit,sample:(cupId,context,vars={},history=[],roll)=>bank()?.pick?.(cupId,context,vars,history,roll)||null};
   let renderQueued=false;
-  const requestRender=()=>{if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;render(false)})};
+  const requestRender=()=>{if(fireBattleHidden()||renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;render(false)})};
   const observedTargets=new WeakSet();
   observer=new MutationObserver(requestRender);
   function observeTarget(el,options){if(!el||observedTargets.has(el))return;observedTargets.add(el);observer.observe(el,options)}
