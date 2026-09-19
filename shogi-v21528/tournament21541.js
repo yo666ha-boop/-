@@ -305,13 +305,13 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     return true;
   }
 
-  function render(){
+  function render(forceFirePanel=false){
     if(!ensureUI())return;
     const store=read(),body=document.getElementById('tourBody21540');if(!body)return;
     const rating=Number(currentStats().rating)||1500,rec=recommendedCup(rating);
     document.body.classList.toggle('tournament21540Active',!!store.active&&['active','draw'].includes(store.active.status));
     const btn=document.getElementById('tournament21540Btn');if(btn){const status=store.active?.status||'',hasTournament=!!store.active,running=hasTournament&&!['champion','lost','boss_lost'].includes(status),label=running?'🏆 大会表を開く':hasTournament?'🏆 大会結果を開く':'🏆 大会モード';btn.innerHTML=label+(running?'<span class="tourDot"></span>':'')}
-    if(fireBattleSleeping(store)){parkFirePanel(body);return}
+    if(!forceFirePanel&&fireBattleSleeping(store)){parkFirePanel(body);return}
     delete body.dataset.fireParked21595;
     const cards=CUPS.map(c=>{
       const cupWins=Number(store.trophies?.[c.id]||0),championships=Number(store.championships?.[c.id]??cupWins)||0,streak=Number(store.streaks?.[c.id]||0),recommended=c.id===rec.id;
@@ -343,7 +343,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     scheduleRoundAI(store.active,cup,0);
     store.active.lastOpponent=currentOpponent(store.active);
     store.history=Array.isArray(store.history)?store.history:[];store.history.unshift({cupId:cup.id,startedAt,rating,format:'16-player-live'});store.history=store.history.slice(0,30);
-    write(store);render();return startCurrentMatch();
+    write(store);render(true);return startCurrentMatch();
   }
   function startCurrentMatch(replay=false){
     const store=read(),a=store.active,cup=cupById(a?.cupId);if(!a||!cup)return false;
