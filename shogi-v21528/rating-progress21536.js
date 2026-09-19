@@ -107,7 +107,7 @@
         boss.async=false;
         boss.addEventListener('load',()=>{
           const ui=document.createElement('script');
-          ui.src=new URL('./tournament-ui21542.js?v=21542a',scriptURL).href;
+          ui.src=new URL('./tournament-ui21542.js?v=21542a&perf=20260919fire3',scriptURL).href;
           ui.async=false;
           ui.addEventListener('load',()=>{
             const skin=document.createElement('script');
