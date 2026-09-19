@@ -295,7 +295,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
 
   function fireBattleSleeping(store){
     const a=store?.active,panel=document.getElementById('tournament21540Panel'),boss=a?.bossChallenge?.status||'locked',resultOn=document.getElementById('resultBanner')?.classList.contains('on');
-    return !!(IS_FIRE_RUNTIME&&a&&!panel?.classList.contains('on')&&!a.pending&&!resultOn&&(['active','draw','boss_active','boss_draw'].includes(a.status)||['active','draw'].includes(boss)));
+    return !!(IS_FIRE_RUNTIME&&a&&!panel?.classList.contains('on')&&!a.pending&&!resultOn&&(['active','draw'].includes(a.status)&&boss==='locked'));
   }
   function parkFirePanel(body){
     if(!body)return false;
