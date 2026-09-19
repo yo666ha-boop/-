@@ -2,6 +2,12 @@ name: Deploy isolated tournament fullapp 21602
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/tournament-cups-20260902
+    paths:
+      - 'preview/fullapp-unified21602-vercel/**'
+      - '.github/workflows/deploy-tournament-fullapp-vercel21602.yml'
 
 permissions:
   contents: read
