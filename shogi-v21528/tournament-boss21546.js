@@ -9,6 +9,7 @@
 
   const KEY='aiShogiTournament21540';
   const PLAYER='__PLAYER__';
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
   const CUPS={
     kenshiro:{id:'kenshiro',name:'ケンシロウ杯',boss:'ケンシロウ',bossRating:2100},
     souther:{id:'souther',name:'サウザー杯',boss:'サウザー',bossRating:2180},
@@ -202,7 +203,7 @@ body.tournamentBoss21546Lock #chars{opacity:.55}
   }
 
   let tries=0;const timer=setInterval(()=>{patchAPI();installObservers();promoteTournamentChampion();decorate();if(patched&&++tries>20)clearInterval(timer)},80);
-  setInterval(()=>{if(!patched)patchAPI();installObservers();promoteTournamentChampion();decorate();ensureBossTerminalRoad()},500);
+  if(!IS_FIRE_RUNTIME)setInterval(()=>{if(!patched)patchAPI();installObservers();promoteTournamentChampion();decorate();ensureBossTerminalRoad()},500);
   patchAPI();installObservers();
 
   window.AI_SHOGI_TOURNAMENT_BOSS={
