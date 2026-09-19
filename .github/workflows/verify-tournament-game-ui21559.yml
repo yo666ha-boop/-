@@ -1,0 +1,83 @@
+name: Verify tournament game UI 21559
+
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament-game-ui21559.js'
+      - 'shogi-v21528/tournament-road21562.js'
+      - 'shogi-v21528/tournament-history21567.js'
+      - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
+      - 'shogi-v21528/tournament-ui21542.js'
+      - 'shogi-v21528/tournament-ui21543.js'
+      - 'shogi-v21528/tournament-skin21544.js'
+      - 'preview/tournament-16/index21543.html'
+      - '.github/scripts/verify-tournament-game-ui21559.mjs'
+      - '.github/scripts/verify-tournament-same-cup-attempt21564.mjs'
+      - '.github/scripts/verify-tournament-history21567.mjs'
+      - '.github/scripts/verify-tournament-history-resume21578.mjs'
+      - '.github/scripts/verify-tournament-visible-microtext21572.mjs'
+      - '.github/scripts/verify-tournament-history-hierarchy21573.mjs'
+      - '.github/scripts/verify-tournament-accessible-text21574.mjs'
+      - '.github/workflows/verify-tournament-game-ui21559.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  game-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check game UI
+        run: |
+          node --check shogi-v21528/tournament-game-ui21559.js
+          node --check shogi-v21528/tournament-road21562.js
+          node --check shogi-v21528/tournament-history21567.js
+          node --check .github/scripts/verify-tournament-game-ui21559.mjs
+          node --check .github/scripts/verify-tournament-same-cup-attempt21564.mjs
+          node --check .github/scripts/verify-tournament-history21567.mjs
+          node --check .github/scripts/verify-tournament-history-resume21578.mjs
+          node --check .github/scripts/verify-tournament-visible-microtext21572.mjs
+          node --check .github/scripts/verify-tournament-history-hierarchy21573.mjs
+          node --check .github/scripts/verify-tournament-accessible-text21574.mjs
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y
+          npm install playwright@1.55.0
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+          npx playwright install --with-deps chromium
+      - name: Verify game-style tournament UI and invariants
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-game-ui21559.mjs 2>&1 | tee /tmp/tournament-game-ui21559.log
+      - name: Verify same-cup attempt counter increments
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-same-cup-attempt21564.mjs 2>&1 | tee /tmp/tournament-same-cup-attempt21564.log
+      - name: Verify recent tournament attempt history
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-history21567.mjs 2>&1 | tee /tmp/tournament-history21567.log
+      - name: Verify recent tournament history resume affordance
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-history-resume21578.mjs 2>&1 | tee /tmp/tournament-history-resume21578.log
+      - name: Verify visible tournament microtext floor
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-visible-microtext21572.mjs 2>&1 | tee /tmp/tournament-visible-microtext21572.log
+      - name: Verify 280px tournament history hierarchy
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-history-hierarchy21573.mjs 2>&1 | tee /tmp/tournament-history-hierarchy21573.log
+      - name: Verify 280px 150% tournament text stress
+        run: |
+          set -o pipefail
+          node .github/scripts/verify-tournament-accessible-text21574.mjs 2>&1 | tee /tmp/tournament-accessible-text21574.log

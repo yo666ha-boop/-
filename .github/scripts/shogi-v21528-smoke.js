@@ -28,6 +28,31 @@ const vm=require('vm');
   });
   console.log('UI',JSON.stringify(ui));
 
+  // Tournament dialogue 21547c relies on this exact live full-app API when the
+  // AI teacher has not been manually run. Keep this probe in the real app smoke
+  // so a mock-only material fallback can never silently pass CI.
+  const stateApi=await page.evaluate(()=>{
+    const api=window.AIShogiIOS;let s=null,error='';
+    try{s=api?.state?.()||null}catch(e){error=String(e&&e.message||e)}
+    let roster=[];try{roster=api?.characters?.()||[]}catch(e){if(!error)error=String(e&&e.message||e)}
+    return{
+      api:!!api,
+      stateFunction:typeof api?.state==='function',
+      charactersFunction:typeof api?.characters==='function',
+      state:!!s,
+      board:Array.isArray(s?.b),
+      boardLength:Array.isArray(s?.b)?s.b.length:0,
+      hands:!!s?.h&&typeof s.h==='object',
+      handS:!!s?.h?.[1]&&typeof s.h[1]==='object',
+      handG:!!s?.h?.[-1]&&typeof s.h[-1]==='object',
+      turn:[1,-1].includes(Number(s?.t)),
+      log:Array.isArray(s?.log),
+      rosterCount:Array.isArray(roster)?roster.length:0,
+      error
+    };
+  });
+  console.log('STATE_API',JSON.stringify(stateApi));
+
   const opponentChecks={};
   for(const target of ['しんじ','ぺんぺん']){
     await page.evaluate(name=>{
@@ -88,6 +113,7 @@ const vm=require('vm');
   if(ui.future!=='未来からやってきたみつき')failures.push('future character missing: '+ui.future);
   if(ui.micchan!=='みっちゃん')failures.push('micchan slot mismatch: '+ui.micchan);
   if(ui.bad.length)failures.push('broken images: '+ui.bad.join(','));
+  if(!stateApi.api||!stateApi.stateFunction||!stateApi.charactersFunction||!stateApi.state||!stateApi.board||stateApi.boardLength!==81||!stateApi.hands||!stateApi.handS||!stateApi.handG||!stateApi.turn||!stateApi.log||stateApi.rosterCount!==26){failures.push('AIShogiIOS live state API incompatible with tournament dialogue 21547c: '+JSON.stringify(stateApi))}
   for(const target of ['しんじ','ぺんぺん']){
     const c=opponentChecks[target];
     if(!c||!c.name.startsWith(target))failures.push(target+' opponent name mismatch: '+JSON.stringify(c));
@@ -103,5 +129,5 @@ const vm=require('vm');
   if(init&&init.ready&&(!best||(!best.move&&!best.resign&&!best.declareWin)))failures.push('bestmove failed: '+(bestError||JSON.stringify(best)));
   await browser.close();
   if(failures.length)throw new Error(failures.join(' | '));
-  console.log('PASS v2.15.28 Firefox: 26 chars, images, Shinji/Penpen opponent portraits, COI runtime, readyok, bestmove');
+  console.log('PASS v2.15.28 Firefox: 26 chars, live AIShogiIOS state b/h/log, images, Shinji/Penpen opponent portraits, COI runtime, readyok, bestmove');
 })().catch(e=>{console.error('FAIL',e&&e.stack||e);process.exit(1)});

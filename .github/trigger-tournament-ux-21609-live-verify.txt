@@ -1,0 +1,7 @@
+TOURNAMENT_UX_21609_LIVE_VERIFY
+2026-09-19 JST
+product_head=6f63eb828b2e84cd0d3913f5e0a9b5d0fd1b9d7d
+public_preview=https://mitsuki-shogi-fullapp-unified21602.vercel.app
+purpose=rerun exact-head workflows only after isolated Vercel serves the validated tournament table button UX product head
+main_unchanged=true
+pr126_keep_draft=true

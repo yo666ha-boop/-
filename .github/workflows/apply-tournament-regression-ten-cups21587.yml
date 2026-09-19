@@ -1,0 +1,32 @@
+name: apply tournament regression ten cups 21587
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-regression-ten-cups21587.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply ten-cup regression migration
+        run: node .github/scripts/apply-tournament-regression-ten-cups21587.mjs
+      - name: Verify updated regression semantics
+        run: |
+          grep -q "length===10" .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
+          grep -q "id==='kenshiro'" .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
+          grep -q "rows.length!==50" .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
+          ! grep -q "id==='shinji'" .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
+          node --check .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/scripts/verify-tournament-all-boss-terminal-fullapp21547.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "test: update all-boss regression for 10 cups 21587"
+          git push origin HEAD:feature/tournament-cups-20260902

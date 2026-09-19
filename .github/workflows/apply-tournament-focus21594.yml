@@ -1,0 +1,31 @@
+name: apply tournament active cup focus 21594
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-focus21594.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply active cup focus UI
+        run: node .github/scripts/apply-tournament-focus21594.mjs
+      - name: Syntax and source gates
+        run: |
+          node --check shogi-v21528/tournament21541.js
+          grep -q "tourFocusLead" shogi-v21528/tournament21541.js
+          grep -q "body.innerHTML=focus" shogi-v21528/tournament21541.js
+          grep -q "version:'21594'" shogi-v21528/tournament21541.js
+      - name: Commit active cup focus UI
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament21541.js
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: focus tournament view after cup selection 21594"
+          git push origin HEAD:feature/tournament-cups-20260902

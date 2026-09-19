@@ -1,0 +1,41 @@
+name: apply tournament micchan voice 21595
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-micchan-voice21595.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply micchan tournament voice correction
+        run: node .github/scripts/apply-tournament-micchan-voice21595.mjs
+      - name: Syntax and character voice gates
+        run: |
+          node --check shogi-v21528/tournament-dialogue-bank21547.js
+          node --check shogi-v21528/tournament-dialogue21547.js
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const bank=fs.readFileSync('shogi-v21528/tournament-dialogue-bank21547.js','utf8');
+          const dialogue=fs.readFileSync('shogi-v21528/tournament-dialogue21547.js','utf8');
+          const mic=(bank.match(/    micchan:\{[\s\S]*?\n    mitsuki:/)||[])[0]||'';
+          if(!mic)throw new Error('micchan profile missing');
+          if(/わたし|私/.test(mic))throw new Error('micchan must not use watashi');
+          if(!mic.includes('にゃんびー'))throw new Error('nyanbee missing');
+          if(!mic.includes('でんじゃーでんじゃーえまーじぇんしー'))throw new Error('danger emergency missing');
+          if(!dialogue.includes("d.opp==='みっちゃん'?micchanLines21595"))throw new Error('micchan opponent override missing');
+          console.log('PASS_TOURNAMENT21595_MICCHAN_NONSENSE_VOICE_STATIC');
+          NODE
+      - name: Commit micchan voice correction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament-dialogue-bank21547.js shogi-v21528/tournament-dialogue21547.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: restore micchan nonsense tournament voice 21595"
+          git push origin HEAD:feature/tournament-cups-20260902

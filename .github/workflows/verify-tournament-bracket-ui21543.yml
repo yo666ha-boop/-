@@ -1,0 +1,36 @@
+name: Verify tournament bracket UI 21543
+on:
+  pull_request:
+    paths:
+      - 'shogi-v21528/tournament21541.js'
+      - 'shogi-v21528/tournament-field21545.js'
+      - 'shogi-v21528/tournament-boss21546.js'
+      - 'shogi-v21528/tournament-ui21542.js'
+      - 'shogi-v21528/tournament-ui21543.js'
+      - 'shogi-v21528/tournament-skin21544.js'
+      - 'shogi-v21528/rating-progress21536.js'
+      - '.github/scripts/verify-tournament-bracket-ui21543.mjs'
+      - '.github/workflows/verify-tournament-bracket-ui21543.yml'
+  workflow_dispatch:
+
+jobs:
+  bracket-ui:
+    runs-on: ubuntu-22.04
+    container: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install matching Playwright package
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Syntax check
+        run: |
+          node --check shogi-v21528/tournament-field21545.js
+          node --check shogi-v21528/tournament-boss21546.js
+          node --check shogi-v21528/tournament-ui21542.js
+          node --check shogi-v21528/tournament-ui21543.js
+          node --check shogi-v21528/tournament-skin21544.js
+          node --check shogi-v21528/rating-progress21536.js
+          node --check .github/scripts/verify-tournament-bracket-ui21543.mjs
+      - name: Verify pairwise progression, boss separation, bracket lines, and integrated skin
+        run: node .github/scripts/verify-tournament-bracket-ui21543.mjs

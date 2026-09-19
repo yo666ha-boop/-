@@ -1,0 +1,35 @@
+name: apply tournament live core 21585
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-tournament-live-core21585.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/tournament-cups-20260902
+          fetch-depth: 0
+      - name: Apply live core migration
+        run: node .github/scripts/apply-tournament-live-core21585.mjs
+      - name: Verify migration markers
+        run: |
+          grep -q "id:'souther'.*boss:'サウザー'" shogi-v21528/tournament21541.js
+          grep -q "id:'mama'.*boss:'まま'" shogi-v21528/tournament21541.js
+          grep -q "id:'onimama'.*boss:'おにまま'" shogi-v21528/tournament21541.js
+          ! grep -q "id:'shinji'.*name:'しんじ杯'" shogi-v21528/tournament21541.js
+          grep -q "Number(ch.rating)<cup.bossRating" shogi-v21528/tournament21541.js
+          grep -q "slice(0,15)" shogi-v21528/tournament21541.js
+          grep -q "playerSlot=bracket.rounds\[0\].indexOf(PLAYER)" shogi-v21528/tournament21541.js
+          grep -q "version:'21585'" shogi-v21528/tournament21541.js
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add shogi-v21528/tournament21541.js
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: sync live tournament core to 10 cups 21585"
+          git push origin HEAD:feature/tournament-cups-20260902

@@ -1,0 +1,11 @@
+Tournament 21595 micchan voice verification trigger.
+Purpose: retrigger PR validation from a user-authored commit after the product apply workflow committed 6cbabfbb35454ed0c40973df5eabd53c62df5251 as github-actions[bot].
+No production behavior is changed by this file.
+
+Require exact-head regression for the 21595 micchan voice correction:
+- micchan tournament host/boss voice uses nonsense/catchphrase style
+- contains にゃんびー
+- contains でんじゃーでんじゃーえまーじぇんしー
+- no わたし / 私 in micchan tournament voice profile
+- micchan as bracket opponent bypasses generic #charSpeech via micchanLines21595
+- preserve 21594 active-cup focus UI and all existing tournament regressions

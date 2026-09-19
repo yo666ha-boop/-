@@ -1,0 +1,3 @@
+Tournament 21587 exact-head regression trigger.
+Purpose: re-run PR gates after automated 21585/21586/21587 migration commits.
+No production runtime behavior is changed by this file.
