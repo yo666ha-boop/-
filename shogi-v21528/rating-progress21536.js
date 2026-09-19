@@ -95,7 +95,7 @@
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const core=document.createElement('script');
-    core.src=new URL('./tournament21541.js?v=21541a&perf=20260919fire2',scriptURL).href;
+    core.src=new URL('./tournament21541.js?v=21541a&perf=20260919fire3',scriptURL).href;
     core.async=false;
     core.addEventListener('load',()=>{
       const field=document.createElement('script');
@@ -103,7 +103,7 @@
       field.async=false;
       field.addEventListener('load',()=>{
         const boss=document.createElement('script');
-        boss.src=new URL('./tournament-boss21546.js?v=21546a&perf=20260919fire2',scriptURL).href;
+        boss.src=new URL('./tournament-boss21546.js?v=21546a&perf=20260919fire3',scriptURL).href;
         boss.async=false;
         boss.addEventListener('load',()=>{
           const ui=document.createElement('script');
@@ -119,11 +119,11 @@
               bank.async=false;
               bank.addEventListener('load',()=>{
                 const dialogue=document.createElement('script');
-                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547d&perf=20260919fire2',scriptURL).href;
+                dialogue.src=new URL('./tournament-dialogue21547.js?v=21547d&perf=20260919fire3',scriptURL).href;
                 dialogue.async=false;
                 dialogue.addEventListener('load',()=>{
                   const game=document.createElement('script');
-                  game.src=new URL('./tournament-game-ui21559.js?v=21562&perf=20260919fire2',scriptURL).href;
+                  game.src=new URL('./tournament-game-ui21559.js?v=21562&perf=20260919fire3',scriptURL).href;
                   game.async=false;
                   document.head.appendChild(game);
                 },{once:true});
@@ -194,7 +194,7 @@ body:has(#tournament21540Panel.tourFireFit) .side>#tourDialogue21547.tourDialogu
   try{
     const scriptURL=document.currentScript?.src||location.href;
     const s=document.createElement('script');
-    s.src=new URL('./tournament-visual21590.js?v=21590a&perf=20260919fire2',scriptURL).href;
+    s.src=new URL('./tournament-visual21590.js?v=21590a&perf=20260919fire3',scriptURL).href;
     s.async=false;
     document.head.appendChild(s);
   }catch(e){console.error('tournament visual21590 loader failed',e)}
