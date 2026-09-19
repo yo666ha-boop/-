@@ -1,0 +1,131 @@
+name: Build Fire Stage 3.6 Search Watchdog APK
+
+on:
+  push:
+    branches:
+      - fire/shogi-webview-v1-20260828
+    paths:
+      - 'fire-app/scripts/apply-stage36-fire-search-watchdog.py'
+      - '.github/workflows/build-fire-stage36-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-stage36-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply Stage 3.6 native search watchdog patch
+        run: |
+          set -euxo pipefail
+          python fire-app/scripts/apply-stage36-fire-search-watchdog.py
+          node --check shogi-v21528/future-yaneura-worker21528.js
+          node --check shogi-side-test/future21520.js
+          grep -F 'scheduleMovetimeWatchdog' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'budgetMs + 2500L' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F 'FIRE_NATIVE_WATCHDOG_STOP' fire-app/app/src/main/java/com/mitsuki/shogi/fire/NativeEngineManager.java
+          grep -F '⑥-Fire時間監視で停止' shogi-v21528/future-yaneura-worker21528.js
+          grep -F "Math.min(Number(timeout)||70000,45000)" shogi-side-test/future21520.js
+          grep -F 'FIRE_THREADS=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_HASH_MB=96' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'FIRE_NODE_MULTIPLIER=2' fire-app/app/src/main/assets/fire/yaneuraou-native-shim.js
+          grep -F 'versionCode = 6' fire-app/app/build.gradle.kts
+          grep -F 'versionName = "3.6-fire-native-v970-search-watchdog"' fire-app/app/build.gradle.kts
+
+      - name: Set up Android NDK r23b
+        id: setup_ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r23b
+
+      - name: Build production-matched YaneuraOu V9.70git Android executables
+        env:
+          NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
+        run: |
+          set -euxo pipefail
+          YANE_COMMIT=33ccf1f907eb7184889fa23051243f81ab0bf973
+          grep -F "commit=$YANE_COMMIT" shogi-side-test/yaneuraou/build-info.txt
+          git clone --filter=blob:none https://github.com/yaneurao/YaneuraOu.git /tmp/YaneuraOu
+          cd /tmp/YaneuraOu
+          git checkout "$YANE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$YANE_COMMIT"
+          grep -F '#define ENGINE_VERSION "9.70git"' source/config.h
+          for ABI in arm64-v8a armeabi-v7a; do
+            rm -rf libs obj
+            "$NDK_HOME/ndk-build" \
+              NDK_PROJECT_PATH="$PWD" \
+              APP_BUILD_SCRIPT="$PWD/script/jni/Android.mk" \
+              NDK_APPLICATION_MK="$PWD/script/jni/Application.mk" \
+              APP_ABI="$ABI" \
+              YANEURAOU_EDITION=YANEURAOU_ENGINE_NNUE \
+              -j2 V=1
+            SRC="libs/$ABI/YaneuraOu_NNUE_$ABI"
+            test -s "$SRC"
+            mkdir -p "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI"
+            cp "$SRC" "$GITHUB_WORKSPACE/fire-app/app/src/main/jniLibs/$ABI/libyaneuraou_v970_exec.so"
+          done
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build Stage 3.6 APK
+        working-directory: fire-app
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify Stage 3.6 APK payload
+        run: |
+          set -euxo pipefail
+          APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          test "$(stat -c%s "$APK")" -gt 60000000
+          unzip -l "$APK" > /tmp/fire-stage36-list.txt
+          grep -F 'assets/shogi-v21528/index.html' /tmp/fire-stage36-list.txt
+          grep -F 'assets/shogi-side-test/yaneuraou/nn.bin' /tmp/fire-stage36-list.txt
+          grep -F 'assets/fire/yaneuraou-native-shim.js' /tmp/fire-stage36-list.txt
+          grep -F 'lib/arm64-v8a/libyaneuraou_v970_exec.so' /tmp/fire-stage36-list.txt
+          grep -F 'lib/armeabi-v7a/libyaneuraou_v970_exec.so' /tmp/fire-stage36-list.txt
+          sha256sum "$APK"
+          ls -lh "$APK"
+
+      - name: Upload Stage 3.6 APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mitsuki-shogi-fire-stage36-native-watchdog-apk
+          path: fire-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish Stage 3.6 physical Fire test link
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          APK=fire-app/app/build/outputs/apk/debug/app-debug.apk
+          ASSET=mitsuki-shogi-fire-stage36.apk
+          TAG=fire-stage36-test
+          cp "$APK" "$ASSET"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+          NOTES='Fire実機検証用 Stage 3.6。Stage 3.5実機で5分以上AIが着手しない報告を受けた修正。YaneuraOu V9.70git＋水匠5、26キャラのR/MultiPV/cp-loss/personality、Threads最低2、Hash最低96MB、Fire探索予算、nodes 2倍は変更せず棋力を落とさない。ネイティブ go movetime がFire実機で自己終了しない場合に備え、Android側から「完全な変換後探索時間＋2.5秒」の後だけ stop を送る外部watchdogを追加。正常にbestmoveが返る場合はwatchdogは無効化されるため探索へ影響しない。Fireのbestmove通信待ちも45秒で同じ強いエンジンの再起動へ移るようにし、90秒待ちの連鎖を防止。watchdog発火時は FIRE_NATIVE_WATCHDOG_STOP をエンジン状態へ表示して実機診断可能。Stage 3.5の事前起動・同一セッション引継ぎ・弱い内蔵AI退避禁止も維持。ブラウザ版は変更しない。'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
+            gh release edit "$TAG" --title 'みつき将棋 Fire Stage 3.6 5分停止修正版' --notes "$NOTES" --prerelease
+          else
+            gh release create "$TAG" "$ASSET" --target "$GITHUB_SHA" --title 'みつき将棋 Fire Stage 3.6 5分停止修正版' --notes "$NOTES" --prerelease
+          fi
+          echo 'Stage 3.6 sideload URL:'
+          echo 'https://github.com/yo666ha-boop/-/releases/download/fire-stage36-test/mitsuki-shogi-fire-stage36.apk'

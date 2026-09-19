@@ -7,16 +7,18 @@ const FIXED_ORIGINS = new Set([
   "https://ai-shogi-yaneuraou-iphone.vercel.app",
   "https://ai-shogi-yaneuraou-iphone-yo666ha-7357s-projects.vercel.app",
 ]);
+const FIRE_LOOPBACK_ORIGIN = /^http:\/\/127\.0\.0\.1:\d{1,5}$/i;
 
 function originAllowed(origin: string) {
   if (!origin) return true;
   if (FIXED_ORIGINS.has(origin)) return true;
+  if (FIRE_LOOPBACK_ORIGIN.test(origin)) return true;
   return /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
 }
 
 function cors(origin: string) {
   const h = new Headers({
-    "Access-Control-Allow-Methods": "GET,PUT,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Authorization,Content-Type",
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
@@ -52,10 +54,15 @@ function normalizeSlotName(value: unknown) {
   return String(value ?? "").normalize("NFKC").trim().replace(/\s+/g, " ");
 }
 
-async function rpc(name: string, body: Record<string, unknown>) {
+function serviceConfig() {
   const base = Deno.env.get("SUPABASE_URL") || "";
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   if (!base || !service) throw new Error("supabase_runtime_not_configured");
+  return { base, service };
+}
+
+async function rpc(name: string, body: Record<string, unknown>) {
+  const { base, service } = serviceConfig();
   const r = await fetch(`${base}/rest/v1/rpc/${name}`, {
     method: "POST",
     headers: {
@@ -69,6 +76,25 @@ async function rpc(name: string, body: Record<string, unknown>) {
   const data = await r.json().catch(() => null);
   if (!r.ok || data === null) throw new Error(`rpc_${name}_${r.status}`);
   return data;
+}
+
+async function deleteRows(saveKey: string, slotId = "") {
+  const { base, service } = serviceConfig();
+  let url = `${base}/rest/v1/shogi_cloud_saves?save_key=eq.${encodeURIComponent(saveKey)}`;
+  if (slotId) url += `&slot_id=eq.${encodeURIComponent(slotId)}`;
+  const r = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      apikey: service,
+      Authorization: `Bearer ${service}`,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      Prefer: "return=representation",
+    },
+  });
+  const data = await r.json().catch(() => []);
+  if (!r.ok || !Array.isArray(data)) throw new Error(`delete_rows_${r.status}`);
+  return data.length;
 }
 
 Deno.serve(async (req: Request) => {
@@ -145,6 +171,25 @@ Deno.serve(async (req: Request) => {
       if (result?.status === "conflict") return reply(origin, 409, { ok: false, error: "revision_conflict", record: result.record ?? null });
       if (result?.status !== "ok" || !result.record) throw new Error("unexpected_put_response");
       return reply(origin, 200, { ok: true, record: result.record });
+    }
+
+    if (req.method === "DELETE") {
+      const text = await req.text();
+      if (new TextEncoder().encode(text).byteLength > 4096) return reply(origin, 413, { ok: false, error: "payload_too_large" });
+      let body: any;
+      try { body = text ? JSON.parse(text) : {}; } catch { return reply(origin, 400, { ok: false, error: "invalid_request" }); }
+      const mode = String(body.mode || "");
+      if (mode === "slot") {
+        const slotId = String(body.slotId || "");
+        if (!SLOT_ID_RE.test(slotId)) return reply(origin, 400, { ok: false, error: "invalid_slot_id" });
+        const deleted = await deleteRows(saveKey, slotId);
+        return reply(origin, 200, { ok: true, mode: "slot", slotId, deleted });
+      }
+      if (mode === "family") {
+        const deleted = await deleteRows(saveKey);
+        return reply(origin, 200, { ok: true, mode: "family", deleted });
+      }
+      return reply(origin, 400, { ok: false, error: "invalid_delete_mode" });
     }
 
     return reply(origin, 405, { ok: false, error: "method_not_allowed" });

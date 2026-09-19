@@ -1,0 +1,68 @@
+name: Fire strength Piyo audit 20260828
+
+on:
+  push:
+    branches: [fire/shogi-webview-v1-20260828]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire-strength-piyo:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Verify live Fire cloud CORS
+        run: node .github/scripts/verify-cloud-edge-live-read-20260827.mjs
+      - name: Syntax check strength and Piyo audits
+        run: |
+          node --check .github/scripts/audit-strength-runtime-contract-20260825.mjs
+          node --check .github/scripts/audit-all26-hierarchy-20260825.mjs
+          node --check .github/scripts/audit-nonfuture-lower8-quality-20260825.mjs
+          node --check .github/scripts/probe-piyo-ui-20260828.mjs
+      - name: Build strength audit page
+        run: node .github/scripts/build-lower8-quality-page-20260825.mjs
+      - name: Start COI strength server
+        run: |
+          node .github/scripts/coi-lower8-quality-server-20260825.mjs >/tmp/strength-server.log 2>&1 &
+          sleep 1
+      - name: Measure runtime strength contract
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-strength-runtime-contract-20260825.mjs 2>&1 | tee /tmp/runtime-strength.log
+      - name: Measure lower 8 quality
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-nonfuture-lower8-quality-20260825.mjs 2>&1 | tee /tmp/lower8-quality.log
+      - name: Measure all 26 hierarchy
+        run: |
+          set -o pipefail
+          node .github/scripts/audit-all26-hierarchy-20260825.mjs 2>&1 | tee /tmp/all26-strength.log
+      - name: Probe Piyo public match UI
+        run: |
+          set -o pipefail
+          node .github/scripts/probe-piyo-ui-20260828.mjs 2>&1 | tee /tmp/piyo-ui.log
+      - name: Upload measurement logs and Piyo screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fire-strength-piyo-audit-20260828
+          path: |
+            /tmp/runtime-strength.log
+            /tmp/lower8-quality.log
+            /tmp/all26-strength.log
+            /tmp/piyo-ui.log
+            /tmp/piyo-ui.png
+            /tmp/strength-server.log
+          if-no-files-found: warn

@@ -1,0 +1,31 @@
+name: Piyo UI probe 20260828
+
+on:
+  push:
+    branches: [fire/shogi-webview-v1-20260828]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+      - name: Probe Piyo normal public match UI
+        run: node .github/scripts/probe-piyo-ui-20260828.mjs 2>&1 | tee /tmp/piyo-ui.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: piyo-ui-probe-20260828
+          path: |
+            /tmp/piyo-ui.log
+            /tmp/piyo-ui.png
+          if-no-files-found: warn
