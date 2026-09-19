@@ -155,6 +155,7 @@
   }
 
   function render(force=false){
+    if(fireBattleHidden()&&document.getElementById('tourBody21540')?.dataset.fireParked21595==='1')return true;
     ensureStyle();const d=derive(),activeRoot=document.querySelector('#tournament21540Panel .tourActive');
     if(!d||!activeRoot){document.getElementById('tourDialogue21547')?.remove();lastSignature='';lastPick=null;return false}
     const p=choose(d,force);if(!p)return false;const src=portrait(d.boss),box=ensureBox(activeRoot);
