@@ -226,7 +226,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     if(!panel){
       panel=document.createElement('section');panel.id='tournament21540Panel';panel.innerHTML='<div class="tourHead"><strong>🏆 キャラクター杯</strong><button class="miniBtn" id="tourClose21540">閉じる</button></div><div id="tourBody21540"></div>';
       controls.insertAdjacentElement('afterend',panel);
-      panel.querySelector('#tourClose21540')?.addEventListener('click',()=>panel.classList.remove('on'));
+      panel.querySelector('#tourClose21540')?.addEventListener('click',()=>{panel.classList.remove('on');render()});
     }
     const charsBox=document.getElementById('chars');
     if(charsBox&&!charsBox.dataset.tourGuard21541){
@@ -293,12 +293,26 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     return'<div class="tourActive"><div class="tourActiveTitle">'+esc(cup.name)+'　'+esc(cup.label)+'　16人制</div>'+current+result+'<div class="tourActions">'+action+'</div>'+renderNews(a)+renderBracket(a,cup)+'<div class="tourBlockedHint">大会中は通常のキャラ選択をロックしています。</div></div>';
   }
 
+  function fireBattleSleeping(store){
+    const a=store?.active,panel=document.getElementById('tournament21540Panel'),boss=a?.bossChallenge?.status||'locked',resultOn=document.getElementById('resultBanner')?.classList.contains('on');
+    return !!(IS_FIRE_RUNTIME&&a&&!panel?.classList.contains('on')&&!a.pending&&!resultOn&&(['active','draw','boss_active','boss_draw'].includes(a.status)||['active','draw'].includes(boss)));
+  }
+  function parkFirePanel(body){
+    if(!body)return false;
+    if(body.dataset.fireParked21595==='1'&&body.childElementCount===1)return true;
+    body.dataset.fireParked21595='1';
+    body.innerHTML='<div class="tourFireDormant21595" hidden aria-hidden="true"></div>';
+    return true;
+  }
+
   function render(){
     if(!ensureUI())return;
     const store=read(),body=document.getElementById('tourBody21540');if(!body)return;
     const rating=Number(currentStats().rating)||1500,rec=recommendedCup(rating);
     document.body.classList.toggle('tournament21540Active',!!store.active&&['active','draw'].includes(store.active.status));
     const btn=document.getElementById('tournament21540Btn');if(btn){const status=store.active?.status||'',hasTournament=!!store.active,running=hasTournament&&!['champion','lost','boss_lost'].includes(status),label=running?'🏆 大会表を開く':hasTournament?'🏆 大会結果を開く':'🏆 大会モード';btn.innerHTML=label+(running?'<span class="tourDot"></span>':'')}
+    if(fireBattleSleeping(store)){parkFirePanel(body);return}
+    delete body.dataset.fireParked21595;
     const cards=CUPS.map(c=>{
       const cupWins=Number(store.trophies?.[c.id]||0),championships=Number(store.championships?.[c.id]??cupWins)||0,streak=Number(store.streaks?.[c.id]||0),recommended=c.id===rec.id;
       const streakHtml=streak>=2?'<span class="tourStreak">🔥 '+streak+'連覇中</span>':'';
@@ -312,7 +326,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     body.querySelectorAll('[data-tour-retry]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourRetry,true)));
     body.querySelector('[data-tour-next]')?.addEventListener('click',()=>startCurrentMatch());
     body.querySelector('[data-tour-replay]')?.addEventListener('click',()=>startCurrentMatch(true));
-    body.querySelector('[data-tour-current]')?.addEventListener('click',()=>{document.getElementById('tournament21540Panel')?.classList.remove('on');document.getElementById('board')?.scrollIntoView?.({block:'center'})});
+    body.querySelector('[data-tour-current]')?.addEventListener('click',()=>{document.getElementById('tournament21540Panel')?.classList.remove('on');document.getElementById('board')?.scrollIntoView?.({block:'center'});render()});
     body.querySelectorAll('[data-tour-exit]').forEach(b=>b.addEventListener('click',exitCup));
   }
 
