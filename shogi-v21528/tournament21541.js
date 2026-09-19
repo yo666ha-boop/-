@@ -226,7 +226,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     if(!panel){
       panel=document.createElement('section');panel.id='tournament21540Panel';panel.innerHTML='<div class="tourHead"><strong>🏆 キャラクター杯</strong><button class="miniBtn" id="tourClose21540">閉じる</button></div><div id="tourBody21540"></div>';
       controls.insertAdjacentElement('afterend',panel);
-      panel.querySelector('#tourClose21540')?.addEventListener('click',()=>{panel.classList.remove('on');render()});
+      panel.querySelector('#tourClose21540')?.addEventListener('click',()=>{panel.classList.remove('on');try{window.AI_SHOGI_TOURNAMENT_DIALOGUE?.render?.()}catch(e){}render()});
     }
     const charsBox=document.getElementById('chars');
     if(charsBox&&!charsBox.dataset.tourGuard21541){
@@ -326,7 +326,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     body.querySelectorAll('[data-tour-retry]').forEach(b=>b.addEventListener('click',()=>startCup(b.dataset.tourRetry,true)));
     body.querySelector('[data-tour-next]')?.addEventListener('click',()=>startCurrentMatch());
     body.querySelector('[data-tour-replay]')?.addEventListener('click',()=>startCurrentMatch(true));
-    body.querySelector('[data-tour-current]')?.addEventListener('click',()=>{document.getElementById('tournament21540Panel')?.classList.remove('on');document.getElementById('board')?.scrollIntoView?.({block:'center'});render()});
+    body.querySelector('[data-tour-current]')?.addEventListener('click',()=>{document.getElementById('tournament21540Panel')?.classList.remove('on');try{window.AI_SHOGI_TOURNAMENT_DIALOGUE?.render?.()}catch(e){}document.getElementById('board')?.scrollIntoView?.({block:'center'});render()});
     body.querySelectorAll('[data-tour-exit]').forEach(b=>b.addEventListener('click',exitCup));
   }
 
@@ -356,6 +356,7 @@ body.tournament21540Active #chars{opacity:.55}.tourBlockedHint{display:none}body
     a.processedToken=0;a.lastOpponent=name;write(store);
     try{window.AIShogiIOS.select(idx)}catch(e){console.error('tournament select failed',e);return false}
     const p=document.getElementById('tournament21540Panel');if(p)p.classList.remove('on');
+    try{window.AI_SHOGI_TOURNAMENT_DIALOGUE?.render?.()}catch(e){}
     const status=document.getElementById('status');if(status)status.textContent=cup.name+' '+ROUNDS[a.round]+'：'+name+' と対局。ほかのAI戦も同時進行中です。';
     render();return true;
   }
