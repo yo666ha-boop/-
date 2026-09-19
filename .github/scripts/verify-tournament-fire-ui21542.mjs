@@ -1,3 +1,4 @@
+// PR130 final exact-head validation
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import http from 'node:http';
