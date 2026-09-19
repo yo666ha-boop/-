@@ -4,10 +4,12 @@
 (function(){
   'use strict';
   if(window.__AI_SHOGI_TOURNAMENT_ROAD_21562)return;
+  const IS_FIRE_RUNTIME=/\bSilk\//i.test(navigator.userAgent||'')||/Kindle|KF[A-Z0-9]{2,}|Amazon/i.test(navigator.userAgent||'');
   window.__AI_SHOGI_TOURNAMENT_ROAD_21562=true;
   function state(){
     try{return window.AI_SHOGI_TOURNAMENT?.state?.()?.active||null}catch(e){return null}
   }
+  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!state()&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
   function phase(a){
     const b=a?.bossChallenge?.status||'locked';
     if(b==='won')return{done:5,current:-1,failed:false};
@@ -69,7 +71,7 @@
     return true;
   }
   let installed=false,tries=0;const t=setInterval(()=>{if(!installed)installed=install();observePanel();if(installed&&render())clearInterval(t);else if(++tries>80)clearInterval(t)},100);
-  window.addEventListener('ai-shogi-local-save',()=>{render();observePanel()});
+  window.addEventListener('ai-shogi-local-save',()=>{if(fireBattleHidden())return;render();observePanel()});
   window.addEventListener('resize',render,{passive:true});
   window.addEventListener('orientationchange',()=>setTimeout(render,120),{passive:true});
 })();
