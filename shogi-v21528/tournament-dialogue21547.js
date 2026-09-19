@@ -19,7 +19,7 @@
   const MATERIAL_VAL={P:100,L:280,N:300,S:420,G:500,B:700,R:850,K:20000,'+P':500,'+L':500,'+N':500,'+S':500,'+B':900,'+R':1050};
   const bank=()=>window.AI_SHOGI_TOURNAMENT_DIALOGUE_BANK;
   const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}};
-  const fireBattleHidden=()=>IS_FIRE_RUNTIME&&!!read()?.active&&!document.getElementById('tournament21540Panel')?.classList.contains('on');
+  const fireBattleHidden=()=>{const a=read()?.active,boss=a?.bossChallenge?.status||'locked';return !!(IS_FIRE_RUNTIME&&a&&!document.getElementById('tournament21540Panel')?.classList.contains('on')&&!a.pending&&!document.getElementById('resultBanner')?.classList.contains('on')&&(['active','draw','boss_active','boss_draw'].includes(a.status)||['active','draw'].includes(boss)))};
   const readHistory=()=>{try{const x=JSON.parse(localStorage.getItem(HISTORY_KEY)||'null');if(x&&typeof x==='object'){x.byKey=x.byKey&&typeof x.byKey==='object'?x.byKey:{};x.sessions=x.sessions&&typeof x.sessions==='object'?x.sessions:{};return x}return{version:2,byKey:{},sessions:{}}}catch(e){return{version:2,byKey:{},sessions:{}}}};
   const writeHistory=x=>{try{x.version=2;x.byKey=x.byKey&&typeof x.byKey==='object'?x.byKey:{};x.sessions=x.sessions&&typeof x.sessions==='object'?x.sessions:{};localStorage.setItem(HISTORY_KEY,JSON.stringify(x));return true}catch(e){return false}};
   function persistSession(key,patch={}){
@@ -155,6 +155,7 @@
   }
 
   function render(force=false){
+    if(fireBattleHidden()){document.getElementById('tourDialogue21547')?.remove();document.getElementById('tourOpponentVoice21549')?.remove();lastSignature='';lastPick=null;return false}
     ensureStyle();const d=derive(),activeRoot=document.querySelector('#tournament21540Panel .tourActive');
     if(!d||!activeRoot){document.getElementById('tourDialogue21547')?.remove();lastSignature='';lastPick=null;return false}
     const p=choose(d,force);if(!p)return false;const src=portrait(d.boss),box=ensureBox(activeRoot);
@@ -192,8 +193,7 @@
   function attachObservers(){
     const panel=document.getElementById('tournament21540Panel'),speech=document.getElementById('charSpeech'),moves=document.getElementById('moves'),result=document.getElementById('resultBanner');
     observeTarget(panel,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
-    observeTarget(speech,{childList:true,subtree:true,characterData:true});
-    if(!IS_FIRE_RUNTIME)observeTarget(moves,{childList:true,subtree:true,characterData:true});
+    if(!IS_FIRE_RUNTIME){observeTarget(speech,{childList:true,subtree:true,characterData:true});observeTarget(moves,{childList:true,subtree:true,characterData:true})}
     observeTarget(result,{attributes:true,childList:true,subtree:true,characterData:true});
     return !!panel;
   }
